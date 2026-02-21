@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+model User {
+  id                BigInt    @id @default(autoincrement())
+  name              String
+  email             String    @unique
+  emailVerifiedAt   DateTime? @map("email_verified_at")
+  password          String
+  rememberToken     String?   @map("remember_token")
+  deletedAt         DateTime? @map("deleted_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  createdPrograms   Program[] @relation("ProgramCreatedBy")
+  updatedPrograms   Program[] @relation("ProgramUpdatedBy")
+  createdIntakes    ProgramIntakeWindow[] @relation("IntakeCreatedBy")
+  updatedIntakes    ProgramIntakeWindow[] @relation("IntakeUpdatedBy")
+  createdPayments   RegistrationPayment[] @relation("PaymentCreatedBy")
+  updatedPayments   RegistrationPayment[] @relation("PaymentUpdatedBy")
+  activities        AdminActivityLog[]
+
+  @@map("users")
+}
+
+model CCARegistration {
+  id                                 BigInt    @id @default(autoincrement())
+  registerId                         String    @unique @map("register_id")
+  programId                          String    @map("program_id")
+  programName                        String    @map("program_name")
+  programYear                        String    @map("program_year")
+  programDuration                    String    @map("program_duration")
+  fullName                           String    @map("full_name")
+  nameWithInitials                   String    @map("name_with_initials")
+  gender                             Gender
+  dateOfBirth                        DateTime  @map("date_of_birth") @db.Date
+  nicNumber                          String?   @map("nic_number")
+  passportNumber                     String?   @map("passport_number")
+  nationality                        String
+  countryOfBirth                     String    @map("country_of_birth")
+  countryOfResidence                 String    @map("country_of_residence")
+  permanentAddress                   String    @map("permanent_address")
+  postalCode                         String    @map("postal_code")
+  country                            String
+  district                           String?
+  province                           String?
+  emailAddress                       String    @map("email_address")
+  whatsappNumber                     String    @map("whatsapp_number")
+  homeContactNumber                  String?   @map("home_contact_number")
+  guardianContactName                String    @map("guardian_contact_name")
+  guardianContactNumber              String    @map("guardian_contact_number")
+  highestQualification               Qualification @map("highest_qualification")
+  qualificationOtherDetails          String?   @map("qualification_other_details")
+  qualificationStatus                QualificationStatus @map("qualification_status")
+  qualificationCompletedDate         DateTime? @map("qualification_completed_date") @db.Date
+  qualificationExpectedCompletionDate DateTime? @map("qualification_expected_completion_date") @db.Date
+  academicQualificationDocuments     Json      @map("academic_qualification_documents")
+  nicDocuments                       Json?     @map("nic_documents")
+  passportDocuments                  Json?     @map("passport_documents")
+  passportPhoto                      Json      @map("passport_photo")
+  paymentSlip                        Json      @map("payment_slip")
+  tags                               Json?
+  fullAmount                         Decimal?  @map("full_amount") @db.Decimal(12, 2)
+  currentPaidAmount                  Decimal?  @map("current_paid_amount") @db.Decimal(12, 2)
+  termsAccepted                      Boolean   @default(false) @map("terms_accepted")
+  deletedAt                          DateTime? @map("deleted_at")
+  createdAt                          DateTime  @default(now()) @map("created_at")
+  updatedAt                          DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  payments                           RegistrationPayment[]
+  program                            Program?  @relation(fields: [programId], references: [code])
+
+  @@index([programId])
+  @@index([emailAddress])
+  @@index([nicNumber])
+  @@index([programId, nicNumber])
+  @@index([programId, passportNumber])
+  @@map("cca_registrations")
+}
+
+model Program {
+  id               BigInt    @id @default(autoincrement())
+  code             String    @unique
+  name             String
+  yearLabel        String    @map("year_label")
+  durationLabel    String    @map("duration_label")
+  basePrice        Decimal   @default(0) @map("base_price") @db.Decimal(12, 2)
+  currency         String    @default("LKR")
+  isActive         Boolean   @default(true) @map("is_active")
+  displayOrder     Int       @default(0) @map("display_order")
+  createdBy        BigInt?   @map("created_by")
+  updatedBy        BigInt?   @map("updated_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  intakeWindows    ProgramIntakeWindow[]
+  registrations    CCARegistration[]
+  creator          User?     @relation("ProgramCreatedBy", fields: [createdBy], references: [id])
+  updater          User?     @relation("ProgramUpdatedBy", fields: [updatedBy], references: [id])
+
+  @@index([isActive, displayOrder])
+  @@map("programs")
+}
+
+model ProgramIntakeWindow {
+  id             BigInt    @id @default(autoincrement())
+  programId      BigInt    @map("program_id")
+  windowName     String    @map("window_name")
+  opensAt        DateTime  @map("opens_at")
+  closesAt       DateTime  @map("closes_at")
+  priceOverride  Decimal?  @map("price_override") @db.Decimal(12, 2)
+  isActive       Boolean   @default(true) @map("is_active")
+  createdBy      BigInt?   @map("created_by")
+  updatedBy      BigInt?   @map("updated_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  program        Program   @relation(fields: [programId], references: [id], onDelete: Cascade)
+  creator        User?     @relation("IntakeCreatedBy", fields: [createdBy], references: [id])
+  updater        User?     @relation("IntakeUpdatedBy", fields: [updatedBy], references: [id])
+
+  @@unique([programId, windowName])
+  @@index([programId, isActive])
+  @@index([opensAt, closesAt])
+  @@map("program_intake_windows")
+}
+
+model RegistrationPayment {
+  id                BigInt          @id @default(autoincrement())
+  ccaRegistrationId BigInt          @map("cca_registration_id")
+  paymentNo         Int             @map("payment_no")
+  paymentDate       DateTime        @map("payment_date") @db.Date
+  amount            Decimal         @db.Decimal(12, 2)
+  paymentMethod     String          @map("payment_method")
+  receiptReference  String?         @map("receipt_reference")
+  note              String?
+  status            PaymentStatus   @default(active)
+  voidReason        String?         @map("void_reason")
+  voidedAt          DateTime?       @map("voided_at")
+  createdBy         BigInt?         @map("created_by")
+  updatedBy         BigInt?         @map("updated_by")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  registration      CCARegistration @relation(fields: [ccaRegistrationId], references: [id], onDelete: Cascade)
+  creator           User?           @relation("PaymentCreatedBy", fields: [createdBy], references: [id])
+  updater           User?           @relation("PaymentUpdatedBy", fields: [updatedBy], references: [id])
+
+  @@unique([ccaRegistrationId, paymentNo])
+  @@index([ccaRegistrationId, status])
+  @@index([paymentDate])
+  @@map("registration_payments")
+}
+
+model AdminActivityLog {
+  id                BigInt    @id @default(autoincrement())
+  actorUserId       BigInt?   @map("actor_user_id")
+  actorNameSnapshot String?   @map("actor_name_snapshot")
+  actorEmailSnapshot String?  @map("actor_email_snapshot")
+  category          String    @default("general")
+  action            String
+  status            String    @default("success")
+  subjectType       String?   @map("subject_type")
+  subjectId         BigInt?   @map("subject_id")
+  subjectLabel      String?   @map("subject_label")
+  message           String?
+  routeName         String?   @map("route_name")
+  httpMethod        String?   @map("http_method")
+  ipAddress         String?   @map("ip_address")
+  userAgent         String?   @map("user_agent")
+  requestId         String?   @map("request_id")
+  beforeData        Json?     @map("before_data")
+  afterData         Json?     @map("after_data")
+  meta              Json?
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  actor             User?     @relation(fields: [actorUserId], references: [id])
+
+  @@index([createdAt])
+  @@index([actorUserId])
+  @@index([category])
+  @@index([action])
+  @@index([status])
+  @@index([subjectType, subjectId])
+  @@index([requestId])
+  @@map("admin_activity_logs")
+}
+
+// Enums
+enum Gender {
+  male
+  female
+}
+
+enum Qualification {
+  degree
+  diploma
+  postgraduate
+  msc
+  phd
+  work_experience
+  other
+}
+
+enum QualificationStatus {
+  completed
+  ongoing
+}
+
+enum PaymentStatus {
+  active
+  void
+}
