@@ -7,6 +7,19 @@ import { loginAction } from "../actions";
 
 const isDev = process.env.NODE_ENV === "development";
 
+function isNextRedirectError(error: unknown): boolean {
+    if (typeof error !== "object" || error === null) {
+        return false;
+    }
+
+    if (!("digest" in error)) {
+        return false;
+    }
+
+    const digest = (error as { digest?: unknown }).digest;
+    return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
+}
+
 export default function AdminLoginPage() {
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -42,6 +55,10 @@ export default function AdminLoginPage() {
                 setIsLoading(false);
             }
         } catch (err) {
+            if (isNextRedirectError(err)) {
+                throw err;
+            }
+
             setError("An unexpected error occurred. Please try again.");
             setIsLoading(false);
         } finally {

@@ -22,6 +22,15 @@ export default function AdminAccountsList({
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Delete confirmation modal state
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+
+    // Check if this is the last admin account
+    const isLastAdmin = users.length <= 1;
+
     async function handleAddAdmin(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
         setIsLoading(true);
@@ -40,17 +49,39 @@ export default function AdminAccountsList({
         }
     }
 
-    async function handleDelete(userId: string, email: string) {
-        if (
-            !confirm(
-                `Are you sure you want to remove admin access for ${email}?`,
-            )
-        )
+    function openDeleteModal(user: AdminUser) {
+        // Prevent opening delete modal if this is the last admin
+        if (isLastAdmin) {
             return;
+        }
+        setDeleteError(null);
+        setUserToDelete(user);
+        setDeleteModalOpen(true);
+    }
 
-        const result = await deleteAdminUser(userId);
+    function closeDeleteModal() {
+        setDeleteModalOpen(false);
+        setUserToDelete(null);
+        setIsDeleting(false);
+        setDeleteError(null);
+    }
+
+    async function handleConfirmDelete() {
+        if (!userToDelete) return;
+
+        // Double-check on frontend
+        if (isLastAdmin) {
+            setDeleteError("Cannot delete the last admin account. At least one admin must remain.");
+            return;
+        }
+
+        setIsDeleting(true);
+        setDeleteError(null);
+        
+        const result = await deleteAdminUser(userToDelete.id);
         if (result.error) {
-            alert(result.error);
+            setDeleteError(result.error);
+            setIsDeleting(false);
         } else {
             window.location.reload();
         }
@@ -87,6 +118,33 @@ export default function AdminAccountsList({
                     <span>Add Admin</span>
                 </button>
             </div>
+
+            {/* Last Admin Warning Banner */}
+            {isLastAdmin && (
+                <div className="mb-6 p-4 rounded-xl bg-amber-50/80 backdrop-blur-sm border border-amber-200 flex items-start gap-3">
+                    <svg
+                        className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                        />
+                    </svg>
+                    <div>
+                        <p className="text-sm font-semibold text-amber-800">
+                            Only One Admin Account Remaining
+                        </p>
+                        <p className="text-sm text-amber-700 mt-0.5">
+                            You cannot delete the last admin account. Add another admin first if you need to remove this one.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-white/70 backdrop-blur-xl border border-white/80 rounded-2xl shadow-xl overflow-hidden">
                 <div className="overflow-x-auto">
@@ -151,30 +209,56 @@ export default function AdminAccountsList({
                                         ).toLocaleDateString()}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                        <button
-                                            onClick={() =>
-                                                handleDelete(
-                                                    user.id,
-                                                    user.email || "",
-                                                )
-                                            }
-                                            className="text-red-600 hover:text-red-900 font-medium inline-flex items-center gap-1 transition-colors"
-                                        >
-                                            <svg
-                                                className="w-4 h-4"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
+                                        {isLastAdmin ? (
+                                            // Disabled delete button with tooltip
+                                            <div className="relative inline-block group">
+                                                <button
+                                                    disabled
+                                                    className="text-gray-400 font-medium inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-not-allowed opacity-60"
+                                                >
+                                                    <svg
+                                                        className="w-4 h-4"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth="2"
+                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                        />
+                                                    </svg>
+                                                    Delete
+                                                </button>
+                                                {/* Tooltip */}
+                                                <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                                    Cannot delete the last admin account
+                                                    <div className="absolute top-full right-8 w-2 h-2 bg-gray-800 transform rotate-45"></div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            // Active delete button
+                                            <button
+                                                onClick={() => openDeleteModal(user)}
+                                                className="text-red-600 hover:text-red-800 font-medium inline-flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50"
                                             >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth="2"
-                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                                />
-                                            </svg>
-                                            Remove
-                                        </button>
+                                                <svg
+                                                    className="w-4 h-4"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth="2"
+                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                    />
+                                                </svg>
+                                                Delete
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
@@ -279,6 +363,185 @@ export default function AdminAccountsList({
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteModalOpen && userToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm transition-opacity"
+                        onClick={closeDeleteModal}
+                    ></div>
+                    
+                    <div className="relative w-full max-w-md transform transition-all">
+                        {/* Glow Effect */}
+                        <div className="absolute -inset-1 bg-gradient-to-r from-red-500/20 via-red-400/20 to-red-500/20 rounded-3xl blur-xl opacity-70"></div>
+                        
+                        <div className="relative bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 overflow-hidden">
+                            {/* Top Warning Bar */}
+                            <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-red-500 via-red-400 to-red-500"></div>
+                            
+                            {/* Header */}
+                            <div className="px-6 pt-8 pb-4 text-center">
+                                {/* Warning Icon */}
+                                <div className="mx-auto w-16 h-16 rounded-2xl bg-red-100 border border-red-200 flex items-center justify-center mb-4">
+                                    <svg
+                                        className="w-8 h-8 text-red-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth="2"
+                                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                        />
+                                    </svg>
+                                </div>
+                                
+                                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                                    Delete Admin Account
+                                </h3>
+                                <p className="text-gray-600">
+                                    This action cannot be undone. This will permanently delete the account.
+                                </p>
+                            </div>
+
+                            {/* Error Message */}
+                            {deleteError && (
+                                <div className="mx-6 mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600 flex items-start gap-2">
+                                    <svg
+                                        className="w-5 h-5 flex-shrink-0"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth="2"
+                                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                        />
+                                    </svg>
+                                    {deleteError}
+                                </div>
+                            )}
+
+                            {/* User Info Card */}
+                            <div className="mx-6 p-4 rounded-xl bg-gray-50/80 border border-gray-200/60">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary-100 to-secondary-100 flex items-center justify-center text-primary-700 font-bold border border-white shadow-sm">
+                                        {userToDelete.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-gray-900 truncate">
+                                            {userToDelete.name}
+                                        </p>
+                                        <p className="text-sm text-gray-500 truncate">
+                                            {userToDelete.email}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Warning List */}
+                            <div className="mx-6 mt-4 space-y-2">
+                                <div className="flex items-start gap-3 text-sm text-gray-600">
+                                    <svg
+                                        className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth="2"
+                                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                        />
+                                    </svg>
+                                    <span>All account data will be permanently removed</span>
+                                </div>
+                                <div className="flex items-start gap-3 text-sm text-gray-600">
+                                    <svg
+                                        className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth="2"
+                                            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                                        />
+                                    </svg>
+                                    <span>Access to admin portal will be revoked immediately</span>
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="p-6 pt-4 flex gap-3">
+                                <button
+                                    onClick={closeDeleteModal}
+                                    disabled={isDeleting}
+                                    className="flex-1 py-3 border border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleConfirmDelete}
+                                    disabled={isDeleting || isLastAdmin}
+                                    className="flex-1 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-xl shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isDeleting ? (
+                                        <>
+                                            <svg
+                                                className="animate-spin h-5 w-5 text-white"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <circle
+                                                    className="opacity-25"
+                                                    cx="12"
+                                                    cy="12"
+                                                    r="10"
+                                                    stroke="currentColor"
+                                                    strokeWidth="4"
+                                                ></circle>
+                                                <path
+                                                    className="opacity-75"
+                                                    fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                                ></path>
+                                            </svg>
+                                            Deleting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg
+                                                className="w-5 h-5"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth="2"
+                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                />
+                                            </svg>
+                                            Delete Account
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

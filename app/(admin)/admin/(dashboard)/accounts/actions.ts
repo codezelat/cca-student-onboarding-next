@@ -60,8 +60,22 @@ export async function createAdminUser(formData: FormData) {
 export async function deleteAdminUser(userId: string) {
     const supabase = await createAdminClient();
 
-    // Prevent self-deletion would be good, but we don't have current user ID here easily
-    // without another call. For now, let's just implement the action.
+    // First, check how many admin users exist
+    const {
+        data: { users },
+        error: listError,
+    } = await supabase.auth.admin.listUsers();
+
+    if (listError) {
+        return { error: "Failed to verify admin count: " + listError.message };
+    }
+
+    // Prevent deletion if this is the last admin account
+    if (users.length <= 1) {
+        return { 
+            error: "Cannot delete the last admin account. At least one admin must remain to access the system." 
+        };
+    }
 
     const { error } = await supabase.auth.admin.deleteUser(userId);
 
