@@ -1,59 +1,80 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
+
+/**
+ * Strip all non-plain-object types (Decimal, Date→ISO, BigInt→number) via a
+ * JSON round-trip so Next.js can safely pass the data to Client Components.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function s<T>(data: T): T {
+  return JSON.parse(
+    JSON.stringify(data, (_k, v) => (typeof v === "bigint" ? Number(v) : v)),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// getDashboardStats — collapsed from 7 queries to 2 (one raw SQL + one groupBy)
+// Cached for 60 s; busted by revalidatePath("/admin") after mutations.
+// ---------------------------------------------------------------------------
+const _cachedDashboardStats = unstable_cache(
+  async () => {
+    type StatsRow = {
+      active: bigint;
+      trashed: bigint;
+      total: bigint;
+      general: bigint;
+      special: bigint;
+    };
+
+    const [statsRows, topProgramResult] = await Promise.all([
+      prisma.$queryRaw<StatsRow[]>`
+        SELECT
+          COUNT(*)                                                                              AS total,
+          COUNT(*) FILTER (WHERE deleted_at IS NULL)                                           AS active,
+          COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)                                       AS trashed,
+          COUNT(*) FILTER (WHERE deleted_at IS NULL AND tags @> '["General Rate"]'::jsonb)     AS general,
+          COUNT(*) FILTER (WHERE deleted_at IS NULL AND tags @> '["Special 50% Offer"]'::jsonb) AS special
+        FROM cca_registrations
+      `,
+      prisma.cCARegistration.groupBy({
+        by: ["programId"],
+        where: { deletedAt: null },
+        _count: { programId: true },
+        orderBy: { _count: { programId: "desc" } },
+        take: 1,
+      }),
+    ]);
+
+    const row = statsRows[0] ?? {
+      active: BigInt(0),
+      trashed: BigInt(0),
+      total: BigInt(0),
+      general: BigInt(0),
+      special: BigInt(0),
+    };
+
+    return {
+      activeRegistrations: Number(row.active),
+      trashedRegistrations: Number(row.trashed),
+      totalRegistrations: Number(row.total),
+      generalRateCount: Number(row.general),
+      specialOfferCount: Number(row.special),
+      topProgram: topProgramResult[0]
+        ? {
+            id: topProgramResult[0].programId,
+            count: topProgramResult[0]._count.programId,
+          }
+        : null,
+    };
+  },
+  ["dashboard-stats"],
+  { revalidate: 60 },
+);
 
 export async function getDashboardStats() {
-  const [active, trashed, total, general, special] = await Promise.all([
-    prisma.cCARegistration.count({ where: { deletedAt: null } }),
-    prisma.cCARegistration.count({ where: { NOT: { deletedAt: null } } }),
-    prisma.cCARegistration.count(),
-    prisma.cCARegistration.count({
-      where: {
-        deletedAt: null,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        tags: { path: [], array_contains: "General Rate" } as any,
-      },
-    }),
-    prisma.cCARegistration.count({
-      where: {
-        deletedAt: null,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        tags: { path: [], array_contains: "Special 50% Offer" } as any,
-      },
-    }),
-  ]);
-
-  // Top program query
-  const topProgramResult = await prisma.cCARegistration.groupBy({
-    by: ["programId"],
-    where: { deletedAt: null },
-    _count: {
-      programId: true,
-    },
-    orderBy: {
-      _count: {
-        programId: "desc",
-      },
-    },
-    take: 1,
-  });
-
-  const topProgram = topProgramResult[0]
-    ? {
-        id: topProgramResult[0].programId,
-        count: topProgramResult[0]._count.programId,
-      }
-    : null;
-
-  return {
-    activeRegistrations: Number(active),
-    trashedRegistrations: Number(trashed),
-    totalRegistrations: Number(total),
-    generalRateCount: Number(general),
-    specialOfferCount: Number(special),
-    topProgram,
-  };
+  return _cachedDashboardStats();
 }
 
 export async function getRegistrations(params: {
@@ -109,32 +130,23 @@ export async function getRegistrations(params: {
     },
   });
 
-  return registrations.map((reg) => ({
-    ...reg,
-    id: Number(reg.id),
-    createdAt: reg.createdAt.toISOString(),
-    updatedAt: reg.updatedAt.toISOString(),
-    deletedAt: reg.deletedAt ? reg.deletedAt.toISOString() : null,
-    dateOfBirth: reg.dateOfBirth.toISOString(),
-    fullAmount: reg.fullAmount ? reg.fullAmount.toString() : null,
-    currentPaidAmount: reg.currentPaidAmount
-      ? reg.currentPaidAmount.toString()
-      : null,
-  }));
+  return s(registrations);
 }
 
+const _cachedPrograms = unstable_cache(
+  async () => {
+    const programs = await prisma.program.findMany({
+      select: { code: true, name: true },
+      orderBy: { displayOrder: "asc" },
+    });
+    return programs.map((p) => ({ programId: p.code, programName: p.name }));
+  },
+  ["active-programs"],
+  { revalidate: 3600 },
+);
+
 export async function getActivePrograms() {
-  const programs = await prisma.program.findMany({
-    select: {
-      code: true,
-      name: true,
-    },
-    orderBy: { displayOrder: "asc" },
-  });
-  return programs.map((p) => ({
-    programId: p.code,
-    programName: p.name,
-  }));
+  return _cachedPrograms();
 }
 
 export async function toggleRegistrationTrash(id: number, restore: boolean) {
@@ -174,37 +186,12 @@ export async function getRegistrationById(id: number) {
 
   if (!registration) return null;
 
-  return {
+  return s({
     ...registration,
-    id: Number(registration.id),
-    createdAt: registration.createdAt.toISOString(),
-    updatedAt: registration.updatedAt.toISOString(),
-    deletedAt: registration.deletedAt
-      ? registration.deletedAt.toISOString()
-      : null,
-    dateOfBirth: registration.dateOfBirth.toISOString(),
-    fullAmount: registration.fullAmount
-      ? registration.fullAmount.toString()
-      : null,
-    currentPaidAmount: registration.currentPaidAmount
-      ? registration.currentPaidAmount.toString()
-      : null,
-    qualificationCompletedDate: registration.qualificationCompletedDate
-      ? registration.qualificationCompletedDate.toISOString()
-      : null,
-    qualificationExpectedCompletionDate:
-      registration.qualificationExpectedCompletionDate
-        ? registration.qualificationExpectedCompletionDate.toISOString()
-        : null,
-    payments: registration.payments.map((p) => ({
-      ...p,
-      id: Number(p.id),
-      amount: p.amount.toString(),
-      paymentDate: p.paymentDate.toISOString(),
-      createdAt: p.createdAt.toISOString(),
-      updatedAt: p.updatedAt.toISOString(),
-    })),
-  };
+    programName: registration.program?.name ?? null,
+    programYear: registration.program?.yearLabel ?? null,
+    programDuration: registration.program?.durationLabel ?? null,
+  });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -265,5 +252,5 @@ export async function updateRegistration(id: number, data: any) {
 
   revalidatePath("/admin");
   revalidatePath(`/admin/registrations/${id}`);
-  return { success: true, registration: updated };
+  return { success: true, registration: s(updated) };
 }

@@ -334,7 +334,17 @@ export default function EditRegistrationClient({
                   <Select
                     defaultValue={form.getValues("highestQualification")}
                     onValueChange={(v) =>
-                      form.setValue("highestQualification", v)
+                      form.setValue(
+                        "highestQualification",
+                        v as
+                          | "other"
+                          | "degree"
+                          | "diploma"
+                          | "postgraduate"
+                          | "msc"
+                          | "phd"
+                          | "work_experience",
+                      )
                     }
                   >
                     <SelectTrigger>
@@ -358,7 +368,10 @@ export default function EditRegistrationClient({
                   <Select
                     defaultValue={form.getValues("qualificationStatus")}
                     onValueChange={(v) =>
-                      form.setValue("qualificationStatus", v)
+                      form.setValue(
+                        "qualificationStatus",
+                        v as "completed" | "ongoing",
+                      )
                     }
                   >
                     <SelectTrigger>
