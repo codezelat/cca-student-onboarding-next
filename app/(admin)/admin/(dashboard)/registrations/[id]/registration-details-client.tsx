@@ -95,7 +95,7 @@ export default function RegistrationDetailsClient({
   const calculatedPaidAmount = payments.reduce(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (acc: number, p: any) =>
-      p.status === "PAID" ? acc + parseFloat(p.amount) : acc,
+      p.status === "active" ? acc + parseFloat(p.amount) : acc,
     0,
   );
 

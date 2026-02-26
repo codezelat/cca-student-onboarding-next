@@ -228,18 +228,10 @@ export async function updateRegistration(id: number, data: any) {
     );
 
   // Convert numbers/decimals
-  if (updateData.fullAmount !== undefined) {
-    updateData.fullAmount =
-      updateData.fullAmount === "" || updateData.fullAmount === null
-        ? null
-        : parseFloat(updateData.fullAmount);
-  }
-  if (updateData.currentPaidAmount !== undefined) {
-    updateData.currentPaidAmount =
-      updateData.currentPaidAmount === "" || updateData.currentPaidAmount === null
-        ? null
-        : parseFloat(updateData.currentPaidAmount);
-  }
+  if (updateData.fullAmount)
+    updateData.fullAmount = parseFloat(updateData.fullAmount);
+  if (updateData.currentPaidAmount)
+    updateData.currentPaidAmount = parseFloat(updateData.currentPaidAmount);
 
   // Normalize enum fields to lowercase to match Prisma schema
   if (updateData.highestQualification)

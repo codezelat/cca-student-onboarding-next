@@ -129,7 +129,6 @@ export default function EditRegistrationClient({
           variant: "default",
         });
         router.refresh();
-        router.push(`/admin/registrations/${registration.id}`);
       }
     } catch (error) {
       toast({

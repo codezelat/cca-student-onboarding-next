@@ -81,7 +81,7 @@ export async function addPayment(data: any) {
         },
     });
 
-    if (status !== "VOID") {
+    if (payment.status === "active") {
         const registration = await prisma.cCARegistration.findUnique({
             where: { id: BigInt(registrationId) },
         });
@@ -92,6 +92,21 @@ export async function addPayment(data: any) {
                 where: { id: BigInt(registrationId) },
                 data: {
                     currentPaidAmount: currentTotal + parseFloat(amount),
+                },
+            });
+        }
+    } else if (payment.status === "void") {
+        const registration = await prisma.cCARegistration.findUnique({
+            where: { id: BigInt(registrationId) },
+        });
+
+        if (registration && registration.currentPaidAmount) {
+            const currentTotal = Number(registration.currentPaidAmount);
+            const newTotal = Math.max(0, currentTotal - parseFloat(amount));
+            await prisma.cCARegistration.update({
+                where: { id: BigInt(registrationId) },
+                data: {
+                    currentPaidAmount: newTotal,
                 },
             });
         }
