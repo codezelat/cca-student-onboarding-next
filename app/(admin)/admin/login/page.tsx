@@ -24,6 +24,8 @@ export default function AdminLoginPage() {
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const recaptchaRef = useRef<ReCAPTCHA>(null);
+    const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+    const recaptchaEnabled = !isDev && Boolean(siteKey);
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -34,6 +36,14 @@ export default function AdminLoginPage() {
             const formData = new FormData(e.currentTarget);
 
             if (!isDev) {
+                if (!siteKey) {
+                    setError(
+                        "reCAPTCHA is not configured. Please contact support.",
+                    );
+                    setIsLoading(false);
+                    return;
+                }
+
                 // Execute reCAPTCHA in production only
                 const token = await recaptchaRef.current?.executeAsync();
                 if (!token) {
@@ -214,16 +224,20 @@ export default function AdminLoginPage() {
                             </div>
 
                             {/* Invisible reCAPTCHA (production only) */}
-                            {!isDev && (
-                                <ReCAPTCHA
-                                    ref={recaptchaRef}
-                                    sitekey={
-                                        process.env
-                                            .NEXT_PUBLIC_RECAPTCHA_SITE_KEY!
-                                    }
-                                    size="invisible"
-                                    badge="inline"
-                                />
+                            {recaptchaEnabled && (
+                                <div className="fixed -bottom-[9999px] -left-[9999px] invisible">
+                                    <ReCAPTCHA
+                                        ref={recaptchaRef}
+                                        sitekey={siteKey!}
+                                        size="invisible"
+                                        badge="inline"
+                                        onErrored={() =>
+                                            setError(
+                                                "reCAPTCHA failed to load. Disable content blockers and refresh.",
+                                            )
+                                        }
+                                    />
+                                </div>
                             )}
 
                             {/* Submit Button */}
