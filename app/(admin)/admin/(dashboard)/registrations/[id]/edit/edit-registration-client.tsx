@@ -106,9 +106,9 @@ export default function EditRegistrationClient({
       qualificationStatus: registration.qualificationStatus,
       qualificationCompletedDate: registration.qualificationCompletedDate
         ? format(
-            new Date(registration.qualificationCompletedDate),
-            "yyyy-MM-dd",
-          )
+          new Date(registration.qualificationCompletedDate),
+          "yyyy-MM-dd",
+        )
         : null,
       programName: registration.programName,
       programYear: registration.programYear,
@@ -129,6 +129,7 @@ export default function EditRegistrationClient({
           variant: "default",
         });
         router.refresh();
+        router.push(`/admin/registrations/${registration.id}`);
       }
     } catch (error) {
       toast({
@@ -337,13 +338,13 @@ export default function EditRegistrationClient({
                       form.setValue(
                         "highestQualification",
                         v as
-                          | "other"
-                          | "degree"
-                          | "diploma"
-                          | "postgraduate"
-                          | "msc"
-                          | "phd"
-                          | "work_experience",
+                        | "other"
+                        | "degree"
+                        | "diploma"
+                        | "postgraduate"
+                        | "msc"
+                        | "phd"
+                        | "work_experience",
                       )
                     }
                   >

@@ -58,7 +58,7 @@ export async function getPaymentLedger() {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function addPayment(data: any) {
-    const { registrationId, amount, paymentMethod, reference, paidAt, remark } =
+    const { registrationId, amount, paymentMethod, reference, paidAt, remark, status } =
         data;
 
     // We need to determine the paymentNo. Logic: max(paymentNo) + 1 for this registration
@@ -77,9 +77,25 @@ export async function addPayment(data: any) {
             receiptReference: reference,
             paymentDate: new Date(paidAt),
             note: remark,
-            status: "active",
+            status: status === "VOID" ? "void" : "active",
         },
     });
+
+    if (status !== "VOID") {
+        const registration = await prisma.cCARegistration.findUnique({
+            where: { id: BigInt(registrationId) },
+        });
+
+        if (registration) {
+            const currentTotal = registration.currentPaidAmount ? Number(registration.currentPaidAmount) : 0;
+            await prisma.cCARegistration.update({
+                where: { id: BigInt(registrationId) },
+                data: {
+                    currentPaidAmount: currentTotal + parseFloat(amount),
+                },
+            });
+        }
+    }
 
     revalidatePath("/admin/finance");
     revalidatePath(`/admin/registrations/${registrationId}`);
@@ -87,6 +103,30 @@ export async function addPayment(data: any) {
 }
 
 export async function voidPayment(id: string, reason: string) {
+    const payment = await prisma.registrationPayment.findUnique({
+        where: { id: BigInt(id) },
+    });
+
+    if (!payment) return;
+
+    // Only decrement if the payment was previously 'active'
+    if (payment.status === "active") {
+        const registration = await prisma.cCARegistration.findUnique({
+            where: { id: payment.ccaRegistrationId },
+        });
+
+        if (registration) {
+            const currentTotal = registration.currentPaidAmount ? Number(registration.currentPaidAmount) : 0;
+            const newTotal = Math.max(0, currentTotal - Number(payment.amount));
+            await prisma.cCARegistration.update({
+                where: { id: payment.ccaRegistrationId },
+                data: {
+                    currentPaidAmount: newTotal,
+                },
+            });
+        }
+    }
+
     await prisma.registrationPayment.update({
         where: { id: BigInt(id) },
         data: {
@@ -98,4 +138,5 @@ export async function voidPayment(id: string, reason: string) {
     });
 
     revalidatePath("/admin/finance");
+    revalidatePath(`/admin/registrations/${payment.ccaRegistrationId}`);
 }

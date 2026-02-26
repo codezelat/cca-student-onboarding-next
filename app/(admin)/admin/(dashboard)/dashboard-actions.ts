@@ -63,9 +63,9 @@ const _cachedDashboardStats = unstable_cache(
       specialOfferCount: Number(row.special),
       topProgram: topProgramResult[0]
         ? {
-            id: topProgramResult[0].programId,
-            count: topProgramResult[0]._count.programId,
-          }
+          id: topProgramResult[0].programId,
+          count: topProgramResult[0]._count.programId,
+        }
         : null,
     };
   },
@@ -228,10 +228,18 @@ export async function updateRegistration(id: number, data: any) {
     );
 
   // Convert numbers/decimals
-  if (updateData.fullAmount)
-    updateData.fullAmount = parseFloat(updateData.fullAmount);
-  if (updateData.currentPaidAmount)
-    updateData.currentPaidAmount = parseFloat(updateData.currentPaidAmount);
+  if (updateData.fullAmount !== undefined) {
+    updateData.fullAmount =
+      updateData.fullAmount === "" || updateData.fullAmount === null
+        ? null
+        : parseFloat(updateData.fullAmount);
+  }
+  if (updateData.currentPaidAmount !== undefined) {
+    updateData.currentPaidAmount =
+      updateData.currentPaidAmount === "" || updateData.currentPaidAmount === null
+        ? null
+        : parseFloat(updateData.currentPaidAmount);
+  }
 
   // Normalize enum fields to lowercase to match Prisma schema
   if (updateData.highestQualification)

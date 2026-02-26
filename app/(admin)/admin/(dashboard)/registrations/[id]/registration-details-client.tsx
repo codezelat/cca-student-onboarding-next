@@ -90,12 +90,21 @@ export default function RegistrationDetailsClient({
 
   const fullAmount = parseFloat(registration.fullAmount || "0");
   const payments = registration.payments || [];
-  const paidAmount = payments.reduce(
+
+  // Calculate total paid from actual transaction records
+  const calculatedPaidAmount = payments.reduce(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (acc: number, p: any) =>
       p.status === "PAID" ? acc + parseFloat(p.amount) : acc,
     0,
   );
+
+  // Use manual sync amount if it exists, otherwise fallback to calculated amount
+  const paidAmount =
+    registration.currentPaidAmount !== null && registration.currentPaidAmount !== undefined
+      ? parseFloat(registration.currentPaidAmount)
+      : calculatedPaidAmount;
+
   const balance = fullAmount - paidAmount;
   const isFullyPaid = balance <= 0 && fullAmount > 0;
 
@@ -240,6 +249,7 @@ export default function RegistrationDetailsClient({
         registrationId: registration.id,
         amount: formData.get("amount"),
         paymentMethod: formData.get("method"),
+        status: formData.get("status"),
         reference: formData.get("ref"),
         paidAt: new Date().toISOString(),
         remark: formData.get("remark"),
@@ -378,6 +388,18 @@ export default function RegistrationDetailsClient({
                                 Online Payment
                               </SelectItem>
                               <SelectItem value="OTHER">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="status">Status</Label>
+                          <Select name="status" defaultValue="PAID">
+                            <SelectTrigger className="rounded-xl">
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PAID">Valid (Paid)</SelectItem>
+                              <SelectItem value="VOID">Void (Cancelled)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -537,9 +559,9 @@ export default function RegistrationDetailsClient({
                           payments.map(
                             (p: {
                               id: string | number;
-                              paidAt: string;
+                              paymentDate: string;
                               paymentMethod: string;
-                              reference?: string;
+                              receiptReference?: string;
                               amount: string | number;
                               status: string;
                             }) => (
@@ -548,16 +570,16 @@ export default function RegistrationDetailsClient({
                                 className="border-gray-100 group"
                               >
                                 <TableCell className="text-xs font-medium py-3">
-                                  {p.paidAt &&
-                                    !isNaN(new Date(p.paidAt).getTime())
-                                    ? format(new Date(p.paidAt), "MMM d, yyyy")
+                                  {p.paymentDate &&
+                                    !isNaN(new Date(p.paymentDate).getTime())
+                                    ? format(new Date(p.paymentDate), "MMM d, yyyy")
                                     : "—"}
                                 </TableCell>
                                 <TableCell className="text-[10px] font-black text-gray-500 py-3 uppercase">
                                   {p.paymentMethod}
                                 </TableCell>
                                 <TableCell className="text-xs text-gray-600 py-3 font-mono">
-                                  {p.reference || "-"}
+                                  {p.receiptReference || "-"}
                                 </TableCell>
                                 <TableCell className="text-sm font-black text-gray-900 py-3 text-right">
                                   Rs.{" "}
@@ -566,7 +588,7 @@ export default function RegistrationDetailsClient({
                                   ).toLocaleString()}
                                 </TableCell>
                                 <TableCell className="py-3 text-center">
-                                  {p.status === "PAID" ? (
+                                  {p.status === "active" ? (
                                     <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[9px] px-1.5 py-0">
                                       PAID
                                     </Badge>
