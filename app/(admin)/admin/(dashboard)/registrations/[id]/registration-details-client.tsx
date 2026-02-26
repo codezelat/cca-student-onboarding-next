@@ -100,8 +100,18 @@ export default function RegistrationDetailsClient({
   const isFullyPaid = balance <= 0 && fullAmount > 0;
 
   const documents = [
-    ...(registration.passportPhoto
-      ? [
+    ...(Array.isArray(registration.passportPhoto)
+      ? registration.passportPhoto.map(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (doc: any, i: number) => ({
+          url: typeof doc === "string" ? doc : doc.url,
+          title: `Passport Photo ${i + 1}`,
+          type: "image",
+          category: "Personal",
+        }),
+      )
+      : registration.passportPhoto
+        ? [
           {
             url:
               typeof registration.passportPhoto === "string"
@@ -112,9 +122,42 @@ export default function RegistrationDetailsClient({
             category: "Personal",
           },
         ]
-      : []),
-    ...(registration.paymentSlip
-      ? [
+        : []),
+    ...(Array.isArray(registration.passportDocuments)
+      ? registration.passportDocuments.map(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (doc: any, i: number) => ({
+          url: typeof doc === "string" ? doc : doc.url,
+          title: `Passport Document ${i + 1}`,
+          type: "auto",
+          category: "Identity",
+        }),
+      )
+      : registration.passportDocuments
+        ? [
+          {
+            url:
+              typeof registration.passportDocuments === "string"
+                ? registration.passportDocuments
+                : (registration.passportDocuments as { url?: string })?.url,
+            title: "Passport Document",
+            type: "auto",
+            category: "Identity",
+          },
+        ]
+        : []),
+    ...(Array.isArray(registration.paymentSlip)
+      ? registration.paymentSlip.map(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (doc: any, i: number) => ({
+          url: typeof doc === "string" ? doc : doc.url,
+          title: `Payment Slip ${i + 1}`,
+          type: "auto",
+          category: "Payment",
+        }),
+      )
+      : registration.paymentSlip
+        ? [
           {
             url:
               typeof registration.paymentSlip === "string"
@@ -125,29 +168,53 @@ export default function RegistrationDetailsClient({
             category: "Payment",
           },
         ]
-      : []),
+        : []),
     ...(Array.isArray(registration.academicQualificationDocuments)
       ? registration.academicQualificationDocuments.map(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (doc: any, i: number) => ({
-            url: typeof doc === "string" ? doc : doc.url,
-            title: `Academic Document ${i + 1}`,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (doc: any, i: number) => ({
+          url: typeof doc === "string" ? doc : doc.url,
+          title: `Academic Document ${i + 1}`,
+          type: "auto",
+          category: "Academic",
+        }),
+      )
+      : registration.academicQualificationDocuments
+        ? [
+          {
+            url:
+              typeof registration.academicQualificationDocuments === "string"
+                ? registration.academicQualificationDocuments
+                : (registration.academicQualificationDocuments as { url?: string })?.url,
+            title: "Academic Document",
             type: "auto",
             category: "Academic",
-          }),
-        )
-      : []),
+          },
+        ]
+        : []),
     ...(Array.isArray(registration.nicDocuments)
       ? registration.nicDocuments.map(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (doc: any, i: number) => ({
-            url: typeof doc === "string" ? doc : doc.url,
-            title: `NIC/Passport ${i + 1}`,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (doc: any, i: number) => ({
+          url: typeof doc === "string" ? doc : doc.url,
+          title: `NIC/Passport ${i + 1}`,
+          type: "auto",
+          category: "Identity",
+        }),
+      )
+      : registration.nicDocuments
+        ? [
+          {
+            url:
+              typeof registration.nicDocuments === "string"
+                ? registration.nicDocuments
+                : (registration.nicDocuments as { url?: string })?.url,
+            title: "NIC/Passport",
             type: "auto",
             category: "Identity",
-          }),
-        )
-      : []),
+          },
+        ]
+        : []),
   ];
 
   const getFileType = (url: string) => {
@@ -367,7 +434,7 @@ export default function RegistrationDetailsClient({
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-2 mb-4">
                   {Array.isArray(registration.tags) &&
-                  registration.tags.length > 0 ? (
+                    registration.tags.length > 0 ? (
                     registration.tags.map((tag: string) => (
                       <Badge
                         key={tag}
@@ -482,7 +549,7 @@ export default function RegistrationDetailsClient({
                               >
                                 <TableCell className="text-xs font-medium py-3">
                                   {p.paidAt &&
-                                  !isNaN(new Date(p.paidAt).getTime())
+                                    !isNaN(new Date(p.paidAt).getTime())
                                     ? format(new Date(p.paidAt), "MMM d, yyyy")
                                     : "—"}
                                 </TableCell>
