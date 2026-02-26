@@ -135,7 +135,8 @@ export async function getRegistrations(params: {
 
 const _cachedPrograms = unstable_cache(
   async () => {
-    const programs = await prisma.program.findMany({
+    const programs: Array<{ code: string; name: string }> =
+      await prisma.program.findMany({
       select: { code: true, name: true },
       orderBy: { displayOrder: "asc" },
     });
