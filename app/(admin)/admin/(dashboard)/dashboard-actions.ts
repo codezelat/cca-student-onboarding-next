@@ -7,7 +7,6 @@ import { revalidatePath, unstable_cache } from "next/cache";
  * Strip all non-plain-object types (Decimal, Date→ISO, BigInt→number) via a
  * JSON round-trip so Next.js can safely pass the data to Client Components.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function s<T>(data: T): T {
   return JSON.parse(
     JSON.stringify(data, (_k, v) => (typeof v === "bigint" ? Number(v) : v)),
