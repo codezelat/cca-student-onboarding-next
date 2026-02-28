@@ -8,17 +8,24 @@ export default async function ReceivedPaymentsPage({
 }) {
   const params = await searchParams;
   const search = (params.search as string) || "";
-  const status = (params.status as string) || "all";
+  const status = (params.status as string) || "pending";
   const page = Math.max(
     1,
     Number.isFinite(Number(params.page)) ? Number(params.page) : 1,
   );
 
-  const pendingPaymentsResult = await getPendingPayments({
-    search,
-    status,
-    page,
-  });
+  const [paymentsResult, pendingOnlyCountResult] = await Promise.all([
+    getPendingPayments({
+      search,
+      status,
+      page,
+    }),
+    getPendingPayments({
+      status: "pending",
+      page: 1,
+      pageSize: 1,
+    }),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -58,7 +65,7 @@ export default async function ReceivedPaymentsPage({
                 Pending Slips
               </p>
               <p className="text-xl font-black text-gray-800">
-                {pendingPaymentsResult.total}
+                {pendingOnlyCountResult.total}
               </p>
             </div>
           </div>
@@ -66,13 +73,13 @@ export default async function ReceivedPaymentsPage({
       </div>
 
       <ReceivedPaymentsTable
-        initialPayments={pendingPaymentsResult.data}
+        initialPayments={paymentsResult.data}
         currentSearch={search}
         currentStatus={status}
-        currentPage={pendingPaymentsResult.page}
-        pageSize={pendingPaymentsResult.pageSize}
-        totalPages={pendingPaymentsResult.totalPages}
-        totalRows={pendingPaymentsResult.total}
+        currentPage={paymentsResult.page}
+        pageSize={paymentsResult.pageSize}
+        totalPages={paymentsResult.totalPages}
+        totalRows={paymentsResult.total}
       />
     </div>
   );

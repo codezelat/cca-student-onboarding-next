@@ -54,7 +54,7 @@ export default function ReceivedPaymentsTable({
         const nextPage = params.page ?? currentPage;
 
         if (nextSearch) sp.set("search", nextSearch);
-        if (nextStatus && nextStatus !== "all") sp.set("status", nextStatus);
+        if (nextStatus) sp.set("status", nextStatus);
         if (nextPage > 1) sp.set("page", String(nextPage));
 
         const query = sp.toString();
