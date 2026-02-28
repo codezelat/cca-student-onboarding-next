@@ -3,20 +3,12 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath, unstable_cache } from "next/cache";
 
-/**
- * Strip all non-plain-object types (Decimal, Date→ISO, BigInt→number) via a
- * JSON round-trip so Next.js can safely pass the data to Client Components.
- */
 function s<T>(data: T): T {
   return JSON.parse(
     JSON.stringify(data, (_k, v) => (typeof v === "bigint" ? Number(v) : v)),
   );
 }
 
-// ---------------------------------------------------------------------------
-// getDashboardStats — collapsed from 7 queries to 2 (one raw SQL + one groupBy)
-// Cached for 60 s; busted by revalidatePath("/admin") after mutations.
-// ---------------------------------------------------------------------------
 const _cachedDashboardStats = unstable_cache(
   async () => {
     type StatsRow = {
@@ -62,9 +54,9 @@ const _cachedDashboardStats = unstable_cache(
       specialOfferCount: Number(row.special),
       topProgram: topProgramResult[0]
         ? {
-          id: topProgramResult[0].programId,
-          count: topProgramResult[0]._count.programId,
-        }
+            id: topProgramResult[0].programId,
+            count: topProgramResult[0]._count.programId,
+          }
         : null,
     };
   },
@@ -136,9 +128,9 @@ const _cachedPrograms = unstable_cache(
   async () => {
     const programs: Array<{ code: string; name: string }> =
       await prisma.program.findMany({
-      select: { code: true, name: true },
-      orderBy: { displayOrder: "asc" },
-    });
+        select: { code: true, name: true },
+        orderBy: { displayOrder: "asc" },
+      });
     return programs.map((p) => ({ programId: p.code, programName: p.name }));
   },
   ["active-programs"],
