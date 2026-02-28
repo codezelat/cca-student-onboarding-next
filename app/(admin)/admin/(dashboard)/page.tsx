@@ -16,10 +16,16 @@ export default async function AdminDashboardPage({
     const search = (params.search as string) || "";
     const programFilter = (params.program_filter as string) || "";
     const tagFilter = (params.tag_filter as string) || "";
+    const page = Math.max(
+        1,
+        Number.isFinite(Number(params.page))
+            ? Number(params.page)
+            : 1,
+    );
 
-    const [stats, registrations, programs] = await Promise.all([
+    const [stats, registrationsResult, programs] = await Promise.all([
         getDashboardStats(),
-        getRegistrations({ scope, search, programFilter, tagFilter }),
+        getRegistrations({ scope, search, programFilter, tagFilter, page }),
         getActivePrograms(),
     ]);
 
@@ -78,13 +84,16 @@ export default async function AdminDashboardPage({
             </div>
 
             <RegistrationTable
-                initialRegistrations={registrations}
+                initialRegistrations={registrationsResult.data}
                 initialStats={stats}
                 programs={programs}
                 currentScope={scope}
                 currentSearch={search}
                 currentProgram={programFilter}
                 currentTag={tagFilter}
+                currentPage={registrationsResult.page}
+                totalPages={registrationsResult.totalPages}
+                totalRows={registrationsResult.total}
             />
         </>
     );

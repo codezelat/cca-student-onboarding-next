@@ -19,12 +19,10 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
-
-  // getUser() validates the session against the Supabase Auth server.
-  // This is more secure than getSession() in a server-side context.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
 
   if (!user) {
     redirect("/admin/login");

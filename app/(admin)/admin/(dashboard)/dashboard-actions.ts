@@ -73,8 +73,20 @@ export async function getRegistrations(params: {
   search?: string;
   programFilter?: string;
   tagFilter?: string;
+  page?: number;
+  pageSize?: number;
 }) {
-  const { scope = "active", search, programFilter, tagFilter } = params;
+  const {
+    scope = "active",
+    search,
+    programFilter,
+    tagFilter,
+    page = 1,
+    pageSize = 25,
+  } = params;
+  const safePage = Math.max(1, page);
+  const safePageSize = Math.min(Math.max(1, pageSize), 100);
+  const skip = (safePage - 1) * safePageSize;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {};
@@ -108,20 +120,44 @@ export async function getRegistrations(params: {
     where.tags = { path: [], array_contains: tagFilter } as any;
   }
 
-  const registrations = await prisma.cCARegistration.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    include: {
-      program: {
-        select: {
-          name: true,
-          code: true,
+  const [total, registrations] = await Promise.all([
+    prisma.cCARegistration.count({ where }),
+    prisma.cCARegistration.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: safePageSize,
+      select: {
+        id: true,
+        registerId: true,
+        programId: true,
+        fullName: true,
+        nicNumber: true,
+        passportNumber: true,
+        emailAddress: true,
+        whatsappNumber: true,
+        paymentSlip: true,
+        fullAmount: true,
+        currentPaidAmount: true,
+        createdAt: true,
+        deletedAt: true,
+        program: {
+          select: {
+            name: true,
+            code: true,
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
 
-  return s(registrations);
+  return s({
+    data: registrations,
+    total,
+    page: safePage,
+    pageSize: safePageSize,
+    totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+  });
 }
 
 const _cachedPrograms = unstable_cache(

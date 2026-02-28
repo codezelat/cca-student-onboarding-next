@@ -13,7 +13,6 @@ import {
     Gift,
     RotateCcw,
     ExternalLink,
-    Receipt,
     Edit,
     Eye,
     Trash2,
@@ -47,6 +46,9 @@ interface RegistrationTableProps {
     currentSearch: string;
     currentProgram: string;
     currentTag: string;
+    currentPage: number;
+    totalPages: number;
+    totalRows: number;
 }
 
 export default function RegistrationTable({
@@ -57,12 +59,21 @@ export default function RegistrationTable({
     currentSearch,
     currentProgram,
     currentTag,
+    currentPage,
+    totalPages,
+    totalRows,
 }: RegistrationTableProps) {
     const router = useRouter();
     const [searchInput, setSearchInput] = useState(currentSearch);
     const [programInput, setProgramInput] = useState(currentProgram);
 
-    function buildUrl(params: Record<string, string>) {
+    function buildUrl(params: {
+        scope?: string;
+        search?: string;
+        program?: string;
+        tag?: string;
+        page?: number;
+    }) {
         const sp = new URLSearchParams();
         sp.set("scope", params.scope || currentScope);
 
@@ -71,17 +82,21 @@ export default function RegistrationTable({
         const program =
             params.program !== undefined ? params.program : currentProgram;
         const tag = params.tag !== undefined ? params.tag : currentTag;
+        const page = params.page !== undefined ? params.page : currentPage;
 
         if (search) sp.set("search", search);
         if (program) sp.set("program_filter", program);
         if (tag) sp.set("tag_filter", tag);
+        if (page > 1) sp.set("page", String(page));
 
         return `/admin?${sp.toString()}`;
     }
 
     function handleFilterSubmit(e: React.FormEvent) {
         e.preventDefault();
-        router.push(buildUrl({ search: searchInput, program: programInput }));
+        router.push(
+            buildUrl({ search: searchInput, program: programInput, page: 1 }),
+        );
     }
 
     function clearFilters() {
@@ -174,7 +189,7 @@ export default function RegistrationTable({
             {/* Scope Switch */}
             <div className="flex flex-wrap items-center gap-3">
                 <Link
-                    href={buildUrl({ scope: "active" })}
+                    href={buildUrl({ scope: "active", page: 1 })}
                     className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                         currentScope === "active"
                             ? "bg-primary text-white shadow-lg scale-105"
@@ -184,7 +199,7 @@ export default function RegistrationTable({
                     Active ({initialStats.activeRegistrations})
                 </Link>
                 <Link
-                    href={buildUrl({ scope: "trashed" })}
+                    href={buildUrl({ scope: "trashed", page: 1 })}
                     className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                         currentScope === "trashed"
                             ? "bg-red-600 text-white shadow-lg scale-105"
@@ -194,7 +209,7 @@ export default function RegistrationTable({
                     Trash ({initialStats.trashedRegistrations})
                 </Link>
                 <Link
-                    href={buildUrl({ scope: "all" })}
+                    href={buildUrl({ scope: "all", page: 1 })}
                     className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                         currentScope === "all"
                             ? "bg-indigo-600 text-white shadow-lg scale-105"
@@ -303,6 +318,7 @@ export default function RegistrationTable({
                     href={buildUrl({
                         tag:
                             currentTag === "General Rate" ? "" : "General Rate",
+                        page: 1,
                     })}
                     className={`p-6 backdrop-blur-xl border rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group ${
                         currentTag === "General Rate"
@@ -337,6 +353,7 @@ export default function RegistrationTable({
                             currentTag === "Special 50% Offer"
                                 ? ""
                                 : "Special 50% Offer",
+                        page: 1,
                     })}
                     className={`p-6 backdrop-blur-xl border rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group ${
                         currentTag === "Special 50% Offer"
@@ -581,6 +598,40 @@ export default function RegistrationTable({
                         </tbody>
                     </table>
                 </div>
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white/40">
+                        <span className="text-sm text-gray-600">
+                            Showing {initialRegistrations.length} of {totalRows}{" "}
+                            registrations
+                        </span>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentPage <= 1}
+                                onClick={() =>
+                                    router.push(
+                                        buildUrl({ page: currentPage - 1 }),
+                                    )
+                                }
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentPage >= totalPages}
+                                onClick={() =>
+                                    router.push(
+                                        buildUrl({ page: currentPage + 1 }),
+                                    )
+                                }
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

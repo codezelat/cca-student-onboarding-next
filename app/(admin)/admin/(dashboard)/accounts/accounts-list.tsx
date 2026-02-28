@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createAdminUser, deleteAdminUser } from "./actions";
+import { useRouter } from "next/navigation";
 
 interface AdminUser {
     id: string;
@@ -17,6 +18,7 @@ export default function AdminAccountsList({
 }: {
     initialUsers: AdminUser[];
 }) {
+    const router = useRouter();
     const [users, setUsers] = useState<AdminUser[]>(initialUsers);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -43,9 +45,24 @@ export default function AdminAccountsList({
             setError(result.error);
             setIsLoading(false);
         } else {
-            // Success - ideally we'd re-fetch or the server action handles revalidation
-            // But for immediate feedback, let's refresh page or update state
-            window.location.reload();
+            const createdUser = result.user;
+            if (createdUser) {
+                setUsers((prev) => [
+                    {
+                        id: createdUser.id,
+                        email: createdUser.email,
+                        name: createdUser.user_metadata?.name || "Unknown",
+                        role: createdUser.user_metadata?.role || "admin",
+                        lastSignIn: createdUser.last_sign_in_at,
+                        createdAt: createdUser.created_at,
+                    },
+                    ...prev,
+                ]);
+            }
+            e.currentTarget.reset();
+            setIsModalOpen(false);
+            setIsLoading(false);
+            router.refresh();
         }
     }
 
@@ -83,7 +100,9 @@ export default function AdminAccountsList({
             setDeleteError(result.error);
             setIsDeleting(false);
         } else {
-            window.location.reload();
+            setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
+            closeDeleteModal();
+            router.refresh();
         }
     }
 

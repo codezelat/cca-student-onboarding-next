@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Search, CheckCircle, XCircle, ExternalLink, RefreshCw } from "lucide-react";
 import { approvePaymentSlip, declinePaymentSlip } from "./received-payments-actions";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 
 export default function ReceivedPaymentsTable({
     initialPayments,
@@ -14,6 +15,7 @@ export default function ReceivedPaymentsTable({
     currentSearch: string;
     currentStatus?: string;
 }) {
+    const router = useRouter();
     const [searchQuery, setSearchQuery] = useState(currentSearch);
     const [statusFilter, setStatusFilter] = useState(currentStatus);
     const [isApproving, setIsApproving] = useState<string | null>(null);
@@ -39,7 +41,7 @@ export default function ReceivedPaymentsTable({
     // Filter submit handler
     const handleFilterSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const params = new URLSearchParams(window.location.search);
+        const params = new URLSearchParams();
 
         if (searchQuery) params.set("search", searchQuery);
         else params.delete("search");
@@ -47,13 +49,18 @@ export default function ReceivedPaymentsTable({
         if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
         else params.delete("status"); // 'all' is the default, keep URL clean
 
-        window.location.href = `/admin/received-payments?${params.toString()}`;
+        const query = params.toString();
+        router.push(
+            query
+                ? `/admin/received-payments?${query}`
+                : "/admin/received-payments",
+        );
     };
 
     const handleClearFilter = () => {
         setSearchQuery("");
         setStatusFilter("all");
-        window.location.href = `/admin/received-payments`;
+        router.push("/admin/received-payments");
     };
 
     const handleDecline = async (registrationId: string, slipIndex: number) => {
@@ -61,6 +68,7 @@ export default function ReceivedPaymentsTable({
         setIsDeclining(`${registrationId}-${slipIndex}`);
         try {
             await declinePaymentSlip(registrationId, slipIndex);
+            router.refresh();
         } catch (error) {
             console.error(error);
             alert("Failed to decline slip.");
@@ -84,6 +92,7 @@ export default function ReceivedPaymentsTable({
             await approvePaymentSlip(approveModal.registrationId, approveModal.slipIndex, amountNum);
             setApproveModal(null);
             setApproveAmount("");
+            router.refresh();
         } catch (error) {
             console.error(error);
             alert("Failed to approve and log payment.");

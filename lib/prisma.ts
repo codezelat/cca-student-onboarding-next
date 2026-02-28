@@ -4,6 +4,11 @@ import pg from "pg";
 
 const prismaClientSingleton = () => {
   const connectionString = process.env.DATABASE_URL;
+  const configuredPoolMax = Number(process.env.PG_POOL_MAX);
+  const poolMax =
+    Number.isFinite(configuredPoolMax) && configuredPoolMax > 0
+      ? configuredPoolMax
+      : 10;
 
   if (!connectionString) {
     throw new Error("DATABASE_URL environment variable is not set.");
@@ -12,7 +17,7 @@ const prismaClientSingleton = () => {
   const pool = new pg.Pool({
     connectionString,
     ssl: { rejectUnauthorized: false },
-    max: 1,
+    max: poolMax,
   });
 
   const adapter = new PrismaPg(pool, {

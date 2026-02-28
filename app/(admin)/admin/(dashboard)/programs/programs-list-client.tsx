@@ -34,6 +34,7 @@ import { toggleProgramStatus, deleteProgram } from "./programs-actions";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
 
 interface ProgramsListClientProps {
     initialPrograms: any[];
@@ -42,6 +43,7 @@ interface ProgramsListClientProps {
 export default function ProgramsListClient({
     initialPrograms,
 }: ProgramsListClientProps) {
+    const router = useRouter();
     const [programs, setPrograms] = useState(initialPrograms);
     const [searchTerm, setSearchTerm] = useState("");
     const { toast } = useToast();
@@ -59,6 +61,7 @@ export default function ProgramsListClient({
                 title: "Status Updated",
                 description: `Program is now ${!currentStatus ? "Active" : "Inactive"}.`,
             });
+            router.refresh();
         } catch (error) {
             // Revert on error
             setPrograms(initialPrograms);
@@ -79,12 +82,12 @@ export default function ProgramsListClient({
             return;
         try {
             await deleteProgram(id);
-            setPrograms((prev) => prev.filter((p) => p.id === id));
+            setPrograms((prev) => prev.filter((p) => p.id !== id));
             toast({
                 title: "Deleted",
                 description: "Program removed successfully.",
             });
-            window.location.reload(); // Refresh to ensure sync
+            router.refresh();
         } catch (error: any) {
             toast({
                 title: "Cannot Delete",
