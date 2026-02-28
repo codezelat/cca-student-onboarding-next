@@ -1,71 +1,84 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
+const lookupQuerySchema = z.object({
+  type: z.enum(["local", "international"]),
+  identifier: z.string().trim().min(3).max(50),
+});
+
 export async function GET(request: Request) {
-    try {
-        const { searchParams } = new URL(request.url);
-        const type = searchParams.get("type"); // "local" or "international"
-        const identifier = searchParams.get("identifier");
+  try {
+    const { searchParams } = new URL(request.url);
+    const parsed = lookupQuerySchema.safeParse({
+      type: searchParams.get("type"),
+      identifier: searchParams.get("identifier"),
+    });
 
-        if (!type || !identifier) {
-            return NextResponse.json(
-                { success: false, error: "Missing required parameters" },
-                { status: 400 }
-            );
-        }
-
-        let registration;
-
-        if (type === "local") {
-            registration = await prisma.cCARegistration.findFirst({
-                where: { nicNumber: identifier },
-                orderBy: { createdAt: 'desc' }
-            });
-        } else if (type === "international") {
-            registration = await prisma.cCARegistration.findFirst({
-                where: { passportNumber: identifier },
-                orderBy: { createdAt: 'desc' }
-            });
-        } else {
-            return NextResponse.json(
-                { success: false, error: "Invalid type parameter" },
-                { status: 400 }
-            );
-        }
-
-        if (!registration) {
-            return NextResponse.json(
-                { success: false, error: "Student not found" },
-                { status: 404 }
-            );
-        }
-
-        // Calculate first name from full name
-        const firstName = registration.fullName
-            ? registration.fullName.split(' ')[0]
-            : registration.nameWithInitials.split(' ').pop() || "Student";
-
-        return NextResponse.json({
-            success: true,
-            data: {
-                id: registration.id.toString(),
-                firstName: firstName,
-                fullName: registration.fullName,
-                programName: registration.programName,
-                // If fullAmount or currentPaidAmount is null, default to 0
-                fullAmount: registration.fullAmount ? Number(registration.fullAmount) : 0,
-                paidAmount: registration.currentPaidAmount ? Number(registration.currentPaidAmount) : 0,
-                balanceDue: (registration.fullAmount ? Number(registration.fullAmount) : 0) - (registration.currentPaidAmount ? Number(registration.currentPaidAmount) : 0)
-            }
-        });
-
-    } catch (error: any) {
-        console.error("Lookup error:", error);
-        return NextResponse.json(
-            { success: false, error: "Internal server error" },
-            { status: 500 }
-        );
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: "Missing or invalid query parameters" },
+        { status: 400 },
+      );
     }
+
+    const { type, identifier } = parsed.data;
+
+    const where =
+      type === "local"
+        ? { nicNumber: identifier }
+        : { passportNumber: identifier };
+
+    const registration = await prisma.cCARegistration.findFirst({
+      where,
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        fullName: true,
+        nameWithInitials: true,
+        programName: true,
+        fullAmount: true,
+        currentPaidAmount: true,
+      },
+    });
+
+    if (!registration) {
+      return NextResponse.json(
+        { success: false, error: "Student not found" },
+        { status: 404 },
+      );
+    }
+
+    const firstName = registration.fullName
+      ? registration.fullName.split(" ")[0]
+      : registration.nameWithInitials.split(" ").pop() || "Student";
+
+    const fullAmount = registration.fullAmount
+      ? Number(registration.fullAmount)
+      : 0;
+    const paidAmount = registration.currentPaidAmount
+      ? Number(registration.currentPaidAmount)
+      : 0;
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: registration.id.toString(),
+        firstName,
+        fullName: registration.fullName,
+        programName: registration.programName,
+        fullAmount,
+        paidAmount,
+        balanceDue: fullAmount - paidAmount,
+      },
+    });
+  } catch (error) {
+    console.error("Lookup error:", error);
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 },
+    );
+  }
 }

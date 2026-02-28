@@ -5,6 +5,12 @@ import Link from "next/link";
 import ReCAPTCHA from "react-google-recaptcha";
 import { useFileUpload } from "@/lib/hooks/use-file-upload";
 import { COUNTRIES, SRI_LANKA_DISTRICTS } from "@/lib/data/registration";
+import {
+    ALLOWED_UPLOAD_ACCEPT,
+    ALLOWED_UPLOAD_LABEL,
+    MAX_UPLOAD_SIZE_BYTES,
+    MAX_UPLOAD_SIZE_MB,
+} from "@/lib/upload-config";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -20,7 +26,7 @@ export default function RegisterPage() {
     >("idle");
 
     const recaptchaRef = useRef<ReCAPTCHA>(null);
-    const { uploadFile, progress, isUploading } = useFileUpload();
+    const { uploadFile } = useFileUpload();
 
     // Form State mapped exactly to Alpine.js implementation
     const [formData, setFormData] = useState({
@@ -100,10 +106,9 @@ export default function RegisterPage() {
     ) => {
         const file = e.target.files?.[0];
         if (file) {
-            const maxSize = 10 * 1024 * 1024; // 10MB
-            if (file.size > maxSize) {
+            if (file.size > MAX_UPLOAD_SIZE_BYTES) {
                 alert(
-                    `File "${file.name}" is too large!\n\nMaximum file size is 10MB.\nYour file is ${(file.size / (1024 * 1024)).toFixed(2)}MB.\n\nPlease compress or choose a smaller file.`,
+                    `File "${file.name}" is too large!\n\nMaximum file size is ${MAX_UPLOAD_SIZE_MB}MB.\nYour file is ${(file.size / (1024 * 1024)).toFixed(2)}MB.\n\nPlease compress or choose a smaller file.`,
                 );
                 e.target.value = "";
                 setUploadedFiles((prev) => ({ ...prev, [fieldName]: null }));
@@ -168,90 +173,90 @@ export default function RegisterPage() {
                 );
             }
 
-            // Process File Uploads (Sequentially to report overall progress, or Promise.all if supported)
-            const academicUrls: string[] = [];
-            const nicUrls: string[] = [];
-            let passportUrls: string[] = [];
-            let photoUrl = "";
-            let paymentUrl = "";
-
-            // Helper to handle progress calculation
-            const filesToUpload = [
-                uploadedFiles.academic_1,
-                uploadedFiles.academic_2,
-                uploadedFiles.nic_1,
-                uploadedFiles.nic_2,
-                uploadedFiles.passport_1,
-                uploadedFiles.passport_2,
-                uploadedFiles.photo,
-                uploadedFiles.payment,
-            ].filter(Boolean) as File[];
-
-            const totalFiles = filesToUpload.length;
-            let filesUploaded = 0;
-
-            const uploadWithProgress = async (
-                file: File,
-                directory: "documents" | "receipts" | "avatars",
-            ) => {
-                const url = await uploadFile(file, directory);
-                filesUploaded++;
-                setUploadProgress(
-                    Math.round((filesUploaded / totalFiles) * 90),
-                ); // 90% is max upload, remaining 10% is form submission logic
-                return url;
+            type UploadTask = {
+                slot: keyof typeof uploadedFiles;
+                file: File;
+                directory: "documents" | "receipts" | "avatars";
             };
 
-            // Academic
+            const uploadTasks: UploadTask[] = [];
             if (uploadedFiles.academic_1)
-                academicUrls.push(
-                    await uploadWithProgress(
-                        uploadedFiles.academic_1,
-                        "documents",
-                    ),
-                );
+                uploadTasks.push({
+                    slot: "academic_1",
+                    file: uploadedFiles.academic_1,
+                    directory: "documents",
+                });
             if (uploadedFiles.academic_2)
-                academicUrls.push(
-                    await uploadWithProgress(
-                        uploadedFiles.academic_2,
-                        "documents",
-                    ),
-                );
-            // NIC
+                uploadTasks.push({
+                    slot: "academic_2",
+                    file: uploadedFiles.academic_2,
+                    directory: "documents",
+                });
             if (uploadedFiles.nic_1)
-                nicUrls.push(
-                    await uploadWithProgress(uploadedFiles.nic_1, "documents"),
-                );
+                uploadTasks.push({
+                    slot: "nic_1",
+                    file: uploadedFiles.nic_1,
+                    directory: "documents",
+                });
             if (uploadedFiles.nic_2)
-                nicUrls.push(
-                    await uploadWithProgress(uploadedFiles.nic_2, "documents"),
-                );
-            // Passport Docs
+                uploadTasks.push({
+                    slot: "nic_2",
+                    file: uploadedFiles.nic_2,
+                    directory: "documents",
+                });
             if (uploadedFiles.passport_1)
-                passportUrls.push(
-                    await uploadWithProgress(
-                        uploadedFiles.passport_1,
-                        "documents",
-                    ),
-                );
+                uploadTasks.push({
+                    slot: "passport_1",
+                    file: uploadedFiles.passport_1,
+                    directory: "documents",
+                });
             if (uploadedFiles.passport_2)
-                passportUrls.push(
-                    await uploadWithProgress(
-                        uploadedFiles.passport_2,
-                        "documents",
-                    ),
-                );
-            // Photo & Payment
+                uploadTasks.push({
+                    slot: "passport_2",
+                    file: uploadedFiles.passport_2,
+                    directory: "documents",
+                });
             if (uploadedFiles.photo)
-                photoUrl = await uploadWithProgress(
-                    uploadedFiles.photo,
-                    "avatars",
-                );
+                uploadTasks.push({
+                    slot: "photo",
+                    file: uploadedFiles.photo,
+                    directory: "avatars",
+                });
             if (uploadedFiles.payment)
-                paymentUrl = await uploadWithProgress(
-                    uploadedFiles.payment,
-                    "receipts",
-                );
+                uploadTasks.push({
+                    slot: "payment",
+                    file: uploadedFiles.payment,
+                    directory: "receipts",
+                });
+
+            let completedUploads = 0;
+            const totalUploads = uploadTasks.length;
+            const uploadedMap = new Map<keyof typeof uploadedFiles, string>();
+
+            await Promise.all(
+                uploadTasks.map(async ({ slot, file, directory }) => {
+                    const url = await uploadFile(file, directory);
+                    uploadedMap.set(slot, url);
+                    completedUploads += 1;
+                    setUploadProgress(
+                        Math.round((completedUploads / totalUploads) * 90),
+                    );
+                }),
+            );
+
+            const academicUrls = [
+                uploadedMap.get("academic_1"),
+                uploadedMap.get("academic_2"),
+            ].filter(Boolean) as string[];
+            const nicUrls = [uploadedMap.get("nic_1"), uploadedMap.get("nic_2")].filter(
+                Boolean,
+            ) as string[];
+            const passportUrls = [
+                uploadedMap.get("passport_1"),
+                uploadedMap.get("passport_2"),
+            ].filter(Boolean) as string[];
+            const photoUrl = uploadedMap.get("photo") || "";
+            const paymentUrl = uploadedMap.get("payment") || "";
 
             setUploadStatus("submitting");
             setUploadProgress(95);
@@ -1221,7 +1226,7 @@ export default function RegisterPage() {
                                     </h2>
                                     <p className="text-sm text-gray-600">
                                         Upload clear copies of your documents
-                                        (Max 10MB per file)
+                                        (Max {MAX_UPLOAD_SIZE_MB}MB per file)
                                     </p>
                                 </div>
                             </div>
@@ -1260,7 +1265,7 @@ export default function RegisterPage() {
                                                 <input
                                                     type="file"
                                                     className="hidden"
-                                                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.heic,.webp"
+                                                    accept={ALLOWED_UPLOAD_ACCEPT}
                                                     onChange={(e) =>
                                                         handleFileSelect(
                                                             e,
@@ -1288,9 +1293,7 @@ export default function RegisterPage() {
                                                             Document #1
                                                         </p>
                                                         <p className="mt-1 text-xs text-gray-500">
-                                                            PDF, DOC, DOCX, JPG,
-                                                            JPEG, PNG, HEIC,
-                                                            WEBP • Max 10MB
+                                                            {ALLOWED_UPLOAD_LABEL} • Max {MAX_UPLOAD_SIZE_MB}MB
                                                         </p>
                                                     </div>
                                                 ) : (
@@ -1330,7 +1333,7 @@ export default function RegisterPage() {
                                                 <input
                                                     type="file"
                                                     className="hidden"
-                                                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.heic,.webp"
+                                                    accept={ALLOWED_UPLOAD_ACCEPT}
                                                     onChange={(e) =>
                                                         handleFileSelect(
                                                             e,
@@ -1358,9 +1361,7 @@ export default function RegisterPage() {
                                                             (Optional)
                                                         </p>
                                                         <p className="mt-1 text-xs text-gray-500">
-                                                            PDF, DOC, DOCX, JPG,
-                                                            JPEG, PNG, HEIC,
-                                                            WEBP • Max 10MB
+                                                            {ALLOWED_UPLOAD_LABEL} • Max {MAX_UPLOAD_SIZE_MB}MB
                                                         </p>
                                                     </div>
                                                 ) : (
@@ -1432,7 +1433,7 @@ export default function RegisterPage() {
                                                     <input
                                                         type="file"
                                                         className="hidden"
-                                                        accept=".pdf,.jpg,.jpeg,.png,.heic,.webp"
+                                                        accept={ALLOWED_UPLOAD_ACCEPT}
                                                         onChange={(e) =>
                                                             handleFileSelect(
                                                                 e,
@@ -1462,8 +1463,7 @@ export default function RegisterPage() {
                                                                 NIC Front
                                                             </p>
                                                             <p className="mt-1 text-xs text-gray-500">
-                                                                JPG, JPEG, PNG,
-                                                                PDF, HEIC, WEBP
+                                                                {ALLOWED_UPLOAD_LABEL}
                                                             </p>
                                                         </div>
                                                     ) : (
@@ -1497,7 +1497,7 @@ export default function RegisterPage() {
                                                     <input
                                                         type="file"
                                                         className="hidden"
-                                                        accept=".pdf,.jpg,.jpeg,.png,.heic,.webp"
+                                                        accept={ALLOWED_UPLOAD_ACCEPT}
                                                         onChange={(e) =>
                                                             handleFileSelect(
                                                                 e,
@@ -1527,8 +1527,7 @@ export default function RegisterPage() {
                                                                 NIC Back
                                                             </p>
                                                             <p className="mt-1 text-xs text-gray-500">
-                                                                JPG, JPEG, PNG,
-                                                                PDF, HEIC, WEBP
+                                                                {ALLOWED_UPLOAD_LABEL}
                                                             </p>
                                                         </div>
                                                     ) : (
@@ -1594,7 +1593,7 @@ export default function RegisterPage() {
                                                 <input
                                                     type="file"
                                                     className="hidden"
-                                                    accept=".pdf,.jpg,.jpeg,.png,.heic,.webp"
+                                                    accept={ALLOWED_UPLOAD_ACCEPT}
                                                     onChange={(e) =>
                                                         handleFileSelect(
                                                             e,
@@ -1623,9 +1622,7 @@ export default function RegisterPage() {
                                                             Information Page
                                                         </p>
                                                         <p className="mt-1 text-xs text-gray-500">
-                                                            PDF, JPG, JPEG, PNG,
-                                                            HEIC, WEBP • Max
-                                                            10MB
+                                                            {ALLOWED_UPLOAD_LABEL} • Max {MAX_UPLOAD_SIZE_MB}MB
                                                         </p>
                                                     </div>
                                                 ) : (
@@ -1697,7 +1694,7 @@ export default function RegisterPage() {
                                                 <input
                                                     type="file"
                                                     className="hidden"
-                                                    accept=".jpg,.jpeg,.png,.heic,.webp"
+                                                    accept=".jpg,.jpeg,.png"
                                                     onChange={(e) =>
                                                         handleFileSelect(
                                                             e,
@@ -1725,9 +1722,7 @@ export default function RegisterPage() {
                                                             Upload Your Photo
                                                         </p>
                                                         <p className="mt-1 text-xs text-gray-500">
-                                                            JPG, JPEG, PNG,
-                                                            HEIC, WEBP • Max
-                                                            10MB
+                                                            JPG, JPEG, PNG • Max {MAX_UPLOAD_SIZE_MB}MB
                                                         </p>
                                                     </div>
                                                 ) : (
@@ -1794,7 +1789,7 @@ export default function RegisterPage() {
                                                 <input
                                                     type="file"
                                                     className="hidden"
-                                                    accept=".pdf,.jpg,.jpeg,.png,.heic,.webp"
+                                                    accept={ALLOWED_UPLOAD_ACCEPT}
                                                     onChange={(e) =>
                                                         handleFileSelect(
                                                             e,
@@ -1822,9 +1817,7 @@ export default function RegisterPage() {
                                                             Upload Payment Slip
                                                         </p>
                                                         <p className="mt-1 text-xs text-gray-500">
-                                                            PDF, JPG, JPEG, PNG,
-                                                            HEIC, WEBP • Max
-                                                            10MB
+                                                            {ALLOWED_UPLOAD_LABEL} • Max {MAX_UPLOAD_SIZE_MB}MB
                                                         </p>
                                                     </div>
                                                 ) : (

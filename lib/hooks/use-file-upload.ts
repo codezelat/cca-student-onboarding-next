@@ -1,4 +1,10 @@
 import { useState } from "react";
+import {
+  ALLOWED_UPLOAD_MIME_TYPES,
+  ALLOWED_UPLOAD_LABEL,
+  MAX_UPLOAD_SIZE_BYTES,
+  MAX_UPLOAD_SIZE_MB,
+} from "@/lib/upload-config";
 
 interface UploadState {
   isUploading: boolean;
@@ -19,6 +25,14 @@ export function useFileUpload() {
     file: File,
     directory: "documents" | "receipts" | "avatars" = "documents",
   ): Promise<string> => {
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      throw new Error(`File exceeds ${MAX_UPLOAD_SIZE_MB}MB limit.`);
+    }
+
+    if (!ALLOWED_UPLOAD_MIME_TYPES.includes(file.type as (typeof ALLOWED_UPLOAD_MIME_TYPES)[number])) {
+      throw new Error(`Unsupported file type. Allowed: ${ALLOWED_UPLOAD_LABEL}.`);
+    }
+
     setState({ isUploading: true, progress: 0, error: null, url: null });
 
     try {

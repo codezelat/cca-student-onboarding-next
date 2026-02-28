@@ -3,6 +3,11 @@
 import { useState, ChangeEvent, useRef } from "react";
 import Link from "next/link";
 import { useFileUpload } from "@/lib/hooks/use-file-upload";
+import {
+  ALLOWED_UPLOAD_ACCEPT,
+  MAX_UPLOAD_SIZE_BYTES,
+  MAX_UPLOAD_SIZE_MB,
+} from "@/lib/upload-config";
 
 export default function PaymentUpdatePage() {
   const [studentType, setStudentType] = useState<"local" | "international">(
@@ -85,9 +90,10 @@ export default function PaymentUpdatePage() {
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      if (file.size > maxSize) {
-        alert(`File "${file.name}" is too large! Maximum 10MB.`);
+      if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+        alert(
+          `File "${file.name}" is too large! Maximum ${MAX_UPLOAD_SIZE_MB}MB.`,
+        );
         e.target.value = "";
         setPaymentFile(null);
         return;
@@ -100,6 +106,7 @@ export default function PaymentUpdatePage() {
     if (!paymentFile || !studentDetails) return;
 
     const currentRegistrationId = studentDetails.id;
+    let progressInterval: ReturnType<typeof setInterval> | null = null;
 
     setIsSubmitting(true);
     setSubmitStatus("idle");
@@ -107,10 +114,10 @@ export default function PaymentUpdatePage() {
 
     try {
       // Simulated upload progress steps for UX
-      const progressInterval = setInterval(() => {
+      progressInterval = setInterval(() => {
         setUploadProgress((prev) => {
           if (prev >= 90) {
-            clearInterval(progressInterval);
+            if (progressInterval) clearInterval(progressInterval);
             return 90;
           }
           return prev + 15;
@@ -120,7 +127,10 @@ export default function PaymentUpdatePage() {
       // Real upload call
       const fileUrl = await uploadFile(paymentFile, "receipts");
 
-      clearInterval(progressInterval);
+      if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+      }
       setUploadProgress(95);
 
       // POST to backend API
@@ -146,6 +156,7 @@ export default function PaymentUpdatePage() {
       setSubmitStatus("error");
       alert("Failed to submit payment slip. Please try again.");
     } finally {
+      if (progressInterval) clearInterval(progressInterval);
       setIsSubmitting(false);
     }
   };
@@ -465,7 +476,7 @@ export default function PaymentUpdatePage() {
                       type="file"
                       ref={fileInputRef}
                       onChange={handleFileSelect}
-                      accept="image/*,application/pdf"
+                      accept={ALLOWED_UPLOAD_ACCEPT}
                       className="hidden"
                       disabled={isSubmitting}
                     />
@@ -491,7 +502,7 @@ export default function PaymentUpdatePage() {
                           Click to upload payment slip
                         </p>
                         <p className="text-sm text-gray-500 mt-1">
-                          PNG, JPG or PDF (Max. 10MB)
+                          PNG, JPG or PDF (Max. {MAX_UPLOAD_SIZE_MB}MB)
                         </p>
                       </div>
                     ) : (

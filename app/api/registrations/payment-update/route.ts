@@ -1,65 +1,73 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
+const paymentUpdateSchema = z.object({
+  registrationId: z.string().trim().regex(/^\d+$/, "Invalid registration ID"),
+  paymentUrl: z.string().trim().url().max(2048),
+});
+
 export async function POST(request: Request) {
-    try {
-        const formData = await request.formData();
+  try {
+    const formData = await request.formData();
 
-        const registrationId = formData.get("registration_id") as string;
-        const paymentUrl = formData.get("payment_url") as string;
+    const parsed = paymentUpdateSchema.safeParse({
+      registrationId: String(formData.get("registration_id") || ""),
+      paymentUrl: String(formData.get("payment_url") || ""),
+    });
 
-        if (!registrationId || !paymentUrl) {
-            return NextResponse.json(
-                { success: false, error: "Missing required parameters" },
-                { status: 400 },
-            );
-        }
-
-        // Fetch existing registration to append to payment slips
-        const registration = await prisma.cCARegistration.findUnique({
-            where: { id: BigInt(registrationId) }
-        });
-
-        if (!registration) {
-            return NextResponse.json(
-                { success: false, error: "Registration not found" },
-                { status: 404 },
-            );
-        }
-
-        // Safely append to the JSON paymentSlip array
-        let currentSlips: any[] = [];
-        if (Array.isArray(registration.paymentSlip)) {
-            currentSlips = [...registration.paymentSlip];
-        } else if (registration.paymentSlip) {
-            currentSlips = [registration.paymentSlip];
-        }
-
-        currentSlips.push({
-            id: `slip_${Date.now()}`,
-            url: paymentUrl,
-            uploadedAt: new Date().toISOString(),
-            status: "pending"
-        });
-
-        await prisma.cCARegistration.update({
-            where: { id: BigInt(registrationId) },
-            data: {
-                paymentSlip: currentSlips
-            }
-        });
-
-        return NextResponse.json({
-            success: true,
-            message: "Payment slip updated successfully",
-        });
-    } catch (error: any) {
-        console.error("Payment update error:", error);
-        return NextResponse.json(
-            { success: false, error: error.message || "Internal server error" },
-            { status: 500 },
-        );
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: parsed.error.issues[0]?.message || "Missing required parameters",
+        },
+        { status: 400 },
+      );
     }
+
+    const { registrationId, paymentUrl } = parsed.data;
+    const registrationBigInt = BigInt(registrationId);
+
+    const newSlip = {
+      id: `slip_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`,
+      url: paymentUrl,
+      uploadedAt: new Date().toISOString(),
+      status: "pending",
+    };
+    const newSlipArray = JSON.stringify([newSlip]);
+
+    type UpdatedRow = { id: bigint };
+    const updatedRows = await prisma.$queryRaw<UpdatedRow[]>(Prisma.sql`
+      UPDATE cca_registrations
+      SET payment_slip = CASE
+        WHEN payment_slip IS NULL THEN ${newSlipArray}::jsonb
+        WHEN jsonb_typeof(payment_slip) = 'array' THEN payment_slip || ${newSlipArray}::jsonb
+        ELSE jsonb_build_array(payment_slip) || ${newSlipArray}::jsonb
+      END
+      WHERE id = ${registrationBigInt}
+      RETURNING id
+    `);
+
+    if (!updatedRows.length) {
+      return NextResponse.json(
+        { success: false, error: "Registration not found" },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Payment slip updated successfully",
+    });
+  } catch (error) {
+    console.error("Payment update error:", error);
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 },
+    );
+  }
 }
