@@ -1,15 +1,26 @@
-import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 export default async function ProfilePage() {
-    const supabase = await createClient();
-    const {
-        data: { session },
-    } = await supabase.auth.getSession();
-    const user = session?.user;
+    const headerStore = await headers();
+    const userId = headerStore.get("x-admin-user-id");
 
-    const userName =
-        user?.user_metadata?.name || user?.email?.split("@")[0] || "Admin";
-    const userEmail = user?.email || "N/A";
+    if (!userId) {
+        redirect("/admin/login");
+    }
+
+    const encodedUserName = headerStore.get("x-admin-user-name");
+    let userName = "Admin";
+
+    if (encodedUserName) {
+        try {
+            userName = decodeURIComponent(encodedUserName);
+        } catch {
+            userName = encodedUserName;
+        }
+    }
+
+    const userEmail = headerStore.get("x-admin-user-email") || "N/A";
 
     return (
         <>

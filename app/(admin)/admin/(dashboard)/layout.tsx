@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 import AdminNavigation from "@/components/admin/admin-navigation";
 
 export const metadata: Metadata = {
@@ -18,18 +18,25 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user;
+  const headerStore = await headers();
+  const userId = headerStore.get("x-admin-user-id");
 
-  if (!user) {
+  if (!userId) {
     redirect("/admin/login");
   }
-  const userName =
-    user.user_metadata?.name || user.email?.split("@")[0] || "Admin";
-  const userEmail = user.email || "N/A";
+
+  const encodedUserName = headerStore.get("x-admin-user-name");
+  let userName = "Admin";
+
+  if (encodedUserName) {
+    try {
+      userName = decodeURIComponent(encodedUserName);
+    } catch {
+      userName = encodedUserName;
+    }
+  }
+
+  const userEmail = headerStore.get("x-admin-user-email") || "N/A";
 
   return (
     <div className="min-h-screen font-sans antialiased">
