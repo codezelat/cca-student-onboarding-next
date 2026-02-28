@@ -48,6 +48,7 @@ export async function getFinanceStats() {
         }),
         prisma.registrationPayment.count({
             where: {
+                status: "active",
                 registration: {
                     is: {
                         deletedAt: null,
