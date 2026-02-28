@@ -13,7 +13,7 @@ export function Header() {
             alt="Codezela"
             width={40}
             height={40}
-            className="w-10 h-10 transition-transform duration-300 group-hover:scale-110"
+            className="w-10 h-10 object-contain transition-transform duration-300 group-hover:scale-110"
           />
           <div>
             <span className="text-xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent block">

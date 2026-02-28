@@ -61,6 +61,139 @@ const registrationSchema = z.object({
 
 const urlArraySchema = z.array(z.string().url().max(2048)).max(10);
 
+const registrationFieldLabels: Record<string, string> = {
+  recaptchaToken: "Security verification",
+  programId: "Program ID",
+  fullName: "Full name",
+  nameWithInitials: "Name with initials",
+  gender: "Gender",
+  dateOfBirth: "Date of birth",
+  nicNumber: "NIC number",
+  passportNumber: "Passport number",
+  nationality: "Nationality",
+  countryOfBirth: "Country of birth",
+  countryOfResidence: "Country of residence",
+  permanentAddress: "Permanent address",
+  postalCode: "Postal code",
+  country: "Country",
+  district: "District",
+  province: "Province",
+  emailAddress: "Email address",
+  whatsappNumber: "WhatsApp number",
+  homeContactNumber: "Home contact number",
+  guardianContactName: "Guardian contact name",
+  guardianContactNumber: "Guardian contact number",
+  highestQualification: "Highest qualification",
+  qualificationOtherDetails: "Other qualification details",
+  qualificationStatus: "Qualification status",
+  qualificationCompletedDate: "Qualification completed date",
+  qualificationExpectedCompletionDate: "Expected completion date",
+  termsAccepted: "Terms and conditions",
+};
+
+class RequestValidationError extends Error {
+  field?: string;
+
+  constructor(message: string, field?: string) {
+    super(message);
+    this.name = "RequestValidationError";
+    this.field = field;
+  }
+}
+
+function getRegistrationValidationMessage(error: z.ZodError): {
+  message: string;
+  field?: string;
+  code: string;
+  originalMessage: string;
+} {
+  const issue = error.issues[0];
+  if (!issue) {
+    return {
+      message: "Invalid submission data. Please review the form and try again.",
+      code: "unknown",
+      originalMessage: "No validation issue available",
+    };
+  }
+
+  const rawField =
+    typeof issue.path?.[0] === "string" ? String(issue.path[0]) : undefined;
+  const field = rawField
+    ? registrationFieldLabels[rawField] || rawField
+    : "Form data";
+
+  if (rawField === "termsAccepted") {
+    return {
+      message: "You must accept the terms and conditions to continue.",
+      field: rawField,
+      code: issue.code,
+      originalMessage: issue.message,
+    };
+  }
+
+  if (rawField === "recaptchaToken") {
+    return {
+      message: "Security verification failed. Please refresh and try again.",
+      field: rawField,
+      code: issue.code,
+      originalMessage: issue.message,
+    };
+  }
+
+  if (issue.code === "invalid_type") {
+    return {
+      message: `${field} is required.`,
+      field: rawField,
+      code: issue.code,
+      originalMessage: issue.message,
+    };
+  }
+
+  if (issue.code === "invalid_format") {
+    return {
+      message:
+        rawField === "emailAddress"
+          ? "Please provide a valid email address."
+          : `${field} format is invalid.`,
+      field: rawField,
+      code: issue.code,
+      originalMessage: issue.message,
+    };
+  }
+
+  if (issue.code === "too_small") {
+    const minimum =
+      "minimum" in issue && typeof issue.minimum === "number"
+        ? issue.minimum
+        : null;
+    return {
+      message:
+        minimum && minimum > 1
+          ? `${field} must be at least ${minimum} characters.`
+          : `${field} is required.`,
+      field: rawField,
+      code: issue.code,
+      originalMessage: issue.message,
+    };
+  }
+
+  if (issue.code === "invalid_value") {
+    return {
+      message: `${field} has an invalid value.`,
+      field: rawField,
+      code: issue.code,
+      originalMessage: issue.message,
+    };
+  }
+
+  return {
+    message: issue.message || "Invalid submission data. Please review and retry.",
+    field: rawField,
+    code: issue.code,
+    originalMessage: issue.message,
+  };
+}
+
 function toOptionalString(value: FormDataEntryValue | null): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -70,7 +203,7 @@ function toOptionalString(value: FormDataEntryValue | null): string | undefined 
 function parseDate(value: string, label: string): Date {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new Error(`Invalid ${label}`);
+    throw new RequestValidationError(`Please provide a valid ${label}.`);
   }
   return date;
 }
@@ -82,12 +215,16 @@ function parseUrlArray(raw: string | undefined, fieldName: string): string[] {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error(`Invalid ${fieldName} format`);
+    throw new RequestValidationError(
+      `Uploaded ${fieldName} data is invalid. Please upload the file(s) again.`,
+    );
   }
 
   const result = urlArraySchema.safeParse(parsed);
   if (!result.success) {
-    throw new Error(`Invalid ${fieldName} values`);
+    throw new RequestValidationError(
+      `Uploaded ${fieldName} data is invalid. Please upload the file(s) again.`,
+    );
   }
   return result.data;
 }
@@ -161,19 +298,25 @@ export async function POST(request: Request) {
 
     const parsed = registrationSchema.safeParse(rawPayload);
     if (!parsed.success) {
+      const friendlyIssue = getRegistrationValidationMessage(parsed.error);
       await logActivitySafe({
         category: "public_registration",
         action: "registration_validation_failed",
         status: "failure",
         subjectType: "RegistrationSubmission",
         subjectLabel: rawPayload.emailAddress || "unknown",
-        message: parsed.error.issues[0]?.message || "Invalid submission data",
+        message: friendlyIssue.message,
         ...requestContext,
+        meta: {
+          field: friendlyIssue.field,
+          code: friendlyIssue.code,
+          originalMessage: friendlyIssue.originalMessage,
+        },
       });
       return NextResponse.json(
         {
           success: false,
-          error: parsed.error.issues[0]?.message || "Invalid submission data",
+          error: friendlyIssue.message,
         },
         { status: 400 },
       );
@@ -537,6 +680,41 @@ export async function POST(request: Request) {
 
     return NextResponse.json(responseBody);
   } catch (error) {
+    if (error instanceof RequestValidationError) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        message: error.message,
+        ...requestContext,
+        meta: {
+          field: error.field || null,
+        },
+      });
+
+      if (activeIdempotencyKey) {
+        try {
+          await finalizeIdempotencyFailure({
+            key: activeIdempotencyKey,
+            httpStatus: 400,
+            errorMessage: error.message,
+            ttlSeconds: 10 * 60,
+          });
+        } catch (idempotencyError) {
+          console.error(
+            "Registration idempotency validation failure update error:",
+            idempotencyError,
+          );
+        }
+      }
+
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 400 },
+      );
+    }
+
     await logActivitySafe({
       category: "public_registration",
       action: "registration_internal_error",

@@ -12,7 +12,7 @@ export function Footer() {
                             alt="Codezela"
                             width={32}
                             height={32}
-                            className="w-8 h-8"
+                            className="w-8 h-8 object-contain"
                             priority
                         />
                         <div>

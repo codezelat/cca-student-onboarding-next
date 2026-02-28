@@ -35,6 +35,7 @@ export default function PaymentUpdatePage() {
     "idle" | "success" | "error"
   >("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [submitError, setSubmitError] = useState("");
 
   const { uploadFile } = useFileUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,6 +112,7 @@ export default function PaymentUpdatePage() {
 
     setIsSubmitting(true);
     setSubmitStatus("idle");
+    setSubmitError("");
     setUploadProgress(10);
 
     try {
@@ -162,7 +164,11 @@ export default function PaymentUpdatePage() {
     } catch (error) {
       console.error("Payment submission failed:", error);
       setSubmitStatus("error");
-      alert("Failed to submit payment slip. Please try again.");
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Failed to submit payment slip. Please try again.",
+      );
     } finally {
       if (progressInterval) clearInterval(progressInterval);
       setIsSubmitting(false);
@@ -193,7 +199,7 @@ export default function PaymentUpdatePage() {
               alt="Codezela Career Accelerator"
               width={400}
               height={80}
-              className="h-12 sm:h-16 md:h-20 mx-auto transition-transform duration-300 group-hover:scale-105"
+              className="h-12 sm:h-16 md:h-20 object-contain mx-auto transition-transform duration-300 group-hover:scale-105"
               priority
             />
           </Link>
@@ -598,6 +604,11 @@ export default function PaymentUpdatePage() {
                       ></div>
                     )}
                   </button>
+                  {submitStatus === "error" && submitError && (
+                    <p className="mt-3 text-sm text-red-600 font-medium">
+                      {submitError}
+                    </p>
+                  )}
                 </div>
               </div>
             )}

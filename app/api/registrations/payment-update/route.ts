@@ -23,6 +23,68 @@ const paymentUpdateSchema = z.object({
   paymentUrl: z.string().trim().url().max(2048),
 });
 
+const paymentUpdateFieldLabels: Record<string, string> = {
+  registrationId: "Registration reference",
+  paymentUrl: "Payment slip URL",
+};
+
+function getPaymentUpdateValidationMessage(error: z.ZodError): {
+  message: string;
+  field?: string;
+  code: string;
+  originalMessage: string;
+} {
+  const issue = error.issues[0];
+  if (!issue) {
+    return {
+      message: "Invalid submission data. Please check and try again.",
+      code: "unknown",
+      originalMessage: "No validation issue available",
+    };
+  }
+
+  const rawField =
+    typeof issue.path?.[0] === "string" ? String(issue.path[0]) : undefined;
+  const field = rawField ? paymentUpdateFieldLabels[rawField] || rawField : "Input";
+
+  if (issue.code === "invalid_type") {
+    return {
+      message: `${field} is required.`,
+      field: rawField,
+      code: issue.code,
+      originalMessage: issue.message,
+    };
+  }
+
+  if (issue.code === "invalid_format") {
+    return {
+      message:
+        rawField === "paymentUrl"
+          ? "Payment slip URL is invalid. Please upload your file again and retry."
+          : `${field} format is invalid.`,
+      field: rawField,
+      code: issue.code,
+      originalMessage: issue.message,
+    };
+  }
+
+  if (issue.code === "too_small") {
+    return {
+      message: `${field} is required.`,
+      field: rawField,
+      code: issue.code,
+      originalMessage: issue.message,
+    };
+  }
+
+  return {
+    message: issue.message || "Invalid submission data. Please check and try again.",
+    field: rawField,
+    code: issue.code,
+    originalMessage: issue.message,
+  };
+}
+
 export async function POST(request: Request) {
   let activeIdempotencyKey: string | null = null;
   const requestContext = getRequestContext(request);
@@ -58,18 +120,24 @@ export async function POST(request: Request) {
     });
 
     if (!parsed.success) {
+      const friendlyIssue = getPaymentUpdateValidationMessage(parsed.error);
       await logActivitySafe({
         category: "payment_update",
         action: "payment_update_validation_failed",
         status: "failure",
         subjectType: "PaymentSlipUpdate",
-        message: parsed.error.issues[0]?.message || "Missing required parameters",
+        message: friendlyIssue.message,
         ...requestContext,
+        meta: {
+          field: friendlyIssue.field,
+          code: friendlyIssue.code,
+          originalMessage: friendlyIssue.originalMessage,
+        },
       });
       return NextResponse.json(
         {
           success: false,
-          error: parsed.error.issues[0]?.message || "Missing required parameters",
+          error: friendlyIssue.message,
         },
         { status: 400 },
       );

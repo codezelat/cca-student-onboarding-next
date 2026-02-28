@@ -337,7 +337,7 @@ export default function RegisterPage() {
                             alt="Codezela Career Accelerator"
                             width={400}
                             height={80}
-                            className="h-12 sm:h-16 md:h-20 mx-auto transition-transform duration-300 group-hover:scale-105"
+                            className="h-12 sm:h-16 md:h-20 object-contain mx-auto transition-transform duration-300 group-hover:scale-105"
                             priority
                         />
                     </Link>
