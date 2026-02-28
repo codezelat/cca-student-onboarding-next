@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import ReCAPTCHA from "react-google-recaptcha";
 import { loginAction } from "../actions";
 
@@ -99,10 +100,13 @@ export default function AdminLoginPage() {
                         <div className="text-center mb-8">
                             {/* Logo Card */}
                             <div className="mx-auto w-20 h-20 rounded-2xl bg-white/80 backdrop-blur-sm border border-white/90 shadow-xl flex items-center justify-center mb-5 hover:shadow-2xl hover:scale-105 transition-all duration-300">
-                                <img
+                                <Image
                                     src="/images/icon.png"
                                     alt="Codezela"
+                                    width={48}
+                                    height={48}
                                     className="w-12 h-12"
+                                    priority
                                 />
                             </div>
                             <h1 className="text-2xl md:text-3xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2">

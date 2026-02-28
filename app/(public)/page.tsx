@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import ThreejsBackground from "@/components/ui/ThreejsBackground";
 
 export default function Home() {
@@ -19,10 +20,13 @@ export default function Home() {
                             <div className="space-y-8">
                                 <div className="inline-block mb-4">
                                     <div className="p-6 rounded-2xl bg-white/60 backdrop-blur-lg border border-white/80 shadow-xl hover:shadow-2xl hover:bg-white/70 transition-all duration-300 inline-block">
-                                        <img
+                                        <Image
                                             src="/images/logo-wide.png"
                                             alt="Codezela Career Accelerator"
+                                            width={320}
+                                            height={64}
                                             className="h-12 md:h-16"
+                                            priority
                                         />
                                     </div>
                                 </div>

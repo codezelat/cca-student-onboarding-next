@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 
 export function Footer() {
     return (
@@ -6,10 +7,13 @@ export function Footer() {
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="flex items-center space-x-3">
-                        <img
+                        <Image
                             src="/images/icon.png"
                             alt="Codezela"
+                            width={32}
+                            height={32}
                             className="w-8 h-8"
+                            priority
                         />
                         <div>
                             <span className="text-lg font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent block">

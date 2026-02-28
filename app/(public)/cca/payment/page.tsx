@@ -2,6 +2,7 @@
 
 import { useState, ChangeEvent, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useFileUpload } from "@/lib/hooks/use-file-upload";
 import {
   ALLOWED_UPLOAD_ACCEPT,
@@ -187,10 +188,13 @@ export default function PaymentUpdatePage() {
         {/* Header Section */}
         <div className="text-center mb-8 sm:mb-12">
           <Link href="/" className="inline-block mb-4 sm:mb-6 group">
-            <img
+            <Image
               src="/images/logo-wide.png"
               alt="Codezela Career Accelerator"
+              width={400}
+              height={80}
               className="h-12 sm:h-16 md:h-20 mx-auto transition-transform duration-300 group-hover:scale-105"
+              priority
             />
           </Link>
           <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2 sm:mb-3 px-2">
