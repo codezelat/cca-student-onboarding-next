@@ -82,11 +82,10 @@ export async function getRegistrations(params: {
     programFilter,
     tagFilter,
     page = 1,
-    pageSize = 25,
+    pageSize = 20,
   } = params;
-  const safePage = Math.max(1, page);
+  const requestedPage = Math.max(1, page);
   const safePageSize = Math.min(Math.max(1, pageSize), 100);
-  const skip = (safePage - 1) * safePageSize;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {};
@@ -120,43 +119,45 @@ export async function getRegistrations(params: {
     where.tags = { path: [], array_contains: tagFilter } as any;
   }
 
-  const [total, registrations] = await Promise.all([
-    prisma.cCARegistration.count({ where }),
-    prisma.cCARegistration.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: safePageSize,
-      select: {
-        id: true,
-        registerId: true,
-        programId: true,
-        fullName: true,
-        nicNumber: true,
-        passportNumber: true,
-        emailAddress: true,
-        whatsappNumber: true,
-        paymentSlip: true,
-        fullAmount: true,
-        currentPaidAmount: true,
-        createdAt: true,
-        deletedAt: true,
-        program: {
-          select: {
-            name: true,
-            code: true,
-          },
+  const total = await prisma.cCARegistration.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+  const safePage = Math.min(requestedPage, totalPages);
+  const skip = (safePage - 1) * safePageSize;
+
+  const registrations = await prisma.cCARegistration.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    skip,
+    take: safePageSize,
+    select: {
+      id: true,
+      registerId: true,
+      programId: true,
+      fullName: true,
+      nicNumber: true,
+      passportNumber: true,
+      emailAddress: true,
+      whatsappNumber: true,
+      paymentSlip: true,
+      fullAmount: true,
+      currentPaidAmount: true,
+      createdAt: true,
+      deletedAt: true,
+      program: {
+        select: {
+          name: true,
+          code: true,
         },
       },
-    }),
-  ]);
+    },
+  });
 
   return s({
     data: registrations,
     total,
     page: safePage,
     pageSize: safePageSize,
-    totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+    totalPages,
   });
 }
 
@@ -194,7 +195,19 @@ export async function purgeRegistration(id: number) {
   revalidatePath("/admin");
 }
 
-export async function getRegistrationById(id: number) {
+export async function getRegistrationById(
+  id: number,
+  params?: {
+    paymentsPage?: number;
+    paymentsPageSize?: number;
+  },
+) {
+  const requestedPaymentsPage = Math.max(1, params?.paymentsPage ?? 1);
+  const safePaymentsPageSize = Math.min(
+    Math.max(1, params?.paymentsPageSize ?? 20),
+    100,
+  );
+
   const registration = await prisma.cCARegistration.findUnique({
     where: { id: BigInt(id) },
     include: {
@@ -206,16 +219,54 @@ export async function getRegistrationById(id: number) {
           durationLabel: true,
         },
       },
-      payments: {
-        orderBy: { createdAt: "desc" },
-      },
     },
   });
 
   if (!registration) return null;
 
+  const [paymentsTotal, activePaymentsTotal, paymentsTotalCount] =
+    await Promise.all([
+      prisma.registrationPayment.count({
+        where: { ccaRegistrationId: BigInt(id) },
+      }),
+      prisma.registrationPayment.aggregate({
+        where: {
+          ccaRegistrationId: BigInt(id),
+          status: "active",
+        },
+        _sum: { amount: true },
+      }),
+      prisma.registrationPayment.count({
+        where: {
+          ccaRegistrationId: BigInt(id),
+          status: "active",
+        },
+      }),
+    ]);
+
+  const paymentsTotalPages = Math.max(
+    1,
+    Math.ceil(paymentsTotal / safePaymentsPageSize),
+  );
+  const safePaymentsPage = Math.min(requestedPaymentsPage, paymentsTotalPages);
+  const paymentsSkip = (safePaymentsPage - 1) * safePaymentsPageSize;
+
+  const payments = await prisma.registrationPayment.findMany({
+    where: { ccaRegistrationId: BigInt(id) },
+    orderBy: { createdAt: "desc" },
+    skip: paymentsSkip,
+    take: safePaymentsPageSize,
+  });
+
   return s({
     ...registration,
+    payments,
+    paymentsPage: safePaymentsPage,
+    paymentsPageSize: safePaymentsPageSize,
+    paymentsTotal,
+    paymentsTotalPages,
+    calculatedPaidAmount: Number(activePaymentsTotal._sum.amount || 0),
+    calculatedPaidTransactions: paymentsTotalCount,
     programName: registration.program?.name ?? null,
     programYear: registration.program?.yearLabel ?? null,
     programDuration: registration.program?.durationLabel ?? null,

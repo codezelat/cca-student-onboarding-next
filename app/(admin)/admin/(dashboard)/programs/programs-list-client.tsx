@@ -142,7 +142,11 @@ export default function ProgramsListClient({
                         variant="outline"
                         className="bg-primary/5 text-primary-600 border-primary-200 uppercase text-[10px] font-bold tracking-widest px-2 py-0.5 mb-2"
                       >
-                        {program.programId}
+                        {program.programId ? (
+                          program.programId
+                        ) : (
+                          <span className="text-gray-400 italic">No Code</span>
+                        )}
                       </Badge>
                       <CardTitle className="text-xl font-bold leading-tight group-hover:text-primary transition-colors">
                         {program.name}

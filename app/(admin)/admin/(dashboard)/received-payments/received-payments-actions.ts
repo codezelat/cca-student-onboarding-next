@@ -54,16 +54,15 @@ export async function getPendingPayments({
   search = "",
   status = "all",
   page = 1,
-  pageSize = 25,
+  pageSize = 20,
 }: {
   search?: string;
   status?: string;
   page?: number;
   pageSize?: number;
 }): Promise<PendingPaymentsResult> {
-  const safePage = Math.max(1, page);
+  const requestedPage = Math.max(1, page);
   const safePageSize = Math.min(Math.max(1, pageSize), 100);
-  const offset = (safePage - 1) * safePageSize;
 
   const normalizedStatus =
     status === "pending" || status === "approved" || status === "declined"
@@ -103,59 +102,62 @@ export async function getPendingPayments({
     uploaded_at: string;
   };
 
-  const [countRows, paymentRows] = await Promise.all([
-    prisma.$queryRaw<CountRow[]>`
-      SELECT COUNT(*) AS total
-      FROM cca_registrations r
-      CROSS JOIN LATERAL jsonb_array_elements(
-        CASE
-          WHEN jsonb_typeof(r.payment_slip) = 'array' THEN r.payment_slip
-          WHEN jsonb_typeof(r.payment_slip) = 'object' THEN jsonb_build_array(r.payment_slip)
-          ELSE '[]'::jsonb
-        END
-      ) WITH ORDINALITY AS slips(slip, idx)
-      WHERE r.deleted_at IS NULL
-        AND slip ? 'id'
-        AND slip->>'id' LIKE 'slip_%'
-        ${statusFilterSql}
-        ${searchFilterSql}
-    `,
-    prisma.$queryRaw<PaymentRow[]>`
-      SELECT
-        r.id::text AS registration_id,
-        r.register_id,
-        r.full_name,
-        COALESCE(NULLIF(r.nic_number, ''), NULLIF(r.passport_number, ''), 'N/A') AS identifier,
-        r.email_address,
-        r.whatsapp_number,
-        slip->>'id' AS slip_id,
-        (idx - 1)::int AS slip_index,
-        COALESCE(slip->>'url', '') AS slip_url,
-        COALESCE(slip->>'status', 'pending') AS status,
-        COALESCE(
-          NULLIF(slip->>'uploadedAt', ''),
-          to_char(r.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-        ) AS uploaded_at
-      FROM cca_registrations r
-      CROSS JOIN LATERAL jsonb_array_elements(
-        CASE
-          WHEN jsonb_typeof(r.payment_slip) = 'array' THEN r.payment_slip
-          WHEN jsonb_typeof(r.payment_slip) = 'object' THEN jsonb_build_array(r.payment_slip)
-          ELSE '[]'::jsonb
-        END
-      ) WITH ORDINALITY AS slips(slip, idx)
-      WHERE r.deleted_at IS NULL
-        AND slip ? 'id'
-        AND slip->>'id' LIKE 'slip_%'
-        ${statusFilterSql}
-        ${searchFilterSql}
-      ORDER BY uploaded_at ASC
-      OFFSET ${offset}
-      LIMIT ${safePageSize}
-    `,
-  ]);
+  const countRows = await prisma.$queryRaw<CountRow[]>`
+    SELECT COUNT(*) AS total
+    FROM cca_registrations r
+    CROSS JOIN LATERAL jsonb_array_elements(
+      CASE
+        WHEN jsonb_typeof(r.payment_slip) = 'array' THEN r.payment_slip
+        WHEN jsonb_typeof(r.payment_slip) = 'object' THEN jsonb_build_array(r.payment_slip)
+        ELSE '[]'::jsonb
+      END
+    ) WITH ORDINALITY AS slips(slip, idx)
+    WHERE r.deleted_at IS NULL
+      AND slip ? 'id'
+      AND slip->>'id' LIKE 'slip_%'
+      ${statusFilterSql}
+      ${searchFilterSql}
+  `;
 
   const total = Number(countRows[0]?.total ?? 0);
+  const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+  const safePage = Math.min(requestedPage, totalPages);
+  const offset = (safePage - 1) * safePageSize;
+
+  const paymentRows = await prisma.$queryRaw<PaymentRow[]>`
+    SELECT
+      r.id::text AS registration_id,
+      r.register_id,
+      r.full_name,
+      COALESCE(NULLIF(r.nic_number, ''), NULLIF(r.passport_number, ''), 'N/A') AS identifier,
+      r.email_address,
+      r.whatsapp_number,
+      slip->>'id' AS slip_id,
+      (idx - 1)::int AS slip_index,
+      COALESCE(slip->>'url', '') AS slip_url,
+      COALESCE(slip->>'status', 'pending') AS status,
+      COALESCE(
+        NULLIF(slip->>'uploadedAt', ''),
+        to_char(r.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+      ) AS uploaded_at
+    FROM cca_registrations r
+    CROSS JOIN LATERAL jsonb_array_elements(
+      CASE
+        WHEN jsonb_typeof(r.payment_slip) = 'array' THEN r.payment_slip
+        WHEN jsonb_typeof(r.payment_slip) = 'object' THEN jsonb_build_array(r.payment_slip)
+        ELSE '[]'::jsonb
+      END
+    ) WITH ORDINALITY AS slips(slip, idx)
+    WHERE r.deleted_at IS NULL
+      AND slip ? 'id'
+      AND slip->>'id' LIKE 'slip_%'
+      ${statusFilterSql}
+      ${searchFilterSql}
+    ORDER BY uploaded_at ASC
+    OFFSET ${offset}
+    LIMIT ${safePageSize}
+  `;
+
   const data: PendingPaymentExtract[] = paymentRows.map((row) => ({
     registrationId: row.registration_id,
     registerId: row.register_id,
@@ -175,7 +177,7 @@ export async function getPendingPayments({
     total,
     page: safePage,
     pageSize: safePageSize,
-    totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+    totalPages,
   });
 }
 
