@@ -105,15 +105,16 @@ export default function RegistrationDetailsClient({
     registration.calculatedPaidAmount !== null
       ? parseFloat(String(registration.calculatedPaidAmount))
       : payments.reduce(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (acc: number, p: any) =>
-      p.status === "active" ? acc + parseFloat(p.amount) : acc,
-    0,
-      );
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (acc: number, p: any) =>
+            p.status === "active" ? acc + parseFloat(p.amount) : acc,
+          0,
+        );
 
   // Use manual sync amount if it exists, otherwise fallback to calculated amount
   const paidAmount =
-    registration.currentPaidAmount !== null && registration.currentPaidAmount !== undefined
+    registration.currentPaidAmount !== null &&
+    registration.currentPaidAmount !== undefined
       ? parseFloat(registration.currentPaidAmount)
       : calculatedPaidAmount;
 
@@ -123,118 +124,122 @@ export default function RegistrationDetailsClient({
   const documents = [
     ...(Array.isArray(registration.passportPhoto)
       ? registration.passportPhoto.map(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (doc: any, i: number) => ({
-          url: typeof doc === "string" ? doc : doc.url,
-          title: `Passport Photo ${i + 1}`,
-          type: "image",
-          category: "Personal",
-        }),
-      )
-      : registration.passportPhoto
-        ? [
-          {
-            url:
-              typeof registration.passportPhoto === "string"
-                ? registration.passportPhoto
-                : (registration.passportPhoto as { url?: string })?.url,
-            title: "Passport Photo",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (doc: any, i: number) => ({
+            url: typeof doc === "string" ? doc : doc.url,
+            title: `Passport Photo ${i + 1}`,
             type: "image",
             category: "Personal",
-          },
-        ]
+          }),
+        )
+      : registration.passportPhoto
+        ? [
+            {
+              url:
+                typeof registration.passportPhoto === "string"
+                  ? registration.passportPhoto
+                  : (registration.passportPhoto as { url?: string })?.url,
+              title: "Passport Photo",
+              type: "image",
+              category: "Personal",
+            },
+          ]
         : []),
     ...(Array.isArray(registration.passportDocuments)
       ? registration.passportDocuments.map(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (doc: any, i: number) => ({
-          url: typeof doc === "string" ? doc : doc.url,
-          title: `Passport Document ${i + 1}`,
-          type: "auto",
-          category: "Identity",
-        }),
-      )
-      : registration.passportDocuments
-        ? [
-          {
-            url:
-              typeof registration.passportDocuments === "string"
-                ? registration.passportDocuments
-                : (registration.passportDocuments as { url?: string })?.url,
-            title: "Passport Document",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (doc: any, i: number) => ({
+            url: typeof doc === "string" ? doc : doc.url,
+            title: `Passport Document ${i + 1}`,
             type: "auto",
             category: "Identity",
-          },
-        ]
+          }),
+        )
+      : registration.passportDocuments
+        ? [
+            {
+              url:
+                typeof registration.passportDocuments === "string"
+                  ? registration.passportDocuments
+                  : (registration.passportDocuments as { url?: string })?.url,
+              title: "Passport Document",
+              type: "auto",
+              category: "Identity",
+            },
+          ]
         : []),
     ...(Array.isArray(registration.paymentSlip)
       ? registration.paymentSlip.map(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (doc: any, i: number) => ({
-          url: typeof doc === "string" ? doc : doc.url,
-          title: `Payment Slip ${i + 1}`,
-          type: "auto",
-          category: "Payment",
-        }),
-      )
-      : registration.paymentSlip
-        ? [
-          {
-            url:
-              typeof registration.paymentSlip === "string"
-                ? registration.paymentSlip
-                : (registration.paymentSlip as { url?: string })?.url,
-            title: "Payment Slip",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (doc: any, i: number) => ({
+            url: typeof doc === "string" ? doc : doc.url,
+            title: `Payment Slip ${i + 1}`,
             type: "auto",
             category: "Payment",
-          },
-        ]
+          }),
+        )
+      : registration.paymentSlip
+        ? [
+            {
+              url:
+                typeof registration.paymentSlip === "string"
+                  ? registration.paymentSlip
+                  : (registration.paymentSlip as { url?: string })?.url,
+              title: "Payment Slip",
+              type: "auto",
+              category: "Payment",
+            },
+          ]
         : []),
     ...(Array.isArray(registration.academicQualificationDocuments)
       ? registration.academicQualificationDocuments.map(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (doc: any, i: number) => ({
-          url: typeof doc === "string" ? doc : doc.url,
-          title: `Academic Document ${i + 1}`,
-          type: "auto",
-          category: "Academic",
-        }),
-      )
-      : registration.academicQualificationDocuments
-        ? [
-          {
-            url:
-              typeof registration.academicQualificationDocuments === "string"
-                ? registration.academicQualificationDocuments
-                : (registration.academicQualificationDocuments as { url?: string })?.url,
-            title: "Academic Document",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (doc: any, i: number) => ({
+            url: typeof doc === "string" ? doc : doc.url,
+            title: `Academic Document ${i + 1}`,
             type: "auto",
             category: "Academic",
-          },
-        ]
+          }),
+        )
+      : registration.academicQualificationDocuments
+        ? [
+            {
+              url:
+                typeof registration.academicQualificationDocuments === "string"
+                  ? registration.academicQualificationDocuments
+                  : (
+                      registration.academicQualificationDocuments as {
+                        url?: string;
+                      }
+                    )?.url,
+              title: "Academic Document",
+              type: "auto",
+              category: "Academic",
+            },
+          ]
         : []),
     ...(Array.isArray(registration.nicDocuments)
       ? registration.nicDocuments.map(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (doc: any, i: number) => ({
-          url: typeof doc === "string" ? doc : doc.url,
-          title: `NIC/Passport ${i + 1}`,
-          type: "auto",
-          category: "Identity",
-        }),
-      )
-      : registration.nicDocuments
-        ? [
-          {
-            url:
-              typeof registration.nicDocuments === "string"
-                ? registration.nicDocuments
-                : (registration.nicDocuments as { url?: string })?.url,
-            title: "NIC/Passport",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (doc: any, i: number) => ({
+            url: typeof doc === "string" ? doc : doc.url,
+            title: `NIC/Passport ${i + 1}`,
             type: "auto",
             category: "Identity",
-          },
-        ]
+          }),
+        )
+      : registration.nicDocuments
+        ? [
+            {
+              url:
+                typeof registration.nicDocuments === "string"
+                  ? registration.nicDocuments
+                  : (registration.nicDocuments as { url?: string })?.url,
+              title: "NIC/Passport",
+              type: "auto",
+              category: "Identity",
+            },
+          ]
         : []),
   ];
 
@@ -286,9 +291,7 @@ export default function RegistrationDetailsClient({
   function buildPaymentsUrl(page: number) {
     const safePage = Math.max(1, page);
     const basePath = `/admin/registrations/${registration.id}`;
-    return safePage > 1
-      ? `${basePath}?payments_page=${safePage}`
-      : basePath;
+    return safePage > 1 ? `${basePath}?payments_page=${safePage}` : basePath;
   }
 
   return (
@@ -327,14 +330,13 @@ export default function RegistrationDetailsClient({
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
-            <Link prefetch={false} href={`/admin/registrations/${registration.id}/edit`}>
+            <Link
+              prefetch={false}
+              href={`/admin/registrations/${registration.id}/edit`}
+            >
               <Edit className="w-4 h-4 mr-2" />
               Edit details
             </Link>
-          </Button>
-          <Button className="bg-linear-to-r from-indigo-600 to-primary hover:from-indigo-700 hover:to-primary/90">
-            <Download className="w-4 h-4 mr-2" />
-            Export PDF
           </Button>
         </div>
       </div>
@@ -348,7 +350,7 @@ export default function RegistrationDetailsClient({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
           >
-            <Card className="overflow-hidden border-indigo-100 bg-linear-to-br from-indigo-50/50 to-white/80 backdrop-blur-sm shadow-xl shadow-indigo-100/20">
+            <Card className="gap-0 overflow-hidden border-indigo-100 bg-linear-to-br from-indigo-50/50 to-white/80 backdrop-blur-sm shadow-xl shadow-indigo-100/20">
               <CardHeader className="pb-3 flex flex-row items-center justify-between">
                 <CardTitle className="text-lg font-bold flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-indigo-600" />
@@ -419,7 +421,9 @@ export default function RegistrationDetailsClient({
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="PAID">Valid (Paid)</SelectItem>
-                              <SelectItem value="VOID">Void (Cancelled)</SelectItem>
+                              <SelectItem value="VOID">
+                                Void (Cancelled)
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -476,7 +480,7 @@ export default function RegistrationDetailsClient({
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-2 mb-4">
                   {Array.isArray(registration.tags) &&
-                    registration.tags.length > 0 ? (
+                  registration.tags.length > 0 ? (
                     registration.tags.map((tag: string) => (
                       <Badge
                         key={tag}
@@ -493,7 +497,7 @@ export default function RegistrationDetailsClient({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Card className="bg-white/50 border-emerald-100 p-4 shadow-sm">
+                  <Card className="gap-1 bg-white/50 border-emerald-100 p-4 shadow-sm">
                     <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">
                       Course Fee
                     </p>
@@ -504,7 +508,7 @@ export default function RegistrationDetailsClient({
                       })}
                     </p>
                   </Card>
-                  <Card className="bg-white/50 border-indigo-100 p-4 shadow-sm">
+                  <Card className="gap-1 bg-white/50 border-indigo-100 p-4 shadow-sm">
                     <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">
                       Total Paid
                     </p>
@@ -516,7 +520,7 @@ export default function RegistrationDetailsClient({
                     </p>
                   </Card>
                   <Card
-                    className={`bg-white/50 p-4 shadow-sm border-${balance > 0 ? "orange" : "emerald"}-100`}
+                    className={`gap-1 bg-white/50 p-4 shadow-sm border-${balance > 0 ? "orange" : "emerald"}-100`}
                   >
                     <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">
                       Balance Due
@@ -600,7 +604,9 @@ export default function RegistrationDetailsClient({
                                 </TableCell>
                                 <TableCell className="text-sm font-black text-gray-900 py-3 text-right">
                                   Rs.{" "}
-                                  {formatAppNumber(parseFloat(String(p.amount)))}
+                                  {formatAppNumber(
+                                    parseFloat(String(p.amount)),
+                                  )}
                                 </TableCell>
                                 <TableCell className="py-3 text-center">
                                   {p.status === "active" ? (
@@ -843,7 +849,7 @@ export default function RegistrationDetailsClient({
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Log Card */}
-          <Card>
+          <Card className="gap-0">
             <CardHeader className="pb-3 border-b">
               <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
                 Registration Metadata
@@ -872,7 +878,7 @@ export default function RegistrationDetailsClient({
           </Card>
 
           {/* Documents List */}
-          <Card className="border-primary/10 shadow-lg shadow-primary/5">
+          <Card className="gap-0 border-primary/10 shadow-lg shadow-primary/5">
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-bold">Documents</CardTitle>
               <Badge
@@ -1082,7 +1088,7 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="border-primary/5 shadow-md shadow-primary/5">
+    <Card className="gap-0 border-primary/5 shadow-md shadow-primary/5">
       <CardHeader className="pb-3 border-b border-gray-50">
         <CardTitle className="text-lg font-bold flex items-center gap-2">
           {icon}
