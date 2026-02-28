@@ -7,6 +7,10 @@ import {
   getAdminActorFromRequestHeaders,
   logActivitySafe,
 } from "@/lib/server/activity-log";
+import {
+  getNextPaymentNo,
+  syncRegistrationPaidAmount,
+} from "@/lib/server/payment-ledger";
 
 /**
  * Payment slip structure
@@ -190,9 +194,14 @@ export async function approvePaymentSlip(
   slipIndex: number,
   amount: number,
 ) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Amount must be greater than zero");
+  }
+
+  const registrationBigInt = BigInt(registrationId);
   const actor = await getAdminActorFromRequestHeaders();
   const reg = await prisma.cCARegistration.findUnique({
-    where: { id: BigInt(registrationId) },
+    where: { id: registrationBigInt },
   });
 
   if (!reg || !reg.paymentSlip) {
@@ -261,6 +270,35 @@ export async function approvePaymentSlip(
     );
   }
 
+  if (slips[slipIndex].id) {
+    const existingPayment = await prisma.registrationPayment.findFirst({
+      where: {
+        ccaRegistrationId: registrationBigInt,
+        receiptReference: slips[slipIndex].id,
+      },
+      select: { id: true },
+    });
+
+    if (existingPayment) {
+      await logActivitySafe({
+        actor,
+        category: "payment_slip",
+        action: "payment_slip_approve_blocked",
+        status: "blocked",
+        subjectType: "CCARegistration",
+        subjectId: registrationId,
+        subjectLabel: reg.registerId,
+        message: "Slip already logged as a payment record",
+        routeName: "/admin/received-payments",
+        meta: {
+          slipIndex,
+          slipId: slips[slipIndex].id,
+        },
+      });
+      throw new Error("This payment slip is already recorded in finance.");
+    }
+  }
+
   const beforeSnapshot = {
     registration: {
       id: reg.id,
@@ -275,40 +313,38 @@ export async function approvePaymentSlip(
   slips[slipIndex].status = "approved";
   slips[slipIndex].approvedAt = new Date().toISOString();
 
-  const currentPaidAmount = reg.currentPaidAmount
-    ? Number(reg.currentPaidAmount)
-    : 0;
-  const newPaidAmount = currentPaidAmount + amount;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let createdPayment: any = null;
+  let syncedPaidAmount = 0;
 
-  // 2. Update Registration
-  await prisma.cCARegistration.update({
-    where: { id: BigInt(registrationId) },
-    data: {
-      paymentSlip: JSON.parse(JSON.stringify(slips)),
-      currentPaidAmount: newPaidAmount,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.cCARegistration.update({
+      where: { id: registrationBigInt },
+      data: {
+        paymentSlip: JSON.parse(JSON.stringify(slips)),
+      },
+    });
+
+    const nextPaymentNo = await getNextPaymentNo(tx, registrationBigInt);
+    createdPayment = await tx.registrationPayment.create({
+      data: {
+        ccaRegistrationId: registrationBigInt,
+        paymentNo: nextPaymentNo,
+        amount,
+        paymentMethod: "Bank Transfer",
+        paymentDate: new Date(),
+        receiptReference: slips[slipIndex].id || `Slip Approved`,
+        note: "Approved from student portal slip upload",
+        status: "active",
+      },
+    });
+
+    syncedPaidAmount = await syncRegistrationPaidAmount(tx, registrationBigInt);
   });
 
-  // 3. Determine Payment Number (max + 1)
-  const lastPayment = await prisma.registrationPayment.findFirst({
-    where: { ccaRegistrationId: BigInt(registrationId) },
-    orderBy: { paymentNo: "desc" },
-  });
-  const nextPaymentNo = (lastPayment?.paymentNo ?? 0) + 1;
-
-  // 4. Create Formal Payment Record
-  const createdPayment = await prisma.registrationPayment.create({
-    data: {
-      ccaRegistrationId: BigInt(registrationId),
-      paymentNo: nextPaymentNo,
-      amount,
-      paymentMethod: "Bank Transfer", // Defaulting as slips usually represent transfers
-      paymentDate: new Date(),
-      receiptReference: slips[slipIndex].id || `Slip Approved`,
-      note: "Approved from student portal slip upload",
-      status: "active",
-    },
-  });
+  if (!createdPayment) {
+    throw new Error("Failed to create payment record");
+  }
 
   await logActivitySafe({
     actor,
@@ -325,7 +361,7 @@ export async function approvePaymentSlip(
       paymentNo: createdPayment.paymentNo,
       amount: createdPayment.amount,
       slip: slips[slipIndex],
-      newPaidAmount,
+      newPaidAmount: syncedPaidAmount,
     },
     meta: {
       slipIndex,

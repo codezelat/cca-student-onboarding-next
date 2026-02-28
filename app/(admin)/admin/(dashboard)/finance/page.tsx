@@ -52,6 +52,10 @@ export default async function FinancePage({
                     <p className="text-3xl font-black bg-linear-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
                         Rs. {parseFloat(stats.totalRevenue).toLocaleString()}
                     </p>
+                    <p className="mt-2 text-xs font-semibold text-gray-400">
+                        Excludes voided: Rs.{" "}
+                        {parseFloat(stats.voidedAmount).toLocaleString()}
+                    </p>
                 </div>
 
                 <div className="p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] group relative overflow-hidden">
@@ -66,6 +70,9 @@ export default async function FinancePage({
                     </p>
                     <p className="text-3xl font-black bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                         {stats.totalPayments}
+                    </p>
+                    <p className="mt-2 text-xs font-semibold text-gray-400">
+                        Voided hidden: {stats.voidedPayments}
                     </p>
                 </div>
 

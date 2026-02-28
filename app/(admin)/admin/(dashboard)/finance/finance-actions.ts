@@ -6,6 +6,10 @@ import {
     getAdminActorFromRequestHeaders,
     logActivitySafe,
 } from "@/lib/server/activity-log";
+import {
+    getNextPaymentNo,
+    syncRegistrationPaidAmount,
+} from "@/lib/server/payment-ledger";
 
 /**
  * BigInt to JSON helper
@@ -34,7 +38,7 @@ async function getRegistrationBalanceSnapshot(registrationId: string | bigint) {
 }
 
 export async function getFinanceStats() {
-    const [totalPaid, totalPayments, activeRegCount] = await Promise.all([
+    const [activePaymentsStats, voidPaymentsStats, activeRegCount] = await Promise.all([
         prisma.registrationPayment.aggregate({
             where: {
                 status: "active",
@@ -45,16 +49,19 @@ export async function getFinanceStats() {
                 },
             },
             _sum: { amount: true },
+            _count: { _all: true },
         }),
-        prisma.registrationPayment.count({
+        prisma.registrationPayment.aggregate({
             where: {
-                status: "active",
+                status: "void",
                 registration: {
                     is: {
                         deletedAt: null,
                     },
                 },
             },
+            _sum: { amount: true },
+            _count: { _all: true },
         }),
         prisma.cCARegistration.count({
             where: { deletedAt: null },
@@ -62,8 +69,10 @@ export async function getFinanceStats() {
     ]);
 
     return {
-        totalRevenue: totalPaid._sum.amount?.toString() || "0",
-        totalPayments,
+        totalRevenue: activePaymentsStats._sum.amount?.toString() || "0",
+        totalPayments: Number(activePaymentsStats._count._all || 0),
+        voidedAmount: voidPaymentsStats._sum.amount?.toString() || "0",
+        voidedPayments: Number(voidPaymentsStats._count._all || 0),
         activeRegistrations: activeRegCount,
     };
 }
@@ -172,13 +181,17 @@ export async function addPayment(data: any) {
     const { registrationId, amount, paymentMethod, reference, paidAt, remark, status } =
         data;
     const numericAmount = parseFloat(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+        throw new Error("Amount must be greater than zero");
+    }
+
+    const registrationBigInt = BigInt(registrationId);
     const beforeRegistration = await getRegistrationBalanceSnapshot(registrationId);
     const registrationRecord = await prisma.cCARegistration.findUnique({
-        where: { id: BigInt(registrationId) },
+        where: { id: registrationBigInt },
         select: {
             id: true,
             deletedAt: true,
-            currentPaidAmount: true,
         },
     });
 
@@ -187,36 +200,28 @@ export async function addPayment(data: any) {
     }
 
     try {
-        // We need to determine the paymentNo. Logic: max(paymentNo) + 1 for this registration
-        const lastPayment = await prisma.registrationPayment.findFirst({
-            where: { ccaRegistrationId: BigInt(registrationId) },
-            orderBy: { paymentNo: "desc" },
-        });
-        const nextPaymentNo = (lastPayment?.paymentNo ?? 0) + 1;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let payment: any = null;
 
-        const payment = await prisma.registrationPayment.create({
-            data: {
-                ccaRegistrationId: BigInt(registrationId),
-                paymentNo: nextPaymentNo,
-                amount: numericAmount,
-                paymentMethod,
-                receiptReference: reference,
-                paymentDate: new Date(paidAt),
-                note: remark,
-                status: status === "VOID" ? "void" : "active",
-            },
-        });
-
-        if (payment.status === "active") {
-            const currentTotal = registrationRecord.currentPaidAmount
-                ? Number(registrationRecord.currentPaidAmount)
-                : 0;
-            await prisma.cCARegistration.update({
-                where: { id: BigInt(registrationId) },
+        await prisma.$transaction(async (tx) => {
+            const nextPaymentNo = await getNextPaymentNo(tx, registrationBigInt);
+            payment = await tx.registrationPayment.create({
                 data: {
-                    currentPaidAmount: currentTotal + numericAmount,
+                    ccaRegistrationId: registrationBigInt,
+                    paymentNo: nextPaymentNo,
+                    amount: numericAmount,
+                    paymentMethod,
+                    receiptReference: reference,
+                    paymentDate: new Date(paidAt),
+                    note: remark,
+                    status: status === "VOID" ? "void" : "active",
                 },
             });
+            await syncRegistrationPaidAmount(tx, registrationBigInt);
+        });
+
+        if (!payment) {
+            throw new Error("Failed to create payment");
         }
 
         const afterRegistration = await getRegistrationBalanceSnapshot(registrationId);
@@ -294,33 +299,26 @@ export async function voidPayment(id: string, reason: string) {
     );
 
     try {
-        // Only decrement if the payment was previously 'active'
-        if (payment.status === "active") {
-            const registration = await prisma.cCARegistration.findUnique({
-                where: { id: payment.ccaRegistrationId },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let updatedPayment: any = null;
+
+        await prisma.$transaction(async (tx) => {
+            updatedPayment = await tx.registrationPayment.update({
+                where: { id: BigInt(id) },
+                data: {
+                    status: "void",
+                    note: `VOIDED: ${reason}`,
+                    voidReason: reason,
+                    voidedAt: new Date(),
+                },
             });
 
-            if (registration) {
-                const currentTotal = registration.currentPaidAmount ? Number(registration.currentPaidAmount) : 0;
-                const newTotal = Math.max(0, currentTotal - Number(payment.amount));
-                await prisma.cCARegistration.update({
-                    where: { id: payment.ccaRegistrationId },
-                    data: {
-                        currentPaidAmount: newTotal,
-                    },
-                });
-            }
-        }
-
-        const updatedPayment = await prisma.registrationPayment.update({
-            where: { id: BigInt(id) },
-            data: {
-                status: "void",
-                note: `VOIDED: ${reason}`,
-                voidReason: reason,
-                voidedAt: new Date(),
-            },
+            await syncRegistrationPaidAmount(tx, payment.ccaRegistrationId);
         });
+
+        if (!updatedPayment) {
+            throw new Error("Failed to update payment status");
+        }
 
         const afterRegistration = await getRegistrationBalanceSnapshot(
             payment.ccaRegistrationId,
