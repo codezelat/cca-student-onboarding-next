@@ -180,7 +180,7 @@ export default function ProgramsListClient({
             >
               <Card className="group border-none shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-primary-100/30 transition-all duration-300 relative overflow-hidden bg-white/70 backdrop-blur-md">
                 <div
-                  className={`absolute top-0 right-0 w-32 h-32 blur-3xl opacity-20 transition-colors duration-500 ${program.isActive ? "bg-emerald-400" : "bg-rose-400"}`}
+                  className={`pointer-events-none absolute top-0 right-0 w-32 h-32 blur-3xl opacity-20 transition-colors duration-500 ${program.isActive ? "bg-emerald-400" : "bg-rose-400"}`}
                 ></div>
 
                 <CardHeader className="pb-2">
