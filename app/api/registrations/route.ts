@@ -2,9 +2,21 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateRegisterId } from "@/lib/services/registration";
 import { recaptchaService } from "@/lib/services/recaptcha";
+import {
+  beginIdempotency,
+  checkRateLimit,
+  createRequestHash,
+  finalizeIdempotencyFailure,
+  finalizeIdempotencySuccess,
+} from "@/lib/server/public-api-guard";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
+const REGISTRATION_ROUTE = "registrations:create";
+const REGISTRATION_RATE_LIMIT = {
+  limit: 5,
+  windowSeconds: 15 * 60,
+};
 
 const qualificationValues = [
   "degree",
@@ -80,7 +92,31 @@ function parseUrlArray(raw: string | undefined, fieldName: string): string[] {
 }
 
 export async function POST(request: Request) {
+  let activeIdempotencyKey: string | null = null;
+
   try {
+    const rateLimit = await checkRateLimit({
+      request,
+      route: REGISTRATION_ROUTE,
+      limit: REGISTRATION_RATE_LIMIT.limit,
+      windowSeconds: REGISTRATION_RATE_LIMIT.windowSeconds,
+    });
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many registration attempts. Please retry shortly.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(rateLimit.retryAfterSeconds),
+          },
+        },
+      );
+    }
+
     const formData = await request.formData();
 
     const rawPayload = {
@@ -216,9 +252,59 @@ export async function POST(request: Request) {
       );
     }
 
+    const hashablePayload = Object.fromEntries(
+      Object.entries(payload).filter(([key]) => key !== "recaptchaToken"),
+    );
+    const idempotencyState = await beginIdempotency({
+      request,
+      route: REGISTRATION_ROUTE,
+      idempotencyKey: request.headers.get("idempotency-key"),
+      requestHash: createRequestHash({
+        ...hashablePayload,
+        academicUrls,
+        nicUrls,
+        passportUrls,
+        photoUrl,
+        paymentUrl,
+      }),
+      ttlSeconds: 24 * 60 * 60,
+      inProgressTimeoutSeconds: 60,
+    });
+
+    if (idempotencyState.kind === "replay") {
+      return NextResponse.json(idempotencyState.responseBody, {
+        status: idempotencyState.httpStatus,
+        headers: {
+          "Idempotent-Replayed": "true",
+        },
+      });
+    }
+
+    if (idempotencyState.kind === "conflict") {
+      return NextResponse.json(
+        { success: false, error: idempotencyState.message },
+        { status: 409 },
+      );
+    }
+
+    if (idempotencyState.kind === "in_progress") {
+      return NextResponse.json(
+        { success: false, error: idempotencyState.message },
+        { status: 409 },
+      );
+    }
+
+    activeIdempotencyKey = idempotencyState.key;
+
     // 1. Verify reCAPTCHA
     const recaptchaResult = await recaptchaService.verify(payload.recaptchaToken);
     if (!recaptchaResult.success) {
+      await finalizeIdempotencyFailure({
+        key: activeIdempotencyKey!,
+        httpStatus: 400,
+        errorMessage: "Security check failed. Please try again.",
+        ttlSeconds: 5 * 60,
+      });
       return NextResponse.json(
         {
           success: false,
@@ -239,6 +325,12 @@ export async function POST(request: Request) {
     });
 
     if (!program) {
+      await finalizeIdempotencyFailure({
+        key: activeIdempotencyKey!,
+        httpStatus: 400,
+        errorMessage: "Selected program is invalid",
+        ttlSeconds: 10 * 60,
+      });
       return NextResponse.json(
         { success: false, error: "Selected program is invalid" },
         { status: 400 },
@@ -302,12 +394,32 @@ export async function POST(request: Request) {
       select: { registerId: true },
     });
 
-    return NextResponse.json({
+    const responseBody = {
       success: true,
       message: "Registration created successfully",
       registerId: result.registerId,
+    };
+
+    await finalizeIdempotencySuccess({
+      key: activeIdempotencyKey!,
+      httpStatus: 200,
+      responseBody,
     });
+
+    return NextResponse.json(responseBody);
   } catch (error) {
+    if (activeIdempotencyKey) {
+      try {
+        await finalizeIdempotencyFailure({
+          key: activeIdempotencyKey,
+          httpStatus: 500,
+          errorMessage: "Internal server error",
+        });
+      } catch (idempotencyError) {
+        console.error("Registration idempotency failure update error:", idempotencyError);
+      }
+    }
+
     console.error("Registration error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },

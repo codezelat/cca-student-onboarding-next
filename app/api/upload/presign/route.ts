@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { fileUpload } from "@/lib/services/file-upload";
+import { checkRateLimit } from "@/lib/server/public-api-guard";
 import { z } from "zod";
 import {
     ALLOWED_UPLOAD_MIME_TYPES,
     MAX_UPLOAD_SIZE_BYTES,
     MAX_UPLOAD_SIZE_MB,
 } from "@/lib/upload-config";
+const PRESIGN_ROUTE = "upload:presign";
+const PRESIGN_RATE_LIMIT = {
+    limit: 60,
+    windowSeconds: 10 * 60,
+};
 
 const presignSchema = z.object({
     filename: z.string().min(1),
@@ -18,6 +24,28 @@ const presignSchema = z.object({
 
 export async function POST(request: Request) {
     try {
+        const rateLimit = await checkRateLimit({
+            request,
+            route: PRESIGN_ROUTE,
+            limit: PRESIGN_RATE_LIMIT.limit,
+            windowSeconds: PRESIGN_RATE_LIMIT.windowSeconds,
+        });
+
+        if (!rateLimit.allowed) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "Too many upload requests. Please retry shortly.",
+                },
+                {
+                    status: 429,
+                    headers: {
+                        "Retry-After": String(rateLimit.retryAfterSeconds),
+                    },
+                },
+            );
+        }
+
         const body = await request.json();
 
         // Validate request body

@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/server/public-api-guard";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
+const LOOKUP_ROUTE = "registrations:lookup";
+const LOOKUP_RATE_LIMIT = {
+  limit: 60,
+  windowSeconds: 10 * 60,
+};
 
 const lookupQuerySchema = z.object({
   type: z.enum(["local", "international"]),
@@ -11,6 +17,28 @@ const lookupQuerySchema = z.object({
 
 export async function GET(request: Request) {
   try {
+    const rateLimit = await checkRateLimit({
+      request,
+      route: LOOKUP_ROUTE,
+      limit: LOOKUP_RATE_LIMIT.limit,
+      windowSeconds: LOOKUP_RATE_LIMIT.windowSeconds,
+    });
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many lookup attempts. Please retry shortly.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(rateLimit.retryAfterSeconds),
+          },
+        },
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const parsed = lookupQuerySchema.safeParse({
       type: searchParams.get("type"),

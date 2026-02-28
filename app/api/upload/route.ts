@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fileUpload } from "@/lib/services/file-upload";
+import { checkRateLimit } from "@/lib/server/public-api-guard";
 import {
   ALLOWED_UPLOAD_MIME_TYPES,
   MAX_UPLOAD_SIZE_BYTES,
@@ -9,9 +10,36 @@ import {
 const ALLOWED_DIRECTORIES = ["documents", "receipts", "avatars"] as const;
 type Directory = (typeof ALLOWED_DIRECTORIES)[number];
 const ALLOWED_MIME_TYPES: Set<string> = new Set(ALLOWED_UPLOAD_MIME_TYPES);
+const UPLOAD_ROUTE = "upload:direct";
+const UPLOAD_RATE_LIMIT = {
+  limit: 40,
+  windowSeconds: 10 * 60,
+};
 
 export async function POST(request: Request) {
   try {
+    const rateLimit = await checkRateLimit({
+      request,
+      route: UPLOAD_ROUTE,
+      limit: UPLOAD_RATE_LIMIT.limit,
+      windowSeconds: UPLOAD_RATE_LIMIT.windowSeconds,
+    });
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many upload attempts. Please retry shortly.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(rateLimit.retryAfterSeconds),
+          },
+        },
+      );
+    }
+
     const formData = await request.formData();
 
     const file = formData.get("file");

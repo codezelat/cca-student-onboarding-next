@@ -137,10 +137,17 @@ export default function PaymentUpdatePage() {
       const submitData = new FormData();
       submitData.set("registration_id", currentRegistrationId);
       submitData.set("payment_url", fileUrl);
+      const idempotencyKey =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
       const response = await fetch("/api/registrations/payment-update", {
         method: "POST",
         body: submitData,
+        headers: {
+          "Idempotency-Key": idempotencyKey,
+        },
       });
 
       const result = await response.json();
