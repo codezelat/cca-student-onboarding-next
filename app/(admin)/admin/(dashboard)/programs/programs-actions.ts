@@ -177,6 +177,14 @@ export async function upsertProgram(data: Record<string, unknown>) {
     const { id, ...rest } = data;
     const programData: Record<string, unknown> = { ...rest };
     const before = id ? await getProgramAuditSnapshot(String(id)) : null;
+    const hasBasePriceInPayload = Object.prototype.hasOwnProperty.call(
+        programData,
+        "basePrice",
+    );
+    const beforeBasePrice =
+        before?.basePrice !== undefined && before?.basePrice !== null
+            ? String(before.basePrice)
+            : null;
 
     // Ensure numeric types
     if (programData.basePrice !== undefined && programData.basePrice !== null && programData.basePrice !== "")
@@ -186,11 +194,42 @@ export async function upsertProgram(data: Record<string, unknown>) {
 
     try {
         let result;
+        let syncedRegistrationCount = 0;
+        let syncedFullAmount = false;
+
         if (id) {
-            result = await prisma.program.update({
-                where: { id: BigInt(String(id)) },
-                data: programData as Prisma.ProgramUncheckedUpdateInput,
+            const txResult = await prisma.$transaction(async (tx) => {
+                const updated = await tx.program.update({
+                    where: { id: BigInt(String(id)) },
+                    data: programData as Prisma.ProgramUncheckedUpdateInput,
+                });
+
+                const afterBasePrice =
+                    updated.basePrice !== undefined && updated.basePrice !== null
+                        ? String(updated.basePrice)
+                        : null;
+                const shouldSyncFees =
+                    hasBasePriceInPayload && beforeBasePrice !== afterBasePrice;
+
+                let syncedCount = 0;
+                if (shouldSyncFees) {
+                    const syncResult = await tx.cCARegistration.updateMany({
+                        where: { programId: updated.code },
+                        data: { fullAmount: updated.basePrice },
+                    });
+                    syncedCount = syncResult.count;
+                }
+
+                return {
+                    updated,
+                    shouldSyncFees,
+                    syncedCount,
+                };
             });
+
+            result = txResult.updated;
+            syncedFullAmount = txResult.shouldSyncFees;
+            syncedRegistrationCount = txResult.syncedCount;
         } else {
             result = await prisma.program.create({
                 data: programData as Prisma.ProgramUncheckedCreateInput,
@@ -205,16 +244,26 @@ export async function upsertProgram(data: Record<string, unknown>) {
             subjectType: "Program",
             subjectId: result.id,
             subjectLabel: result.code,
-            message: id ? "Program details updated" : "New program created",
+            message:
+                id && syncedFullAmount
+                    ? `Program details updated and ${syncedRegistrationCount} registration fee records synced`
+                    : id
+                      ? "Program details updated"
+                      : "New program created",
             routeName: "/admin/programs",
             beforeData: before,
             afterData: result,
             meta: {
                 changedKeys: Object.keys(programData),
+                syncedFullAmount,
+                syncedRegistrationCount,
             },
         });
 
         revalidatePath("/admin/programs");
+        revalidatePath("/admin");
+        revalidatePath("/admin/finance");
+        revalidatePath("/admin/received-payments");
         return serialize(result);
     } catch (error) {
         await logActivitySafe({
