@@ -8,6 +8,7 @@ import {
   finalizeIdempotencyFailure,
   finalizeIdempotencySuccess,
 } from "@/lib/server/public-api-guard";
+import { getRequestContext, logActivitySafe } from "@/lib/server/activity-log";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ const paymentUpdateSchema = z.object({
 
 export async function POST(request: Request) {
   let activeIdempotencyKey: string | null = null;
+  const requestContext = getRequestContext(request);
 
   try {
     const rateLimit = await checkRateLimit({
@@ -56,6 +58,14 @@ export async function POST(request: Request) {
     });
 
     if (!parsed.success) {
+      await logActivitySafe({
+        category: "payment_update",
+        action: "payment_update_validation_failed",
+        status: "failure",
+        subjectType: "PaymentSlipUpdate",
+        message: parsed.error.issues[0]?.message || "Missing required parameters",
+        ...requestContext,
+      });
       return NextResponse.json(
         {
           success: false,
@@ -85,6 +95,15 @@ export async function POST(request: Request) {
     }
 
     if (idempotencyState.kind === "conflict") {
+      await logActivitySafe({
+        category: "payment_update",
+        action: "payment_update_idempotency_conflict",
+        status: "blocked",
+        subjectType: "PaymentSlipUpdate",
+        subjectId: registrationId,
+        message: idempotencyState.message,
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: idempotencyState.message },
         { status: 409 },
@@ -92,6 +111,15 @@ export async function POST(request: Request) {
     }
 
     if (idempotencyState.kind === "in_progress") {
+      await logActivitySafe({
+        category: "payment_update",
+        action: "payment_update_idempotency_in_progress",
+        status: "blocked",
+        subjectType: "PaymentSlipUpdate",
+        subjectId: registrationId,
+        message: idempotencyState.message,
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: idempotencyState.message },
         { status: 409 },
@@ -123,6 +151,15 @@ export async function POST(request: Request) {
     `);
 
     if (!updatedRows.length) {
+      await logActivitySafe({
+        category: "payment_update",
+        action: "payment_update_registration_not_found",
+        status: "failure",
+        subjectType: "CCARegistration",
+        subjectId: registrationId,
+        message: "Registration not found",
+        ...requestContext,
+      });
       await finalizeIdempotencyFailure({
         key: activeIdempotencyKey!,
         httpStatus: 404,
@@ -146,8 +183,32 @@ export async function POST(request: Request) {
       responseBody,
     });
 
+    await logActivitySafe({
+      category: "payment_update",
+      action: "payment_slip_uploaded",
+      status: "success",
+      subjectType: "CCARegistration",
+      subjectId: registrationId,
+      message: "Additional payment slip submitted by student",
+      ...requestContext,
+      meta: {
+        slipId: newSlip.id,
+      },
+    });
+
     return NextResponse.json(responseBody);
   } catch (error) {
+    await logActivitySafe({
+      category: "payment_update",
+      action: "payment_update_internal_error",
+      status: "failure",
+      subjectType: "PaymentSlipUpdate",
+      message: "Unhandled error while updating payment slip",
+      ...requestContext,
+      meta: {
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
     if (activeIdempotencyKey) {
       try {
         await finalizeIdempotencyFailure({

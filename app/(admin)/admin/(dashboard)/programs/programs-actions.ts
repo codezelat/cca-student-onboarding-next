@@ -2,16 +2,56 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
+import {
+    getAdminActorFromRequestHeaders,
+    logActivitySafe,
+} from "@/lib/server/activity-log";
 
 /**
  * BigInt to JSON helper
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function serialize(data: any) {
     return JSON.parse(
         JSON.stringify(data, (key, value) =>
             typeof value === "bigint" ? value.toString() : value,
         ),
     );
+}
+
+async function getProgramAuditSnapshot(id: string) {
+    return prisma.program.findUnique({
+        where: { id: BigInt(id) },
+        select: {
+            id: true,
+            code: true,
+            name: true,
+            yearLabel: true,
+            durationLabel: true,
+            basePrice: true,
+            currency: true,
+            isActive: true,
+            displayOrder: true,
+            updatedAt: true,
+        },
+    });
+}
+
+async function getIntakeAuditSnapshot(id: string) {
+    return prisma.programIntakeWindow.findUnique({
+        where: { id: BigInt(id) },
+        select: {
+            id: true,
+            programId: true,
+            windowName: true,
+            opensAt: true,
+            closesAt: true,
+            priceOverride: true,
+            isActive: true,
+            updatedAt: true,
+        },
+    });
 }
 
 export async function getAllPrograms(params?: {
@@ -88,40 +128,121 @@ export async function getProgramById(id: string) {
 }
 
 export async function toggleProgramStatus(id: string, currentStatus: boolean) {
-    await prisma.program.update({
-        where: { id: BigInt(id) },
-        data: { isActive: !currentStatus },
-    });
+    const actor = await getAdminActorFromRequestHeaders();
+    const before = await getProgramAuditSnapshot(id);
 
-    revalidatePath("/admin/programs");
+    try {
+        const updated = await prisma.program.update({
+            where: { id: BigInt(id) },
+            data: { isActive: !currentStatus },
+        });
+
+        await logActivitySafe({
+            actor,
+            category: "program",
+            action: "program_status_toggled",
+            status: "success",
+            subjectType: "Program",
+            subjectId: id,
+            subjectLabel: updated.code,
+            message: `Program status changed to ${updated.isActive ? "active" : "inactive"}`,
+            routeName: "/admin/programs",
+            beforeData: before,
+            afterData: updated,
+        });
+        revalidatePath("/admin/programs");
+    } catch (error) {
+        await logActivitySafe({
+            actor,
+            category: "program",
+            action: "program_status_toggle_failed",
+            status: "failure",
+            subjectType: "Program",
+            subjectId: id,
+            subjectLabel: before?.code || id,
+            message: "Failed to toggle program status",
+            routeName: "/admin/programs",
+            beforeData: before,
+            meta: {
+                targetStatus: !currentStatus,
+                error: error instanceof Error ? error.message : "Unknown error",
+            },
+        });
+        throw error;
+    }
 }
 
-export async function upsertProgram(data: any) {
-    const { id, ...programData } = data;
+export async function upsertProgram(data: Record<string, unknown>) {
+    const actor = await getAdminActorFromRequestHeaders();
+    const { id, ...rest } = data;
+    const programData: Record<string, unknown> = { ...rest };
+    const before = id ? await getProgramAuditSnapshot(String(id)) : null;
 
     // Ensure numeric types
-    if (programData.basePrice)
-        programData.basePrice = parseFloat(programData.basePrice);
-    if (programData.displayOrder)
-        programData.displayOrder = parseInt(programData.displayOrder);
+    if (programData.basePrice !== undefined && programData.basePrice !== null && programData.basePrice !== "")
+        programData.basePrice = parseFloat(String(programData.basePrice));
+    if (programData.displayOrder !== undefined && programData.displayOrder !== null && programData.displayOrder !== "")
+        programData.displayOrder = parseInt(String(programData.displayOrder), 10);
 
-    let result;
-    if (id) {
-        result = await prisma.program.update({
-            where: { id: BigInt(id) },
-            data: programData,
+    try {
+        let result;
+        if (id) {
+            result = await prisma.program.update({
+                where: { id: BigInt(String(id)) },
+                data: programData as Prisma.ProgramUncheckedUpdateInput,
+            });
+        } else {
+            result = await prisma.program.create({
+                data: programData as Prisma.ProgramUncheckedCreateInput,
+            });
+        }
+
+        await logActivitySafe({
+            actor,
+            category: "program",
+            action: id ? "program_updated" : "program_created",
+            status: "success",
+            subjectType: "Program",
+            subjectId: result.id,
+            subjectLabel: result.code,
+            message: id ? "Program details updated" : "New program created",
+            routeName: "/admin/programs",
+            beforeData: before,
+            afterData: result,
+            meta: {
+                changedKeys: Object.keys(programData),
+            },
         });
-    } else {
-        result = await prisma.program.create({
-            data: programData,
+
+        revalidatePath("/admin/programs");
+        return serialize(result);
+    } catch (error) {
+        await logActivitySafe({
+            actor,
+            category: "program",
+            action: id ? "program_update_failed" : "program_create_failed",
+            status: "failure",
+            subjectType: "Program",
+            subjectId: id ? String(id) : null,
+            subjectLabel:
+                before?.code ||
+                (typeof programData.code === "string"
+                    ? programData.code
+                    : "unknown"),
+            message: id ? "Failed to update program" : "Failed to create program",
+            routeName: "/admin/programs",
+            beforeData: before,
+            meta: {
+                changedKeys: Object.keys(programData),
+                error: error instanceof Error ? error.message : "Unknown error",
+            },
         });
+        throw error;
     }
-
-    revalidatePath("/admin/programs");
-    return serialize(result);
 }
 
 export async function deleteProgram(id: string) {
+    const actor = await getAdminActorFromRequestHeaders();
     // Check if it has registrations first
     const program = await prisma.program.findUnique({
         where: { id: BigInt(id) },
@@ -129,6 +250,17 @@ export async function deleteProgram(id: string) {
     });
 
     if (!program) {
+        await logActivitySafe({
+            actor,
+            category: "program",
+            action: "program_delete_failed",
+            status: "failure",
+            subjectType: "Program",
+            subjectId: id,
+            subjectLabel: id,
+            message: "Program not found",
+            routeName: "/admin/programs",
+        });
         throw new Error("Program not found");
     }
 
@@ -139,14 +271,58 @@ export async function deleteProgram(id: string) {
     });
 
     if (regCount > 0) {
+        await logActivitySafe({
+            actor,
+            category: "program",
+            action: "program_delete_blocked",
+            status: "blocked",
+            subjectType: "Program",
+            subjectId: id,
+            subjectLabel: program.code,
+            message: "Program deletion blocked because registrations exist",
+            routeName: "/admin/programs",
+            meta: {
+                registrationCount: regCount,
+            },
+        });
         throw new Error("Cannot delete program with active registrations.");
     }
 
-    await prisma.program.delete({
-        where: { id: BigInt(id) },
-    });
+    try {
+        const deleted = await prisma.program.delete({
+            where: { id: BigInt(id) },
+        });
 
-    revalidatePath("/admin/programs");
+        await logActivitySafe({
+            actor,
+            category: "program",
+            action: "program_deleted",
+            status: "success",
+            subjectType: "Program",
+            subjectId: deleted.id,
+            subjectLabel: deleted.code,
+            message: "Program deleted",
+            routeName: "/admin/programs",
+            beforeData: deleted,
+        });
+        revalidatePath("/admin/programs");
+    } catch (error) {
+        await logActivitySafe({
+            actor,
+            category: "program",
+            action: "program_delete_failed",
+            status: "failure",
+            subjectType: "Program",
+            subjectId: id,
+            subjectLabel: program.code,
+            message: "Failed to delete program",
+            routeName: "/admin/programs",
+            meta: {
+                error: error instanceof Error ? error.message : "Unknown error",
+            },
+        });
+        throw error;
+    }
 }
 
 export async function getProgramIntakes(
@@ -181,33 +357,87 @@ export async function getProgramIntakes(
     });
 }
 
-export async function upsertIntakeWindow(data: any) {
-    const { id, programId, ...intakeData } = data;
+export async function upsertIntakeWindow(data: Record<string, unknown>) {
+    const actor = await getAdminActorFromRequestHeaders();
+    const { id, programId, ...rest } = data;
+    const intakeData: Record<string, unknown> = { ...rest };
+    const before = id ? await getIntakeAuditSnapshot(String(id)) : null;
 
     // Convert dates
-    intakeData.opensAt = new Date(intakeData.opensAt);
-    intakeData.closesAt = new Date(intakeData.closesAt);
-    if (intakeData.priceOverride)
-        intakeData.priceOverride = parseFloat(intakeData.priceOverride);
-
-    let result;
-    if (id) {
-        result = await prisma.programIntakeWindow.update({
-            where: { id: BigInt(id) },
-            data: intakeData,
-        });
-    } else {
-        result = await prisma.programIntakeWindow.create({
-            data: {
-                ...intakeData,
-                programId: BigInt(programId),
-            },
-        });
+    intakeData.opensAt = new Date(String(intakeData.opensAt));
+    intakeData.closesAt = new Date(String(intakeData.closesAt));
+    if (
+        intakeData.priceOverride !== undefined &&
+        intakeData.priceOverride !== null &&
+        intakeData.priceOverride !== ""
+    ) {
+        intakeData.priceOverride = parseFloat(String(intakeData.priceOverride));
     }
 
-    revalidatePath(`/admin/programs/${programId}/intakes`);
-    revalidatePath("/admin/programs"); // Refresh dashboard stats too
-    return serialize(result);
+    try {
+        let result;
+        if (id) {
+            result = await prisma.programIntakeWindow.update({
+                where: { id: BigInt(String(id)) },
+                data: intakeData as Prisma.ProgramIntakeWindowUncheckedUpdateInput,
+            });
+        } else {
+            result = await prisma.programIntakeWindow.create({
+                data: {
+                    ...(intakeData as Prisma.ProgramIntakeWindowUncheckedCreateInput),
+                    programId: BigInt(String(programId)),
+                } as Prisma.ProgramIntakeWindowUncheckedCreateInput,
+            });
+        }
+
+        await logActivitySafe({
+            actor,
+            category: "program_intake",
+            action: id ? "intake_updated" : "intake_created",
+            status: "success",
+            subjectType: "ProgramIntakeWindow",
+            subjectId: result.id,
+            subjectLabel: result.windowName,
+            message: id
+                ? "Program intake window updated"
+                : "Program intake window created",
+            routeName: `/admin/programs/${programId}/intakes`,
+            beforeData: before,
+            afterData: result,
+            meta: {
+                programId,
+                changedKeys: Object.keys(intakeData),
+            },
+        });
+
+        revalidatePath(`/admin/programs/${programId}/intakes`);
+        revalidatePath("/admin/programs"); // Refresh dashboard stats too
+        return serialize(result);
+    } catch (error) {
+        await logActivitySafe({
+            actor,
+            category: "program_intake",
+            action: id ? "intake_update_failed" : "intake_create_failed",
+            status: "failure",
+            subjectType: "ProgramIntakeWindow",
+            subjectId: id ? String(id) : null,
+            subjectLabel:
+                before?.windowName ||
+                (typeof intakeData.windowName === "string"
+                    ? intakeData.windowName
+                    : "unknown"),
+            message: id
+                ? "Failed to update intake window"
+                : "Failed to create intake window",
+            routeName: `/admin/programs/${programId}/intakes`,
+            beforeData: before,
+            meta: {
+                programId,
+                error: error instanceof Error ? error.message : "Unknown error",
+            },
+        });
+        throw error;
+    }
 }
 
 export async function toggleIntakeStatus(
@@ -215,18 +445,89 @@ export async function toggleIntakeStatus(
     programId: string,
     currentStatus: boolean,
 ) {
-    await prisma.programIntakeWindow.update({
-        where: { id: BigInt(id) },
-        data: { isActive: !currentStatus },
-    });
-    revalidatePath(`/admin/programs/${programId}/intakes`);
-    revalidatePath("/admin/programs");
+    const actor = await getAdminActorFromRequestHeaders();
+    const before = await getIntakeAuditSnapshot(id);
+
+    try {
+        const updated = await prisma.programIntakeWindow.update({
+            where: { id: BigInt(id) },
+            data: { isActive: !currentStatus },
+        });
+        await logActivitySafe({
+            actor,
+            category: "program_intake",
+            action: "intake_status_toggled",
+            status: "success",
+            subjectType: "ProgramIntakeWindow",
+            subjectId: id,
+            subjectLabel: updated.windowName,
+            message: `Intake status changed to ${updated.isActive ? "active" : "inactive"}`,
+            routeName: `/admin/programs/${programId}/intakes`,
+            beforeData: before,
+            afterData: updated,
+        });
+        revalidatePath(`/admin/programs/${programId}/intakes`);
+        revalidatePath("/admin/programs");
+    } catch (error) {
+        await logActivitySafe({
+            actor,
+            category: "program_intake",
+            action: "intake_status_toggle_failed",
+            status: "failure",
+            subjectType: "ProgramIntakeWindow",
+            subjectId: id,
+            subjectLabel: before?.windowName || id,
+            message: "Failed to toggle intake status",
+            routeName: `/admin/programs/${programId}/intakes`,
+            beforeData: before,
+            meta: {
+                targetStatus: !currentStatus,
+                error: error instanceof Error ? error.message : "Unknown error",
+            },
+        });
+        throw error;
+    }
 }
 
 export async function deleteIntakeWindow(id: string, programId: string) {
-    await prisma.programIntakeWindow.delete({
-        where: { id: BigInt(id) },
-    });
-    revalidatePath(`/admin/programs/${programId}/intakes`);
-    revalidatePath("/admin/programs");
+    const actor = await getAdminActorFromRequestHeaders();
+    const before = await getIntakeAuditSnapshot(id);
+
+    try {
+        await prisma.programIntakeWindow.delete({
+            where: { id: BigInt(id) },
+        });
+
+        await logActivitySafe({
+            actor,
+            category: "program_intake",
+            action: "intake_deleted",
+            status: "success",
+            subjectType: "ProgramIntakeWindow",
+            subjectId: id,
+            subjectLabel: before?.windowName || id,
+            message: "Program intake window deleted",
+            routeName: `/admin/programs/${programId}/intakes`,
+            beforeData: before,
+        });
+        revalidatePath(`/admin/programs/${programId}/intakes`);
+        revalidatePath("/admin/programs");
+    } catch (error) {
+        await logActivitySafe({
+            actor,
+            category: "program_intake",
+            action: "intake_delete_failed",
+            status: "failure",
+            subjectType: "ProgramIntakeWindow",
+            subjectId: id,
+            subjectLabel: before?.windowName || id,
+            message: "Failed to delete intake window",
+            routeName: `/admin/programs/${programId}/intakes`,
+            beforeData: before,
+            meta: {
+                error: error instanceof Error ? error.message : "Unknown error",
+            },
+        });
+        throw error;
+    }
 }

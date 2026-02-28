@@ -3,6 +3,10 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
+import {
+  getAdminActorFromRequestHeaders,
+  logActivitySafe,
+} from "@/lib/server/activity-log";
 
 /**
  * Payment slip structure
@@ -186,12 +190,26 @@ export async function approvePaymentSlip(
   slipIndex: number,
   amount: number,
 ) {
+  const actor = await getAdminActorFromRequestHeaders();
   const reg = await prisma.cCARegistration.findUnique({
     where: { id: BigInt(registrationId) },
   });
 
-  if (!reg || !reg.paymentSlip)
+  if (!reg || !reg.paymentSlip) {
+    await logActivitySafe({
+      actor,
+      category: "payment_slip",
+      action: "payment_slip_approve_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: registrationId,
+      subjectLabel: registrationId,
+      message: "Registration or payment slip not found",
+      routeName: "/admin/received-payments",
+      meta: { slipIndex },
+    });
     throw new Error("Registration or slip not found");
+  }
 
   let slips: PaymentSlip[] = [];
   try {
@@ -204,15 +222,54 @@ export async function approvePaymentSlip(
     slips = [slips];
   }
 
-  if (!slips[slipIndex]) throw new Error("Slip index out of bounds");
+  if (!slips[slipIndex]) {
+    await logActivitySafe({
+      actor,
+      category: "payment_slip",
+      action: "payment_slip_approve_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: registrationId,
+      subjectLabel: reg.registerId,
+      message: "Slip index out of bounds",
+      routeName: "/admin/received-payments",
+      meta: { slipIndex },
+    });
+    throw new Error("Slip index out of bounds");
+  }
   if (
     slips[slipIndex].status === "approved" ||
     slips[slipIndex].status === "declined"
   ) {
+    await logActivitySafe({
+      actor,
+      category: "payment_slip",
+      action: "payment_slip_approve_blocked",
+      status: "blocked",
+      subjectType: "CCARegistration",
+      subjectId: registrationId,
+      subjectLabel: reg.registerId,
+      message: `Slip is already ${slips[slipIndex].status}`,
+      routeName: "/admin/received-payments",
+      meta: {
+        slipIndex,
+        slipStatus: slips[slipIndex].status,
+      },
+    });
     throw new Error(
       `This payment slip has already been ${slips[slipIndex].status}.`,
     );
   }
+
+  const beforeSnapshot = {
+    registration: {
+      id: reg.id,
+      registerId: reg.registerId,
+      fullName: reg.fullName,
+      currentPaidAmount: reg.currentPaidAmount,
+    },
+    slip: slips[slipIndex],
+  };
 
   // 1. Update Slip Status
   slips[slipIndex].status = "approved";
@@ -240,7 +297,7 @@ export async function approvePaymentSlip(
   const nextPaymentNo = (lastPayment?.paymentNo ?? 0) + 1;
 
   // 4. Create Formal Payment Record
-  await prisma.registrationPayment.create({
+  const createdPayment = await prisma.registrationPayment.create({
     data: {
       ccaRegistrationId: BigInt(registrationId),
       paymentNo: nextPaymentNo,
@@ -253,6 +310,29 @@ export async function approvePaymentSlip(
     },
   });
 
+  await logActivitySafe({
+    actor,
+    category: "payment_slip",
+    action: "payment_slip_approved",
+    status: "success",
+    subjectType: "CCARegistration",
+    subjectId: registrationId,
+    subjectLabel: reg.registerId,
+    message: "Payment slip approved and ledger entry created",
+    routeName: "/admin/received-payments",
+    beforeData: beforeSnapshot,
+    afterData: {
+      paymentNo: createdPayment.paymentNo,
+      amount: createdPayment.amount,
+      slip: slips[slipIndex],
+      newPaidAmount,
+    },
+    meta: {
+      slipIndex,
+      amount,
+    },
+  });
+
   revalidatePath("/admin/received-payments");
   revalidatePath(`/admin/registrations/${registrationId}`);
   return { success: true };
@@ -262,12 +342,26 @@ export async function declinePaymentSlip(
   registrationId: string,
   slipIndex: number,
 ) {
+  const actor = await getAdminActorFromRequestHeaders();
   const reg = await prisma.cCARegistration.findUnique({
     where: { id: BigInt(registrationId) },
   });
 
-  if (!reg || !reg.paymentSlip)
+  if (!reg || !reg.paymentSlip) {
+    await logActivitySafe({
+      actor,
+      category: "payment_slip",
+      action: "payment_slip_decline_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: registrationId,
+      subjectLabel: registrationId,
+      message: "Registration or payment slip not found",
+      routeName: "/admin/received-payments",
+      meta: { slipIndex },
+    });
     throw new Error("Registration or slip not found");
+  }
 
   let slips: PaymentSlip[] = [];
   try {
@@ -280,15 +374,54 @@ export async function declinePaymentSlip(
     slips = [slips];
   }
 
-  if (!slips[slipIndex]) throw new Error("Slip index out of bounds");
+  if (!slips[slipIndex]) {
+    await logActivitySafe({
+      actor,
+      category: "payment_slip",
+      action: "payment_slip_decline_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: registrationId,
+      subjectLabel: reg.registerId,
+      message: "Slip index out of bounds",
+      routeName: "/admin/received-payments",
+      meta: { slipIndex },
+    });
+    throw new Error("Slip index out of bounds");
+  }
   if (
     slips[slipIndex].status === "approved" ||
     slips[slipIndex].status === "declined"
   ) {
+    await logActivitySafe({
+      actor,
+      category: "payment_slip",
+      action: "payment_slip_decline_blocked",
+      status: "blocked",
+      subjectType: "CCARegistration",
+      subjectId: registrationId,
+      subjectLabel: reg.registerId,
+      message: `Slip is already ${slips[slipIndex].status}`,
+      routeName: "/admin/received-payments",
+      meta: {
+        slipIndex,
+        slipStatus: slips[slipIndex].status,
+      },
+    });
     throw new Error(
       `This payment slip has already been ${slips[slipIndex].status}.`,
     );
   }
+
+  const beforeSnapshot = {
+    registration: {
+      id: reg.id,
+      registerId: reg.registerId,
+      fullName: reg.fullName,
+      currentPaidAmount: reg.currentPaidAmount,
+    },
+    slip: slips[slipIndex],
+  };
 
   // 1. Update Slip Status
   slips[slipIndex].status = "declined";
@@ -298,6 +431,25 @@ export async function declinePaymentSlip(
     where: { id: BigInt(registrationId) },
     data: {
       paymentSlip: JSON.parse(JSON.stringify(slips)),
+    },
+  });
+
+  await logActivitySafe({
+    actor,
+    category: "payment_slip",
+    action: "payment_slip_declined",
+    status: "success",
+    subjectType: "CCARegistration",
+    subjectId: registrationId,
+    subjectLabel: reg.registerId,
+    message: "Payment slip declined",
+    routeName: "/admin/received-payments",
+    beforeData: beforeSnapshot,
+    afterData: {
+      slip: slips[slipIndex],
+    },
+    meta: {
+      slipIndex,
     },
   });
 

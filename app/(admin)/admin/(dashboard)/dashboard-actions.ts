@@ -2,11 +2,33 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath, unstable_cache } from "next/cache";
+import {
+  getAdminActorFromRequestHeaders,
+  logActivitySafe,
+} from "@/lib/server/activity-log";
 
 function s<T>(data: T): T {
   return JSON.parse(
     JSON.stringify(data, (_k, v) => (typeof v === "bigint" ? Number(v) : v)),
   );
+}
+
+async function getRegistrationAuditSnapshot(id: number) {
+  return prisma.cCARegistration.findUnique({
+    where: { id: BigInt(id) },
+    select: {
+      id: true,
+      registerId: true,
+      fullName: true,
+      programId: true,
+      emailAddress: true,
+      whatsappNumber: true,
+      deletedAt: true,
+      fullAmount: true,
+      currentPaidAmount: true,
+      updatedAt: true,
+    },
+  });
 }
 
 const _cachedDashboardStats = unstable_cache(
@@ -179,20 +201,94 @@ export async function getActivePrograms() {
 }
 
 export async function toggleRegistrationTrash(id: number, restore: boolean) {
-  await prisma.cCARegistration.update({
-    where: { id: BigInt(id) },
-    data: {
-      deletedAt: restore ? null : new Date(),
-    },
-  });
-  revalidatePath("/admin");
+  const actor = await getAdminActorFromRequestHeaders();
+  const before = await getRegistrationAuditSnapshot(id);
+
+  try {
+    await prisma.cCARegistration.update({
+      where: { id: BigInt(id) },
+      data: {
+        deletedAt: restore ? null : new Date(),
+      },
+    });
+
+    const after = await getRegistrationAuditSnapshot(id);
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: restore ? "registration_restored" : "registration_trashed",
+      status: "success",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before?.registerId || after?.registerId || String(id),
+      message: restore
+        ? "Registration restored from trash"
+        : "Registration moved to trash",
+      routeName: "/admin",
+      beforeData: before,
+      afterData: after,
+    });
+    revalidatePath("/admin");
+  } catch (error) {
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: restore ? "registration_restore_failed" : "registration_trash_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before?.registerId || String(id),
+      message: "Failed to toggle registration trash status",
+      routeName: "/admin",
+      beforeData: before,
+      meta: {
+        restore,
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
+    throw error;
+  }
 }
 
 export async function purgeRegistration(id: number) {
-  await prisma.cCARegistration.delete({
-    where: { id: BigInt(id) },
-  });
-  revalidatePath("/admin");
+  const actor = await getAdminActorFromRequestHeaders();
+  const before = await getRegistrationAuditSnapshot(id);
+
+  try {
+    await prisma.cCARegistration.delete({
+      where: { id: BigInt(id) },
+    });
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: "registration_purged",
+      status: "success",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before?.registerId || String(id),
+      message: "Registration permanently deleted",
+      routeName: "/admin",
+      beforeData: before,
+    });
+    revalidatePath("/admin");
+  } catch (error) {
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: "registration_purge_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before?.registerId || String(id),
+      message: "Failed to permanently delete registration",
+      routeName: "/admin",
+      beforeData: before,
+      meta: {
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
+    throw error;
+  }
 }
 
 export async function getRegistrationById(
@@ -291,6 +387,8 @@ export async function getRegistrationById(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function updateRegistration(id: number, data: any) {
+  const actor = await getAdminActorFromRequestHeaders();
+  const before = await getRegistrationAuditSnapshot(id);
   // Basic scrubbing of data to ensure we don't accidentally update system fields
   const {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -340,12 +438,59 @@ export async function updateRegistration(id: number, data: any) {
   if (updateData.gender)
     updateData.gender = String(updateData.gender).toLowerCase();
 
-  const updated = await prisma.cCARegistration.update({
-    where: { id: BigInt(id) },
-    data: updateData,
-  });
+  try {
+    const updated = await prisma.cCARegistration.update({
+      where: { id: BigInt(id) },
+      data: updateData,
+    });
 
-  revalidatePath("/admin");
-  revalidatePath(`/admin/registrations/${id}`);
-  return { success: true, registration: s(updated) };
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: "registration_updated",
+      status: "success",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: updated.registerId,
+      message: "Registration profile updated by admin",
+      routeName: `/admin/registrations/${id}/edit`,
+      beforeData: before,
+      afterData: {
+        id: updated.id,
+        registerId: updated.registerId,
+        fullName: updated.fullName,
+        programId: updated.programId,
+        emailAddress: updated.emailAddress,
+        whatsappNumber: updated.whatsappNumber,
+        fullAmount: updated.fullAmount,
+        currentPaidAmount: updated.currentPaidAmount,
+        updatedAt: updated.updatedAt,
+      },
+      meta: {
+        changedKeys: Object.keys(updateData),
+      },
+    });
+
+    revalidatePath("/admin");
+    revalidatePath(`/admin/registrations/${id}`);
+    return { success: true, registration: s(updated) };
+  } catch (error) {
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: "registration_update_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before?.registerId || String(id),
+      message: "Failed to update registration profile",
+      routeName: `/admin/registrations/${id}/edit`,
+      beforeData: before,
+      meta: {
+        changedKeys: Object.keys(updateData),
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
+    throw error;
+  }
 }

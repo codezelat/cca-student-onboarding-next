@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { getRequestContext, logActivitySafe } from "@/lib/server/activity-log";
 
 type RateLimitOptions = {
   request: Request;
@@ -185,8 +186,27 @@ export async function checkRateLimit({
   `);
 
   const count = Number(rows[0]?.request_count ?? 1);
+  const allowed = count <= limit;
+  if (!allowed) {
+    const context = getRequestContext(request);
+    await logActivitySafe({
+      category: "security",
+      action: "rate_limit_exceeded",
+      status: "blocked",
+      subjectType: "PublicApiRoute",
+      subjectLabel: route,
+      message: "Request blocked by public API rate limiter",
+      ...context,
+      meta: {
+        route,
+        requestCount: count,
+        limit,
+        windowSeconds,
+      },
+    });
+  }
   return {
-    allowed: count <= limit,
+    allowed,
     retryAfterSeconds,
     count,
   };
@@ -272,6 +292,20 @@ export async function beginIdempotency({
   }
 
   if (existing.route !== route || existing.client_id !== clientId) {
+    const context = getRequestContext(request);
+    await logActivitySafe({
+      category: "security",
+      action: "idempotency_conflict",
+      status: "blocked",
+      subjectType: "PublicApiRoute",
+      subjectLabel: route,
+      message: "Idempotency key reused across different client or route",
+      ...context,
+      meta: {
+        route,
+        key,
+      },
+    });
     return {
       kind: "conflict",
       key,
@@ -280,6 +314,20 @@ export async function beginIdempotency({
   }
 
   if (existing.request_hash !== requestHash) {
+    const context = getRequestContext(request);
+    await logActivitySafe({
+      category: "security",
+      action: "idempotency_payload_mismatch",
+      status: "blocked",
+      subjectType: "PublicApiRoute",
+      subjectLabel: route,
+      message: "Idempotency key reused with a different payload hash",
+      ...context,
+      meta: {
+        route,
+        key,
+      },
+    });
     return {
       kind: "conflict",
       key,
@@ -292,6 +340,21 @@ export async function beginIdempotency({
     existing.http_status !== null &&
     existing.response_body !== null
   ) {
+    const context = getRequestContext(request);
+    await logActivitySafe({
+      category: "idempotency",
+      action: "idempotency_replay_served",
+      status: "success",
+      subjectType: "PublicApiRoute",
+      subjectLabel: route,
+      message: "Served cached response for duplicate idempotent request",
+      ...context,
+      meta: {
+        route,
+        key,
+        httpStatus: existing.http_status,
+      },
+    });
     return {
       kind: "replay",
       key,
@@ -303,6 +366,22 @@ export async function beginIdempotency({
   if (existing.status === "in_progress") {
     const ageMs = Date.now() - new Date(existing.updated_at).getTime();
     if (ageMs < inProgressTimeoutSeconds * 1000) {
+      const context = getRequestContext(request);
+      await logActivitySafe({
+        category: "idempotency",
+        action: "idempotency_in_progress",
+        status: "blocked",
+        subjectType: "PublicApiRoute",
+        subjectLabel: route,
+        message: "Duplicate idempotent request is still in progress",
+        ...context,
+        meta: {
+          route,
+          key,
+          ageMs,
+          timeoutMs: inProgressTimeoutSeconds * 1000,
+        },
+      });
       return {
         kind: "in_progress",
         key,

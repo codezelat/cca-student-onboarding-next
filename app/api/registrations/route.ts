@@ -9,6 +9,7 @@ import {
   finalizeIdempotencyFailure,
   finalizeIdempotencySuccess,
 } from "@/lib/server/public-api-guard";
+import { getRequestContext, logActivitySafe } from "@/lib/server/activity-log";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -93,6 +94,7 @@ function parseUrlArray(raw: string | undefined, fieldName: string): string[] {
 
 export async function POST(request: Request) {
   let activeIdempotencyKey: string | null = null;
+  const requestContext = getRequestContext(request);
 
   try {
     const rateLimit = await checkRateLimit({
@@ -159,6 +161,15 @@ export async function POST(request: Request) {
 
     const parsed = registrationSchema.safeParse(rawPayload);
     if (!parsed.success) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: rawPayload.emailAddress || "unknown",
+        message: parsed.error.issues[0]?.message || "Invalid submission data",
+        ...requestContext,
+      });
       return NextResponse.json(
         {
           success: false,
@@ -171,6 +182,15 @@ export async function POST(request: Request) {
     const payload = parsed.data;
 
     if (payload.nationality.toLowerCase() === "sri lankan" && !payload.nicNumber) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "NIC number is required for Sri Lankan nationals",
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: "NIC number is required for Sri Lankan nationals" },
         { status: 400 },
@@ -178,6 +198,15 @@ export async function POST(request: Request) {
     }
 
     if (payload.nationality.toLowerCase() !== "sri lankan" && !payload.passportNumber) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "Passport number is required for international students",
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: "Passport number is required for international students" },
         { status: 400 },
@@ -185,6 +214,15 @@ export async function POST(request: Request) {
     }
 
     if (payload.qualificationStatus === "completed" && !payload.qualificationCompletedDate) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "Qualification completed date is required",
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: "Qualification completed date is required" },
         { status: 400 },
@@ -195,6 +233,15 @@ export async function POST(request: Request) {
       payload.qualificationStatus === "ongoing" &&
       !payload.qualificationExpectedCompletionDate
     ) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "Expected completion date is required for ongoing qualifications",
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: "Expected completion date is required for ongoing qualifications" },
         { status: 400 },
@@ -205,6 +252,15 @@ export async function POST(request: Request) {
       payload.highestQualification === "other" &&
       !payload.qualificationOtherDetails
     ) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "Missing qualification details for 'other' option",
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: "Please provide details for the selected qualification" },
         { status: 400 },
@@ -227,18 +283,45 @@ export async function POST(request: Request) {
     const paymentUrl = toOptionalString(formData.get("payment_url"));
 
     if (!academicUrls.length) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "At least one academic document is required",
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: "At least one academic document is required" },
         { status: 400 },
       );
     }
     if (!photoUrl || !z.string().url().safeParse(photoUrl).success) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "Valid passport photo is required",
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: "A valid passport photo upload is required" },
         { status: 400 },
       );
     }
     if (!paymentUrl || !z.string().url().safeParse(paymentUrl).success) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "Valid payment slip upload is required",
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: "A valid payment slip upload is required" },
         { status: 400 },
@@ -246,6 +329,15 @@ export async function POST(request: Request) {
     }
 
     if (payload.nicNumber && !nicUrls.length) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "NIC document is required when NIC number is provided",
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: "NIC document upload is required when NIC number is provided" },
         { status: 400 },
@@ -281,6 +373,15 @@ export async function POST(request: Request) {
     }
 
     if (idempotencyState.kind === "conflict") {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_idempotency_conflict",
+        status: "blocked",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: idempotencyState.message,
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: idempotencyState.message },
         { status: 409 },
@@ -288,6 +389,15 @@ export async function POST(request: Request) {
     }
 
     if (idempotencyState.kind === "in_progress") {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_idempotency_in_progress",
+        status: "blocked",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: idempotencyState.message,
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: idempotencyState.message },
         { status: 409 },
@@ -299,6 +409,15 @@ export async function POST(request: Request) {
     // 1. Verify reCAPTCHA
     const recaptchaResult = await recaptchaService.verify(payload.recaptchaToken);
     if (!recaptchaResult.success) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_recaptcha_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "Security check failed",
+        ...requestContext,
+      });
       await finalizeIdempotencyFailure({
         key: activeIdempotencyKey!,
         httpStatus: 400,
@@ -325,6 +444,16 @@ export async function POST(request: Request) {
     });
 
     if (!program) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_program_invalid",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "Selected program is invalid",
+        ...requestContext,
+        meta: { programId: payload.programId },
+      });
       await finalizeIdempotencyFailure({
         key: activeIdempotencyKey!,
         httpStatus: 400,
@@ -391,7 +520,25 @@ export async function POST(request: Request) {
 
     const result = await prisma.cCARegistration.create({
       data: registrationData,
-      select: { registerId: true },
+      select: { id: true, registerId: true },
+    });
+
+    await logActivitySafe({
+      category: "public_registration",
+      action: "registration_created",
+      status: "success",
+      subjectType: "CCARegistration",
+      subjectId: result.id,
+      subjectLabel: result.registerId,
+      message: "Public registration created",
+      ...requestContext,
+      afterData: {
+        registerId: result.registerId,
+        programId: payload.programId,
+      },
+      meta: {
+        nationality: payload.nationality,
+      },
     });
 
     const responseBody = {
@@ -408,6 +555,17 @@ export async function POST(request: Request) {
 
     return NextResponse.json(responseBody);
   } catch (error) {
+    await logActivitySafe({
+      category: "public_registration",
+      action: "registration_internal_error",
+      status: "failure",
+      subjectType: "RegistrationSubmission",
+      message: "Unhandled error during public registration",
+      ...requestContext,
+      meta: {
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
     if (activeIdempotencyKey) {
       try {
         await finalizeIdempotencyFailure({

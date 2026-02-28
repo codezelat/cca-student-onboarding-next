@@ -1,37 +1,111 @@
-export default function ActivityPage() {
-    return (
-        <>
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2">
-                    Activity Timeline
-                </h1>
-                <p className="text-gray-600">
-                    Track all admin actions and system events
-                </p>
-            </div>
+import { Activity, AlertTriangle, Clock, UserRound } from "lucide-react";
+import { getActivityLogs } from "./activity-actions";
+import ActivityLogTable from "./activity-log-table";
 
-            <div className="bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-xl p-12 text-center">
-                <svg
-                    className="w-16 h-16 text-gray-400 mx-auto mb-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                </svg>
-                <p className="text-gray-500 text-lg font-medium">
-                    No activity recorded yet
-                </p>
-                <p className="text-gray-400 text-sm mt-1">
-                    Activity logs will appear here once the database is
-                    connected
-                </p>
-            </div>
-        </>
-    );
+export default async function ActivityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const search = (params.search as string) || "";
+  const actor = (params.actor as string) || "";
+  const category = (params.category as string) || "";
+  const action = (params.action as string) || "";
+  const status = (params.status as string) || "";
+  const subjectType = (params.subject_type as string) || "";
+  const dateFrom = (params.date_from as string) || "";
+  const dateTo = (params.date_to as string) || "";
+  const page = Math.max(
+    1,
+    Number.isFinite(Number(params.page)) ? Number(params.page) : 1,
+  );
+
+  const activityResult = await getActivityLogs({
+    search,
+    actor,
+    category,
+    action,
+    status,
+    subjectType,
+    dateFrom,
+    dateTo,
+    page,
+    pageSize: 25,
+  });
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold bg-linear-to-r from-slate-700 via-slate-800 to-indigo-700 bg-clip-text text-transparent mb-2 flex items-center gap-2">
+          <Activity className="w-8 h-8 text-slate-700" />
+          Activity Timeline
+        </h1>
+        <p className="text-gray-600">
+          Centralized audit trail for admin actions, security checks, and public
+          workflow events.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="p-5 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg">
+          <p className="text-xs font-black text-gray-500 uppercase tracking-widest">
+            Total Logs
+          </p>
+          <p className="text-3xl font-black text-slate-900 mt-1">
+            {activityResult.stats.totalLogs}
+          </p>
+        </div>
+        <div className="p-5 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-black text-gray-500 uppercase tracking-widest">
+              Failures / Blocked
+            </p>
+            <AlertTriangle className="w-4 h-4 text-rose-500" />
+          </div>
+          <p className="text-3xl font-black text-rose-700 mt-1">
+            {activityResult.stats.failureLogs}
+          </p>
+        </div>
+        <div className="p-5 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-black text-gray-500 uppercase tracking-widest">
+              Last 24 Hours
+            </p>
+            <Clock className="w-4 h-4 text-indigo-500" />
+          </div>
+          <p className="text-3xl font-black text-indigo-700 mt-1">
+            {activityResult.stats.last24hLogs}
+          </p>
+        </div>
+        <div className="p-5 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-black text-gray-500 uppercase tracking-widest">
+              Unique Actors
+            </p>
+            <UserRound className="w-4 h-4 text-emerald-500" />
+          </div>
+          <p className="text-3xl font-black text-emerald-700 mt-1">
+            {activityResult.stats.uniqueActors}
+          </p>
+        </div>
+      </div>
+
+      <ActivityLogTable
+        initialLogs={activityResult.data}
+        totalRows={activityResult.total}
+        currentPage={activityResult.page}
+        totalPages={activityResult.totalPages}
+        currentSearch={search}
+        currentActor={actor}
+        currentCategory={category}
+        currentAction={action}
+        currentStatus={status}
+        currentSubjectType={subjectType}
+        currentDateFrom={dateFrom}
+        currentDateTo={dateTo}
+        filterOptions={activityResult.filters}
+      />
+    </div>
+  );
 }

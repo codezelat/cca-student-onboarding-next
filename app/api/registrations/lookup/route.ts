@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/server/public-api-guard";
+import { getRequestContext, logActivitySafe } from "@/lib/server/activity-log";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ const lookupQuerySchema = z.object({
 });
 
 export async function GET(request: Request) {
+  const requestContext = getRequestContext(request);
   try {
     const rateLimit = await checkRateLimit({
       request,
@@ -46,6 +48,14 @@ export async function GET(request: Request) {
     });
 
     if (!parsed.success) {
+      await logActivitySafe({
+        category: "public_lookup",
+        action: "lookup_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationLookup",
+        message: "Missing or invalid lookup query parameters",
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: "Missing or invalid query parameters" },
         { status: 400 },
@@ -73,6 +83,15 @@ export async function GET(request: Request) {
     });
 
     if (!registration) {
+      await logActivitySafe({
+        category: "public_lookup",
+        action: "lookup_not_found",
+        status: "success",
+        subjectType: "RegistrationLookup",
+        subjectLabel: type,
+        message: "Lookup completed with no matching student",
+        ...requestContext,
+      });
       return NextResponse.json(
         { success: false, error: "Student not found" },
         { status: 404 },
@@ -90,6 +109,18 @@ export async function GET(request: Request) {
       ? Number(registration.currentPaidAmount)
       : 0;
 
+    await logActivitySafe({
+      category: "public_lookup",
+      action: "lookup_succeeded",
+      status: "success",
+      subjectType: "CCARegistration",
+      subjectId: registration.id,
+      subjectLabel: registration.fullName,
+      message: "Student payment lookup succeeded",
+      ...requestContext,
+      meta: { type },
+    });
+
     return NextResponse.json({
       success: true,
       data: {
@@ -103,6 +134,17 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
+    await logActivitySafe({
+      category: "public_lookup",
+      action: "lookup_internal_error",
+      status: "failure",
+      subjectType: "RegistrationLookup",
+      message: "Unhandled error during lookup",
+      ...requestContext,
+      meta: {
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
     console.error("Lookup error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fileUpload } from "@/lib/services/file-upload";
 import { checkRateLimit } from "@/lib/server/public-api-guard";
+import { getRequestContext, logActivitySafe } from "@/lib/server/activity-log";
 import { z } from "zod";
 import {
     ALLOWED_UPLOAD_MIME_TYPES,
@@ -23,6 +24,7 @@ const presignSchema = z.object({
 });
 
 export async function POST(request: Request) {
+    const requestContext = getRequestContext(request);
     try {
         const rateLimit = await checkRateLimit({
             request,
@@ -51,6 +53,14 @@ export async function POST(request: Request) {
         // Validate request body
         const result = presignSchema.safeParse(body);
         if (!result.success) {
+            await logActivitySafe({
+                category: "file_upload",
+                action: "presign_validation_failed",
+                status: "failure",
+                subjectType: "UploadPresign",
+                message: "Invalid request parameters for upload presign",
+                ...requestContext,
+            });
             return NextResponse.json(
                 { success: false, error: "Invalid request parameters" },
                 { status: 400 },
@@ -58,6 +68,19 @@ export async function POST(request: Request) {
         }
 
         if (result.data.fileSize > MAX_UPLOAD_SIZE_BYTES) {
+            await logActivitySafe({
+                category: "file_upload",
+                action: "presign_file_too_large",
+                status: "failure",
+                subjectType: "UploadPresign",
+                message: `Upload exceeds ${MAX_UPLOAD_SIZE_MB}MB limit`,
+                ...requestContext,
+                meta: {
+                    directory: result.data.directory,
+                    fileSize: result.data.fileSize,
+                    contentType: result.data.contentType,
+                },
+            });
             return NextResponse.json(
                 {
                     success: false,
@@ -74,11 +97,37 @@ export async function POST(request: Request) {
             result.data.directory,
         );
 
+        await logActivitySafe({
+            category: "file_upload",
+            action: "presign_generated",
+            status: "success",
+            subjectType: "UploadPresign",
+            message: "Presigned upload URL generated",
+            ...requestContext,
+            meta: {
+                directory: result.data.directory,
+                contentType: result.data.contentType,
+                fileSize: result.data.fileSize,
+                key: uploadData.key,
+            },
+        });
+
         return NextResponse.json({
             success: true,
             data: uploadData,
         });
     } catch (error) {
+        await logActivitySafe({
+            category: "file_upload",
+            action: "presign_internal_error",
+            status: "failure",
+            subjectType: "UploadPresign",
+            message: "Failed to generate presigned upload URL",
+            ...requestContext,
+            meta: {
+                error: error instanceof Error ? error.message : "Unknown error",
+            },
+        });
         console.error("Presign URL Generation Error:", error);
         return NextResponse.json(
             { success: false, error: "Failed to generate upload URL" },
