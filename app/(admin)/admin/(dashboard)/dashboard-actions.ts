@@ -31,63 +31,55 @@ async function getRegistrationAuditSnapshot(id: number) {
   });
 }
 
-const _cachedDashboardStats = unstable_cache(
-  async () => {
-    type StatsRow = {
-      active: bigint;
-      trashed: bigint;
-      total: bigint;
-      general: bigint;
-      special: bigint;
-    };
-
-    const [statsRows, topProgramResult] = await Promise.all([
-      prisma.$queryRaw<StatsRow[]>`
-        SELECT
-          COUNT(*)                                                                              AS total,
-          COUNT(*) FILTER (WHERE deleted_at IS NULL)                                           AS active,
-          COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)                                       AS trashed,
-          COUNT(*) FILTER (WHERE deleted_at IS NULL AND tags @> '["General Rate"]'::jsonb)     AS general,
-          COUNT(*) FILTER (WHERE deleted_at IS NULL AND tags @> '["Special 50% Offer"]'::jsonb) AS special
-        FROM cca_registrations
-      `,
-      prisma.cCARegistration.groupBy({
-        by: ["programId"],
-        where: { deletedAt: null },
-        _count: { programId: true },
-        orderBy: { _count: { programId: "desc" } },
-        take: 1,
-      }),
-    ]);
-
-    const row = statsRows[0] ?? {
-      active: BigInt(0),
-      trashed: BigInt(0),
-      total: BigInt(0),
-      general: BigInt(0),
-      special: BigInt(0),
-    };
-
-    return {
-      activeRegistrations: Number(row.active),
-      trashedRegistrations: Number(row.trashed),
-      totalRegistrations: Number(row.total),
-      generalRateCount: Number(row.general),
-      specialOfferCount: Number(row.special),
-      topProgram: topProgramResult[0]
-        ? {
-            id: topProgramResult[0].programId,
-            count: topProgramResult[0]._count.programId,
-          }
-        : null,
-    };
-  },
-  ["dashboard-stats"],
-  { revalidate: 60 },
-);
-
 export async function getDashboardStats() {
-  return _cachedDashboardStats();
+  type StatsRow = {
+    active: bigint;
+    trashed: bigint;
+    total: bigint;
+    general: bigint;
+    special: bigint;
+  };
+
+  const [statsRows, topProgramResult] = await Promise.all([
+    prisma.$queryRaw<StatsRow[]>`
+      SELECT
+        COUNT(*)                                                                              AS total,
+        COUNT(*) FILTER (WHERE deleted_at IS NULL)                                           AS active,
+        COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)                                       AS trashed,
+        COUNT(*) FILTER (WHERE deleted_at IS NULL AND tags @> '["General Rate"]'::jsonb)     AS general,
+        COUNT(*) FILTER (WHERE deleted_at IS NULL AND tags @> '["Special 50% Offer"]'::jsonb) AS special
+      FROM cca_registrations
+    `,
+    prisma.cCARegistration.groupBy({
+      by: ["programId"],
+      where: { deletedAt: null },
+      _count: { programId: true },
+      orderBy: { _count: { programId: "desc" } },
+      take: 1,
+    }),
+  ]);
+
+  const row = statsRows[0] ?? {
+    active: BigInt(0),
+    trashed: BigInt(0),
+    total: BigInt(0),
+    general: BigInt(0),
+    special: BigInt(0),
+  };
+
+  return {
+    activeRegistrations: Number(row.active),
+    trashedRegistrations: Number(row.trashed),
+    totalRegistrations: Number(row.total),
+    generalRateCount: Number(row.general),
+    specialOfferCount: Number(row.special),
+    topProgram: topProgramResult[0]
+      ? {
+          id: topProgramResult[0].programId,
+          count: topProgramResult[0]._count.programId,
+        }
+      : null,
+  };
 }
 
 export async function getRegistrations(params: {
