@@ -12,7 +12,7 @@ export function Footer() {
                             className="w-8 h-8"
                         />
                         <div>
-                            <span className="text-lg font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent block">
+                            <span className="text-lg font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent block">
                                 Codezela Career Accelerator
                             </span>
                             <span className="text-xs text-gray-600">

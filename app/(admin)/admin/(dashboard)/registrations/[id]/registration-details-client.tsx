@@ -308,7 +308,7 @@ export default function RegistrationDetailsClient({
             </Link>
           </Button>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-indigo-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold tracking-tight bg-linear-to-r from-primary to-indigo-600 bg-clip-text text-transparent">
               {registration.fullName}
             </h1>
             {registration.deletedAt && (
@@ -332,7 +332,7 @@ export default function RegistrationDetailsClient({
               Edit details
             </Link>
           </Button>
-          <Button className="bg-gradient-to-r from-indigo-600 to-primary hover:from-indigo-700 hover:to-primary/90">
+          <Button className="bg-linear-to-r from-indigo-600 to-primary hover:from-indigo-700 hover:to-primary/90">
             <Download className="w-4 h-4 mr-2" />
             Export PDF
           </Button>
@@ -348,7 +348,7 @@ export default function RegistrationDetailsClient({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
           >
-            <Card className="overflow-hidden border-indigo-100 bg-gradient-to-br from-indigo-50/50 to-white/80 backdrop-blur-sm shadow-xl shadow-indigo-100/20">
+            <Card className="overflow-hidden border-indigo-100 bg-linear-to-br from-indigo-50/50 to-white/80 backdrop-blur-sm shadow-xl shadow-indigo-100/20">
               <CardHeader className="pb-3 flex flex-row items-center justify-between">
                 <CardTitle className="text-lg font-bold flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-indigo-600" />
@@ -925,7 +925,7 @@ export default function RegistrationDetailsClient({
       {/* Document Viewer Modal */}
       <AnimatePresence>
         {selectedDoc && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 lg:p-8">
+          <div className="fixed inset-0 z-100 flex items-center justify-center p-4 sm:p-6 lg:p-8">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

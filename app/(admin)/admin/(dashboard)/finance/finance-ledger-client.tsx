@@ -236,7 +236,7 @@ export default function FinanceLedgerClient({
                             <TableHead className="text-[10px] font-black uppercase text-gray-500 tracking-widest text-center px-4">
                                 Status
                             </TableHead>
-                            <TableHead className="w-[80px] pr-6"></TableHead>
+                            <TableHead className="w-20 pr-6"></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>

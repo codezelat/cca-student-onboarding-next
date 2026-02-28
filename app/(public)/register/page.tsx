@@ -315,7 +315,7 @@ export default function RegisterPage() {
     return (
         <div className="relative min-h-screen py-6 sm:py-12 px-3 sm:px-6 lg:px-8 overflow-hidden text-gray-800 antialiased">
             {/* Glassmorphic Background with Purple Liquid Blobs */}
-            <div className="fixed inset-0 bg-gradient-to-br from-violet-50 via-purple-50 to-indigo-50 overflow-hidden -z-10">
+            <div className="fixed inset-0 bg-linear-to-br from-violet-50 via-purple-50 to-indigo-50 overflow-hidden -z-10">
                 <div className="absolute top-0 -left-4 w-96 h-96 bg-violet-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
                 <div
                     className="absolute top-0 -right-4 w-96 h-96 bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"
@@ -337,7 +337,7 @@ export default function RegisterPage() {
                             className="h-12 sm:h-16 md:h-20 mx-auto transition-transform duration-300 group-hover:scale-105"
                         />
                     </Link>
-                    <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2 sm:mb-3 px-2">
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2 sm:mb-3 px-2">
                         Codezela Career Accelerator
                     </h1>
                     <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold text-gray-700 mb-3 sm:mb-4 px-2">
@@ -371,7 +371,7 @@ export default function RegisterPage() {
                         </p>
                         <Link
                             href="/"
-                            className="inline-block px-8 py-4 rounded-xl bg-gradient-to-r from-primary-500 to-secondary-500 text-white font-bold transition-transform hover:scale-105"
+                            className="inline-block px-8 py-4 rounded-xl bg-linear-to-r from-primary-500 to-secondary-500 text-white font-bold transition-transform hover:scale-105"
                         >
                             Return to Homepage
                         </Link>
@@ -384,7 +384,7 @@ export default function RegisterPage() {
                         {/* Section 1: Program Information */}
                         <div className="bg-white/60 backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-6 sm:p-8">
                             <div className="flex items-center gap-3 mb-6">
-                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg">
+                                <div className="w-12 h-12 rounded-xl bg-linear-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg">
                                     <svg
                                         className="w-6 h-6 text-white"
                                         fill="none"
@@ -442,7 +442,7 @@ export default function RegisterPage() {
                         {/* Section 2: Personal Information */}
                         <div className="bg-white/60 backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-6 sm:p-8">
                             <div className="flex items-center gap-3 mb-6">
-                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg">
+                                <div className="w-12 h-12 rounded-xl bg-linear-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg">
                                     <svg
                                         className="w-6 h-6 text-white"
                                         fill="none"
@@ -687,7 +687,7 @@ export default function RegisterPage() {
                         {/* Section 3: Contact Information */}
                         <div className="bg-white/60 backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-6 sm:p-8">
                             <div className="flex items-center gap-3 mb-6">
-                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg">
+                                <div className="w-12 h-12 rounded-xl bg-linear-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg">
                                     <svg
                                         className="w-6 h-6 text-white"
                                         fill="none"
@@ -991,7 +991,7 @@ export default function RegisterPage() {
                         {/* Section 4: Qualification Information */}
                         <div className="bg-white/60 backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-6 sm:p-8">
                             <div className="flex items-center gap-3 mb-6">
-                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg">
+                                <div className="w-12 h-12 rounded-xl bg-linear-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg">
                                     <svg
                                         className="w-6 h-6 text-white"
                                         fill="none"
@@ -1212,7 +1212,7 @@ export default function RegisterPage() {
                         {/* Section 5: Required Documents */}
                         <div className="bg-white/60 backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-6 sm:p-8">
                             <div className="flex items-center gap-3 mb-6">
-                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg">
+                                <div className="w-12 h-12 rounded-xl bg-linear-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg">
                                     <svg
                                         className="w-6 h-6 text-white"
                                         fill="none"
@@ -1306,7 +1306,7 @@ export default function RegisterPage() {
                                                 ) : (
                                                     <div className="flex items-center gap-3">
                                                         <svg
-                                                            className="w-8 h-8 text-green-500 flex-shrink-0"
+                                                            className="w-8 h-8 text-green-500 shrink-0"
                                                             fill="none"
                                                             stroke="currentColor"
                                                             viewBox="0 0 24 24"
@@ -1374,7 +1374,7 @@ export default function RegisterPage() {
                                                 ) : (
                                                     <div className="flex items-center gap-3">
                                                         <svg
-                                                            className="w-8 h-8 text-green-500 flex-shrink-0"
+                                                            className="w-8 h-8 text-green-500 shrink-0"
                                                             fill="none"
                                                             stroke="currentColor"
                                                             viewBox="0 0 24 24"
@@ -1635,7 +1635,7 @@ export default function RegisterPage() {
                                                 ) : (
                                                     <div className="flex items-center gap-3">
                                                         <svg
-                                                            className="w-8 h-8 text-green-500 flex-shrink-0"
+                                                            className="w-8 h-8 text-green-500 shrink-0"
                                                             fill="none"
                                                             stroke="currentColor"
                                                             viewBox="0 0 24 24"
@@ -1735,7 +1735,7 @@ export default function RegisterPage() {
                                                 ) : (
                                                     <div className="flex items-center gap-3">
                                                         <svg
-                                                            className="w-8 h-8 text-green-500 flex-shrink-0"
+                                                            className="w-8 h-8 text-green-500 shrink-0"
                                                             fill="none"
                                                             stroke="currentColor"
                                                             viewBox="0 0 24 24"
@@ -1830,7 +1830,7 @@ export default function RegisterPage() {
                                                 ) : (
                                                     <div className="flex items-center gap-3">
                                                         <svg
-                                                            className="w-8 h-8 text-green-500 flex-shrink-0"
+                                                            className="w-8 h-8 text-green-500 shrink-0"
                                                             fill="none"
                                                             stroke="currentColor"
                                                             viewBox="0 0 24 24"
@@ -1866,7 +1866,7 @@ export default function RegisterPage() {
 
                         {/* Submit Button */}
                         <div className="bg-white/60 backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-6 sm:p-8">
-                            <div className="p-5 rounded-xl bg-gradient-to-br from-primary-50 to-secondary-50 border-2 border-primary-200 mb-6">
+                            <div className="p-5 rounded-xl bg-linear-to-br from-primary-50 to-secondary-50 border-2 border-primary-200 mb-6">
                                 <div className="flex items-start gap-4">
                                     <input
                                         type="checkbox"
@@ -1874,7 +1874,7 @@ export default function RegisterPage() {
                                         name="terms_accepted"
                                         checked={formData.terms_accepted}
                                         onChange={handleInputChange}
-                                        className="mt-1.5 w-5 h-5 rounded border-primary-300 text-primary-600 focus:ring-primary-500 focus:ring-2 flex-shrink-0 cursor-pointer"
+                                        className="mt-1.5 w-5 h-5 rounded border-primary-300 text-primary-600 focus:ring-primary-500 focus:ring-2 shrink-0 cursor-pointer"
                                     />
                                     <label
                                         htmlFor="terms_accepted"
@@ -1912,7 +1912,7 @@ export default function RegisterPage() {
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-2.5">
                                         <div
-                                            className="bg-gradient-to-r from-primary-500 to-secondary-500 h-2.5 rounded-full transition-all duration-300"
+                                            className="bg-linear-to-r from-primary-500 to-secondary-500 h-2.5 rounded-full transition-all duration-300"
                                             style={{
                                                 width: `${uploadProgress}%`,
                                             }}
@@ -1940,7 +1940,7 @@ export default function RegisterPage() {
                                 disabled={
                                     isSubmitting || !formData.terms_accepted
                                 }
-                                className="w-full px-8 py-5 rounded-2xl bg-gradient-to-r from-primary-500 to-secondary-500 text-white font-bold text-lg hover:from-primary-600 hover:to-secondary-600 transition-all duration-300 shadow-xl hover:shadow-2xl hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed group flex items-center justify-center gap-2"
+                                className="w-full px-8 py-5 rounded-2xl bg-linear-to-r from-primary-500 to-secondary-500 text-white font-bold text-lg hover:from-primary-600 hover:to-secondary-600 transition-all duration-300 shadow-xl hover:shadow-2xl hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed group flex items-center justify-center gap-2"
                             >
                                 {isSubmitting ? (
                                     <>

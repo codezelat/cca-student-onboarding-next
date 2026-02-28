@@ -118,7 +118,7 @@ export default function AdminNavigation({
                             href="/admin"
                             className="flex items-center space-x-3 group"
                         >
-                            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-xl flex items-center justify-center shadow-md transition-transform duration-300 group-hover:scale-110">
+                            <div className="w-10 h-10 bg-linear-to-br from-primary-500 to-secondary-600 rounded-xl flex items-center justify-center shadow-md transition-transform duration-300 group-hover:scale-110">
                                 <svg
                                     className="w-6 h-6 text-white"
                                     fill="none"
@@ -133,7 +133,7 @@ export default function AdminNavigation({
                                     />
                                 </svg>
                             </div>
-                            <span className="text-xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+                            <span className="text-xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
                                 CCA Admin Area
                             </span>
                         </Link>
@@ -147,7 +147,7 @@ export default function AdminNavigation({
                                 className="flex items-center space-x-3 px-4 py-2 rounded-xl bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/60 transition-all duration-300 shadow-lg hover:shadow-xl group"
                             >
                                 {/* Avatar */}
-                                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300">
+                                <div className="w-9 h-9 rounded-lg bg-linear-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300">
                                     <span className="text-white font-semibold text-sm">
                                         {initial}
                                     </span>
@@ -179,9 +179,9 @@ export default function AdminNavigation({
 
                             {/* Dropdown Menu */}
                             {dropdownOpen && (
-                                <div className="absolute right-0 mt-2 w-64 rounded-xl shadow-2xl bg-white/90 backdrop-blur-xl border border-white/60 overflow-hidden z-[9999] animate-in fade-in slide-in-from-top-2 duration-200">
+                                <div className="absolute right-0 mt-2 w-64 rounded-xl shadow-2xl bg-white/90 backdrop-blur-xl border border-white/60 overflow-hidden z-9999 animate-in fade-in slide-in-from-top-2 duration-200">
                                     {/* User Info Header */}
-                                    <div className="px-4 py-3 bg-gradient-to-r from-primary-500 to-secondary-500">
+                                    <div className="px-4 py-3 bg-linear-to-r from-primary-500 to-secondary-500">
                                         <div className="flex items-center space-x-3">
                                             <div className="w-12 h-12 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
                                                 <span className="text-white font-bold text-lg">

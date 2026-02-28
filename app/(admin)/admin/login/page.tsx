@@ -79,7 +79,7 @@ export default function AdminLoginPage() {
     return (
         <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
             {/* Animated Background with Liquid Gradient Blobs */}
-            <div className="fixed inset-0 bg-gradient-to-br from-violet-50 via-purple-50 to-indigo-50 overflow-hidden -z-10">
+            <div className="fixed inset-0 bg-linear-to-br from-violet-50 via-purple-50 to-indigo-50 overflow-hidden -z-10">
                 <div className="absolute top-0 -left-4 w-96 h-96 bg-violet-200 rounded-full mix-blend-multiply filter blur-xl opacity-60 animate-blob"></div>
                 <div className="absolute top-0 -right-4 w-96 h-96 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-50 animate-blob animation-delay-2000"></div>
                 <div className="absolute -bottom-8 left-20 w-96 h-96 bg-indigo-200 rounded-full mix-blend-multiply filter blur-xl opacity-60 animate-blob animation-delay-4000"></div>
@@ -89,11 +89,11 @@ export default function AdminLoginPage() {
                 {/* Login Card with Glassmorphism */}
                 <div className="relative group">
                     {/* Glow Effect */}
-                    <div className="absolute -inset-1 bg-gradient-to-r from-primary-500/20 via-secondary-500/20 to-primary-500/20 rounded-3xl blur-xl opacity-60 group-hover:opacity-80 transition-opacity duration-500"></div>
+                    <div className="absolute -inset-1 bg-linear-to-r from-primary-500/20 via-secondary-500/20 to-primary-500/20 rounded-3xl blur-xl opacity-60 group-hover:opacity-80 transition-opacity duration-500"></div>
                     
                     <div className="relative p-8 md:p-10 rounded-3xl bg-white/75 backdrop-blur-2xl border border-white/90 shadow-2xl">
                         {/* Gradient Accent */}
-                        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary-500 via-secondary-500 to-primary-500 rounded-t-3xl"></div>
+                        <div className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-primary-500 via-secondary-500 to-primary-500 rounded-t-3xl"></div>
 
                         {/* Logo & Header */}
                         <div className="text-center mb-8">
@@ -105,7 +105,7 @@ export default function AdminLoginPage() {
                                     className="w-12 h-12"
                                 />
                             </div>
-                            <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2">
+                            <h1 className="text-2xl md:text-3xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2">
                                 Admin Portal
                             </h1>
                             <p className="text-gray-600">
@@ -117,7 +117,7 @@ export default function AdminLoginPage() {
                         {error && (
                             <div className="mb-6 p-4 rounded-xl bg-red-50/80 backdrop-blur-sm border border-red-200 flex items-start gap-3">
                                 <svg
-                                    className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
+                                    className="w-5 h-5 text-red-500 shrink-0 mt-0.5"
                                     fill="none"
                                     stroke="currentColor"
                                     viewBox="0 0 24 24"
@@ -244,7 +244,7 @@ export default function AdminLoginPage() {
                             <button
                                 type="submit"
                                 disabled={isLoading}
-                                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary-500 to-secondary-500 text-white font-semibold shadow-lg shadow-primary-500/30 hover:shadow-xl hover:shadow-primary-500/40 hover:from-primary-600 hover:to-secondary-600 focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+                                className="w-full py-3.5 rounded-xl bg-linear-to-r from-primary-500 to-secondary-500 text-white font-semibold shadow-lg shadow-primary-500/30 hover:shadow-xl hover:shadow-primary-500/40 hover:from-primary-600 hover:to-secondary-600 focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
                             >
                                 {isLoading ? (
                                     <>

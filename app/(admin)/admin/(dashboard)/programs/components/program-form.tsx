@@ -124,7 +124,7 @@ export default function ProgramForm({ program }: ProgramFormProps) {
             </div>
 
             <Card className="border-none shadow-2xl shadow-gray-200/50 bg-white/70 backdrop-blur-md overflow-hidden">
-                <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-primary via-purple-500 to-indigo-600"></div>
+                <div className="absolute top-0 inset-x-0 h-1.5 bg-linear-to-r from-primary via-purple-500 to-indigo-600"></div>
                 <CardHeader className="pt-8 px-8">
                     <div className="flex items-center gap-4">
                         <div className="p-3 bg-primary/10 text-primary rounded-2xl">

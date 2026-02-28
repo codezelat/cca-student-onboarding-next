@@ -2,7 +2,7 @@ export default function ActivityPage() {
     return (
         <>
             <div className="mb-8">
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2">
+                <h1 className="text-3xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2">
                     Activity Timeline
                 </h1>
                 <p className="text-gray-600">

@@ -150,7 +150,7 @@ export default function ReceivedPaymentsTable({
                     <div className="flex gap-3">
                         <button
                             type="submit"
-                            className="px-6 py-2.5 bg-gradient-to-r from-primary to-indigo-600 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all"
+                            className="px-6 py-2.5 bg-linear-to-r from-primary to-indigo-600 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all"
                         >
                             Filter
                         </button>

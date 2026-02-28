@@ -21,7 +21,7 @@ export default async function ProgramsPage({
         <div className="space-y-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2 flex items-center gap-2">
+                    <h1 className="text-3xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2 flex items-center gap-2">
                         <BookOpen className="w-8 h-8 text-primary-600" />
                         Program Management
                     </h1>

@@ -47,7 +47,7 @@ export default async function IntakesPage({ params, searchParams }: PageProps) {
                             <CalendarDays className="w-8 h-8" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
+                            <h1 className="text-3xl font-bold bg-linear-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
                                 Intake Management
                             </h1>
                             <p className="text-gray-600 text-sm flex items-center gap-1">

@@ -268,7 +268,7 @@ export default function RegistrationTable({
                     <div className="flex flex-wrap items-center gap-3 pt-2">
                         <button
                             type="submit"
-                            className="px-6 py-2.5 bg-gradient-to-r from-primary to-indigo-600 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all flex items-center gap-2"
+                            className="px-6 py-2.5 bg-linear-to-r from-primary to-indigo-600 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all flex items-center gap-2"
                         >
                             <Filter className="w-4 h-4" />
                             Apply Filters
@@ -305,7 +305,7 @@ export default function RegistrationTable({
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
                                 Active Students
                             </p>
-                            <p className="text-3xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                            <p className="text-3xl font-black bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                                 {initialStats.activeRegistrations}
                             </p>
                         </div>
@@ -332,7 +332,7 @@ export default function RegistrationTable({
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
                                 General Rate
                             </p>
-                            <p className="text-3xl font-black bg-gradient-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">
+                            <p className="text-3xl font-black bg-linear-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">
                                 {initialStats.generalRateCount}
                             </p>
                         </div>
@@ -367,7 +367,7 @@ export default function RegistrationTable({
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
                                 Special Offer
                             </p>
-                            <p className="text-3xl font-black bg-gradient-to-r from-purple-600 to-fuchsia-600 bg-clip-text text-transparent">
+                            <p className="text-3xl font-black bg-linear-to-r from-purple-600 to-fuchsia-600 bg-clip-text text-transparent">
                                 {initialStats.specialOfferCount}
                             </p>
                         </div>

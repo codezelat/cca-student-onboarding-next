@@ -25,7 +25,7 @@ export default async function ProfilePage() {
     return (
         <>
             <div className="mb-8">
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2">
+                <h1 className="text-3xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2">
                     Profile Settings
                 </h1>
                 <p className="text-gray-600">
@@ -36,7 +36,7 @@ export default async function ProfilePage() {
             <div className="max-w-2xl">
                 {/* Profile Info Card */}
                 <div className="bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-xl overflow-hidden mb-6">
-                    <div className="px-6 py-4 bg-gradient-to-r from-primary-500 to-secondary-500">
+                    <div className="px-6 py-4 bg-linear-to-r from-primary-500 to-secondary-500">
                         <div className="flex items-center space-x-4">
                             <div className="w-16 h-16 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
                                 <span className="text-white font-bold text-2xl">

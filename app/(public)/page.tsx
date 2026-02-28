@@ -29,7 +29,7 @@ export default function Home() {
 
                                 <div className="space-y-6">
                                     <h1 className="text-5xl lg:text-7xl font-bold leading-tight">
-                                        <span className="bg-gradient-to-r from-primary-600 via-secondary-600 to-primary-700 bg-clip-text text-transparent">
+                                        <span className="bg-linear-to-r from-primary-600 via-secondary-600 to-primary-700 bg-clip-text text-transparent">
                                             Accelerate
                                         </span>
                                         <br />
@@ -47,7 +47,7 @@ export default function Home() {
                                 <div className="flex flex-wrap gap-4">
                                     <Link
                                         href="/register"
-                                        className="group px-8 py-4 rounded-2xl bg-gradient-to-r from-primary-500 to-secondary-500 
+                                        className="group px-8 py-4 rounded-2xl bg-linear-to-r from-primary-500 to-secondary-500 
                                               text-white font-semibold hover:from-primary-600 hover:to-secondary-600 
                                               transition-all duration-300 shadow-2xl hover:shadow-primary-500/50 
                                               hover:scale-105 inline-flex items-center gap-2"
@@ -107,7 +107,7 @@ export default function Home() {
                                 {/* Stats */}
                                 <div className="grid grid-cols-3 gap-6 pt-8">
                                     <div className="text-center p-4 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/90 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300">
-                                        <div className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+                                        <div className="text-3xl lg:text-4xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
                                             1000+
                                         </div>
                                         <div className="text-sm text-gray-700 mt-1 font-medium">
@@ -115,7 +115,7 @@ export default function Home() {
                                         </div>
                                     </div>
                                     <div className="text-center p-4 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/90 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300">
-                                        <div className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+                                        <div className="text-3xl lg:text-4xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
                                             100%
                                         </div>
                                         <div className="text-sm text-gray-700 mt-1 font-medium">
@@ -123,7 +123,7 @@ export default function Home() {
                                         </div>
                                     </div>
                                     <div className="text-center p-4 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/90 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300">
-                                        <div className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+                                        <div className="text-3xl lg:text-4xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
                                             24/7
                                         </div>
                                         <div className="text-sm text-gray-700 mt-1 font-medium">
@@ -143,12 +143,12 @@ export default function Home() {
                                                 hover:bg-white/85 transform hover:-rotate-1"
                                     >
                                         <div
-                                            className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary-500/10 to-secondary-500/10 
+                                            className="absolute inset-0 rounded-3xl bg-linear-to-br from-primary-500/10 to-secondary-500/10 
                                                     opacity-0 group-hover:opacity-100 transition-opacity duration-500"
                                         ></div>
                                         <div className="relative">
                                             <div
-                                                className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-500 to-secondary-500 
+                                                className="w-14 h-14 rounded-2xl bg-linear-to-br from-primary-500 to-secondary-500 
                                                         flex items-center justify-center mb-4 shadow-xl group-hover:scale-110 
                                                         group-hover:shadow-primary-500/50 transition-all duration-300"
                                             >
@@ -184,12 +184,12 @@ export default function Home() {
                                                 hover:bg-white/85 ml-12 transform hover:rotate-1"
                                     >
                                         <div
-                                            className="absolute inset-0 rounded-3xl bg-gradient-to-br from-secondary-500/10 to-primary-500/10 
+                                            className="absolute inset-0 rounded-3xl bg-linear-to-br from-secondary-500/10 to-primary-500/10 
                                                     opacity-0 group-hover:opacity-100 transition-opacity duration-500"
                                         ></div>
                                         <div className="relative">
                                             <div
-                                                className="w-14 h-14 rounded-2xl bg-gradient-to-br from-secondary-500 to-primary-600 
+                                                className="w-14 h-14 rounded-2xl bg-linear-to-br from-secondary-500 to-primary-600 
                                                         flex items-center justify-center mb-4 shadow-xl group-hover:scale-110 
                                                         group-hover:shadow-secondary-500/50 transition-all duration-300"
                                             >
@@ -225,12 +225,12 @@ export default function Home() {
                                                 hover:bg-white/85 transform hover:-rotate-1"
                                     >
                                         <div
-                                            className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary-500/10 to-secondary-500/10 
+                                            className="absolute inset-0 rounded-3xl bg-linear-to-br from-primary-500/10 to-secondary-500/10 
                                                     opacity-0 group-hover:opacity-100 transition-opacity duration-500"
                                         ></div>
                                         <div className="relative">
                                             <div
-                                                className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-500 to-secondary-500 
+                                                className="w-14 h-14 rounded-2xl bg-linear-to-br from-primary-500 to-secondary-500 
                                                         flex items-center justify-center mb-4 shadow-xl group-hover:scale-110 
                                                         group-hover:shadow-primary-500/50 transition-all duration-300"
                                             >
@@ -268,7 +268,7 @@ export default function Home() {
                     <div className="max-w-6xl mx-auto">
                         <div className="text-center mb-12">
                             <h2 className="text-4xl lg:text-5xl font-bold mb-4">
-                                <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+                                <span className="bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
                                     Get In Touch
                                 </span>
                             </h2>
@@ -286,7 +286,7 @@ export default function Home() {
                                 </h3>
                                 <div className="space-y-4">
                                     <div className="flex items-start gap-4">
-                                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center flex-shrink-0">
+                                        <div className="w-12 h-12 rounded-xl bg-linear-to-br from-primary-500 to-secondary-500 flex items-center justify-center shrink-0">
                                             <svg
                                                 className="w-6 h-6 text-white"
                                                 fill="none"
@@ -323,7 +323,7 @@ export default function Home() {
                                     </div>
 
                                     <div className="flex items-start gap-4">
-                                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center flex-shrink-0">
+                                        <div className="w-12 h-12 rounded-xl bg-linear-to-br from-primary-500 to-secondary-500 flex items-center justify-center shrink-0">
                                             <svg
                                                 className="w-6 h-6 text-white"
                                                 fill="none"
@@ -360,7 +360,7 @@ export default function Home() {
                                     </div>
 
                                     <div className="flex items-start gap-4">
-                                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center flex-shrink-0">
+                                        <div className="w-12 h-12 rounded-xl bg-linear-to-br from-primary-500 to-secondary-500 flex items-center justify-center shrink-0">
                                             <svg
                                                 className="w-6 h-6 text-white"
                                                 fill="none"
@@ -395,7 +395,7 @@ export default function Home() {
                                 <div className="space-y-4">
                                     <Link
                                         href="/register"
-                                        className="flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-primary-500 to-secondary-500 
+                                        className="flex items-center gap-4 p-4 rounded-2xl bg-linear-to-r from-primary-500 to-secondary-500 
                                               text-white hover:from-primary-600 hover:to-secondary-600 transition-all duration-300 
                                               shadow-lg hover:shadow-xl hover:scale-105 group"
                                     >
@@ -546,7 +546,7 @@ export default function Home() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="w-12 h-12 rounded-xl bg-white/60 backdrop-blur-md border border-white/80 
-                                        flex items-center justify-center hover:bg-gradient-to-br hover:from-purple-500 hover:via-pink-500 hover:to-orange-500 hover:border-pink-500 
+                                        flex items-center justify-center hover:bg-linear-to-br hover:from-purple-500 hover:via-pink-500 hover:to-orange-500 hover:border-pink-500 
                                         transition-all duration-300 hover:scale-110 group shadow-lg"
                                 >
                                     <svg

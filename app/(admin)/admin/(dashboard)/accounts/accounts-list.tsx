@@ -107,7 +107,7 @@ export default function AdminAccountsList({
         <>
             <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2">
+                    <h1 className="text-3xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2">
                         Admin Accounts
                     </h1>
                     <p className="text-gray-600">
@@ -116,7 +116,7 @@ export default function AdminAccountsList({
                 </div>
                 <button
                     onClick={() => setIsModalOpen(true)}
-                    className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-secondary-600 text-white font-semibold rounded-xl hover:from-primary-700 hover:to-secondary-700 focus:outline-none focus:ring-4 focus:ring-primary-300 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center space-x-2"
+                    className="px-5 py-2.5 bg-linear-to-r from-primary-600 to-secondary-600 text-white font-semibold rounded-xl hover:from-primary-700 hover:to-secondary-700 focus:outline-none focus:ring-4 focus:ring-primary-300 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center space-x-2"
                 >
                     <svg
                         className="w-5 h-5"
@@ -139,7 +139,7 @@ export default function AdminAccountsList({
             {isLastAdmin && (
                 <div className="mb-6 p-4 rounded-xl bg-amber-50/80 backdrop-blur-sm border border-amber-200 flex items-start gap-3">
                     <svg
-                        className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"
+                        className="w-5 h-5 text-amber-600 shrink-0 mt-0.5"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -192,7 +192,7 @@ export default function AdminAccountsList({
                                 >
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
-                                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary-100 to-secondary-100 flex items-center justify-center text-primary-700 font-bold border border-white shadow-sm">
+                                            <div className="h-10 w-10 rounded-full bg-linear-to-br from-primary-100 to-secondary-100 flex items-center justify-center text-primary-700 font-bold border border-white shadow-sm">
                                                 {user.name
                                                     .charAt(0)
                                                     .toUpperCase()}
@@ -398,7 +398,7 @@ export default function AdminAccountsList({
                                 <button
                                     type="submit"
                                     disabled={isLoading}
-                                    className="flex-1 py-2.5 bg-gradient-to-r from-primary-600 to-secondary-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-70 flex items-center justify-center gap-2"
+                                    className="flex-1 py-2.5 bg-linear-to-r from-primary-600 to-secondary-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-70 flex items-center justify-center gap-2"
                                 >
                                     {isLoading ? (
                                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -421,11 +421,11 @@ export default function AdminAccountsList({
                     
                     <div className="relative w-full max-w-md transform transition-all">
                         {/* Glow Effect */}
-                        <div className="absolute -inset-1 bg-gradient-to-r from-red-500/20 via-red-400/20 to-red-500/20 rounded-3xl blur-xl opacity-70"></div>
+                        <div className="absolute -inset-1 bg-linear-to-r from-red-500/20 via-red-400/20 to-red-500/20 rounded-3xl blur-xl opacity-70"></div>
                         
                         <div className="relative bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 overflow-hidden">
                             {/* Top Warning Bar */}
-                            <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-red-500 via-red-400 to-red-500"></div>
+                            <div className="absolute inset-x-0 top-0 h-1.5 bg-linear-to-r from-red-500 via-red-400 to-red-500"></div>
                             
                             {/* Header */}
                             <div className="px-6 pt-8 pb-4 text-center">
@@ -458,7 +458,7 @@ export default function AdminAccountsList({
                             {deleteError && (
                                 <div className="mx-6 mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600 flex items-start gap-2">
                                     <svg
-                                        className="w-5 h-5 flex-shrink-0"
+                                        className="w-5 h-5 shrink-0"
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
@@ -477,7 +477,7 @@ export default function AdminAccountsList({
                             {/* User Info Card */}
                             <div className="mx-6 p-4 rounded-xl bg-gray-50/80 border border-gray-200/60">
                                 <div className="flex items-center gap-3">
-                                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary-100 to-secondary-100 flex items-center justify-center text-primary-700 font-bold border border-white shadow-sm">
+                                    <div className="h-10 w-10 rounded-full bg-linear-to-br from-primary-100 to-secondary-100 flex items-center justify-center text-primary-700 font-bold border border-white shadow-sm">
                                         {userToDelete.name.charAt(0).toUpperCase()}
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -495,7 +495,7 @@ export default function AdminAccountsList({
                             <div className="mx-6 mt-4 space-y-2">
                                 <div className="flex items-start gap-3 text-sm text-gray-600">
                                     <svg
-                                        className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
+                                        className="w-5 h-5 text-red-500 shrink-0 mt-0.5"
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
@@ -511,7 +511,7 @@ export default function AdminAccountsList({
                                 </div>
                                 <div className="flex items-start gap-3 text-sm text-gray-600">
                                     <svg
-                                        className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
+                                        className="w-5 h-5 text-red-500 shrink-0 mt-0.5"
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
@@ -539,7 +539,7 @@ export default function AdminAccountsList({
                                 <button
                                     onClick={handleConfirmDelete}
                                     disabled={isDeleting || isLastAdmin}
-                                    className="flex-1 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-xl shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    className="flex-1 py-3 bg-linear-to-r from-red-500 to-red-600 text-white font-semibold rounded-xl shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
                                     {isDeleting ? (
                                         <>

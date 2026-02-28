@@ -171,7 +171,7 @@ export default function PaymentUpdatePage() {
   return (
     <div className="relative min-h-screen py-6 sm:py-12 px-3 sm:px-6 lg:px-8 overflow-hidden text-gray-800 antialiased">
       {/* Premium Glassmorphic Background matching /register */}
-      <div className="fixed inset-0 bg-gradient-to-br from-violet-50 via-purple-50 to-indigo-50 overflow-hidden -z-10">
+      <div className="fixed inset-0 bg-linear-to-br from-violet-50 via-purple-50 to-indigo-50 overflow-hidden -z-10">
         <div className="absolute top-0 -left-4 w-96 h-96 bg-violet-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
         <div
           className="absolute top-0 -right-4 w-96 h-96 bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"
@@ -193,7 +193,7 @@ export default function PaymentUpdatePage() {
               className="h-12 sm:h-16 md:h-20 mx-auto transition-transform duration-300 group-hover:scale-105"
             />
           </Link>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2 sm:mb-3 px-2">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent mb-2 sm:mb-3 px-2">
             Payment Update Portal
           </h1>
           <p className="text-lg sm:text-xl text-gray-600 px-2 max-w-xl mx-auto">
@@ -227,7 +227,7 @@ export default function PaymentUpdatePage() {
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="inline-block px-8 py-4 rounded-xl bg-gradient-to-r from-primary-500 to-secondary-500 text-white font-bold transition-transform hover:scale-105 shadow-lg shadow-primary-500/30"
+              className="inline-block px-8 py-4 rounded-xl bg-linear-to-r from-primary-500 to-secondary-500 text-white font-bold transition-transform hover:scale-105 shadow-lg shadow-primary-500/30"
             >
               Submit Another Slip
             </button>
@@ -237,7 +237,7 @@ export default function PaymentUpdatePage() {
             {/* Section 1: Student Identification */}
             <div className="bg-white/60 backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-6 sm:p-8 transition-all">
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-linear-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg shrink-0">
                   <svg
                     className="w-6 h-6 text-white"
                     fill="none"
@@ -382,7 +382,7 @@ export default function PaymentUpdatePage() {
               <div className="bg-white/60 backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-6 sm:p-8 animate-fade-in-up">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shrink-0">
+                    <div className="w-12 h-12 rounded-xl bg-linear-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shrink-0">
                       <svg
                         className="w-6 h-6 text-white"
                         fill="none"
@@ -557,7 +557,7 @@ export default function PaymentUpdatePage() {
                   <button
                     onClick={handleSubmitPayment}
                     disabled={!paymentFile || isSubmitting}
-                    className="w-full mt-6 py-4 rounded-xl bg-gradient-to-r from-primary-500 to-secondary-500 text-white font-bold transition-all shadow-lg hover:shadow-primary-500/30 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99] relative overflow-hidden"
+                    className="w-full mt-6 py-4 rounded-xl bg-linear-to-r from-primary-500 to-secondary-500 text-white font-bold transition-all shadow-lg hover:shadow-primary-500/30 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99] relative overflow-hidden"
                   >
                     {isSubmitting ? (
                       <div className="flex items-center justify-center gap-2 relative z-10">

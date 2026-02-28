@@ -23,7 +23,7 @@ export default async function FinancePage({
         <div className="space-y-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent mb-2 flex items-center gap-2">
+                    <h1 className="text-3xl font-bold bg-linear-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent mb-2 flex items-center gap-2">
                         <Wallet className="w-8 h-8 text-emerald-600" />
                         Finance Ledger
                     </h1>
@@ -49,7 +49,7 @@ export default async function FinancePage({
                     <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-1">
                         Total Paid
                     </p>
-                    <p className="text-3xl font-black bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                    <p className="text-3xl font-black bg-linear-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
                         Rs. {parseFloat(stats.totalRevenue).toLocaleString()}
                     </p>
                 </div>
@@ -64,7 +64,7 @@ export default async function FinancePage({
                     <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-1">
                         Transactions
                     </p>
-                    <p className="text-3xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                    <p className="text-3xl font-black bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                         {stats.totalPayments}
                     </p>
                 </div>
@@ -79,7 +79,7 @@ export default async function FinancePage({
                     <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-1">
                         Students
                     </p>
-                    <p className="text-3xl font-black bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
+                    <p className="text-3xl font-black bg-linear-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
                         {stats.activeRegistrations}
                     </p>
                 </div>

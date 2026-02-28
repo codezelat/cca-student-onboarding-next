@@ -349,7 +349,7 @@ export default function IntakesClient({
             </div>
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="sm:max-w-[500px] rounded-3xl bg-white/90 backdrop-blur-xl border-white/60 shadow-2xl">
+                <DialogContent className="sm:max-w-125 rounded-3xl bg-white/90 backdrop-blur-xl border-white/60 shadow-2xl">
                     <form action={handleSave}>
                         <DialogHeader>
                             <DialogTitle className="text-2xl font-bold">
