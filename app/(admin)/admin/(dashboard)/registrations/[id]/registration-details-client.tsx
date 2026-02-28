@@ -95,14 +95,21 @@ export default function RegistrationDetailsClient({
 
   const fullAmount = parseFloat(registration.fullAmount || "0");
   const payments = registration.payments || [];
+  const paymentsPage = registration.paymentsPage || 1;
+  const paymentsTotalPages = registration.paymentsTotalPages || 1;
+  const paymentsTotal = registration.paymentsTotal || payments.length;
 
   // Calculate total paid from actual transaction records
-  const calculatedPaidAmount = payments.reduce(
+  const calculatedPaidAmount =
+    registration.calculatedPaidAmount !== undefined &&
+    registration.calculatedPaidAmount !== null
+      ? parseFloat(String(registration.calculatedPaidAmount))
+      : payments.reduce(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (acc: number, p: any) =>
       p.status === "active" ? acc + parseFloat(p.amount) : acc,
     0,
-  );
+      );
 
   // Use manual sync amount if it exists, otherwise fallback to calculated amount
   const paidAmount =
@@ -274,6 +281,14 @@ export default function RegistrationDetailsClient({
     } finally {
       setIsSavingPayment(false);
     }
+  }
+
+  function buildPaymentsUrl(page: number) {
+    const safePage = Math.max(1, page);
+    const basePath = `/admin/registrations/${registration.id}`;
+    return safePage > 1
+      ? `${basePath}?payments_page=${safePage}`
+      : basePath;
   }
 
   return (
@@ -608,6 +623,36 @@ export default function RegistrationDetailsClient({
                       </TableBody>
                     </Table>
                   </div>
+                  {paymentsTotalPages > 1 && (
+                    <div className="flex items-center justify-between mt-3">
+                      <p className="text-xs text-gray-500">
+                        Page {paymentsPage} of {paymentsTotalPages} (
+                        {payments.length} / {paymentsTotal} transactions)
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={paymentsPage <= 1}
+                          onClick={() =>
+                            router.push(buildPaymentsUrl(paymentsPage - 1))
+                          }
+                        >
+                          Previous
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={paymentsPage >= paymentsTotalPages}
+                          onClick={() =>
+                            router.push(buildPaymentsUrl(paymentsPage + 1))
+                          }
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

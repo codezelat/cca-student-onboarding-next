@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Calendar,
     Plus,
@@ -36,6 +36,7 @@ import {
     deleteIntakeWindow,
 } from "../../programs-actions";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 import {
     formatAppDate,
     formatAppNumber,
@@ -45,17 +46,28 @@ import {
 interface IntakesClientProps {
     programId: string;
     initialIntakes: any[];
+    currentPage: number;
+    totalPages: number;
+    totalRows: number;
 }
 
 export default function IntakesClient({
     programId,
     initialIntakes,
+    currentPage,
+    totalPages,
+    totalRows,
 }: IntakesClientProps) {
+    const router = useRouter();
     const [intakes, setIntakes] = useState(initialIntakes);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingIntake, setEditingIntake] = useState<any>(null);
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
+
+    useEffect(() => {
+        setIntakes(initialIntakes);
+    }, [initialIntakes]);
 
     async function handleSave(formData: FormData) {
         setIsSaving(true);
@@ -83,6 +95,7 @@ export default function IntakesClient({
             toast({ title: "Success", description: "Intake window saved." });
             setIsDialogOpen(false);
             setEditingIntake(null);
+            router.refresh();
         } catch (error) {
             toast({
                 title: "Error",
@@ -103,6 +116,7 @@ export default function IntakesClient({
                 ),
             );
             toast({ title: "Status Updated" });
+            router.refresh();
         } catch (error) {
             toast({ title: "Error", variant: "destructive" });
         }
@@ -119,6 +133,7 @@ export default function IntakesClient({
             await deleteIntakeWindow(id, programId);
             setIntakes((prev) => prev.filter((i) => i.id !== id));
             toast({ title: "Deleted" });
+            router.refresh();
         } catch (error) {
             toast({ title: "Error", variant: "destructive" });
         }
@@ -133,6 +148,12 @@ export default function IntakesClient({
         setEditingIntake(null);
         setIsDialogOpen(true);
     };
+
+    function buildUrl(page: number) {
+        return page > 1
+            ? `/admin/programs/${programId}/intakes?page=${page}`
+            : `/admin/programs/${programId}/intakes`;
+    }
 
     return (
         <div className="space-y-6">
@@ -293,6 +314,36 @@ export default function IntakesClient({
                             <Plus className="w-4 h-4 mr-2" />
                             Add Intake
                         </Button>
+                    </div>
+                )}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-white/60 bg-white/40">
+                        <span className="text-sm text-gray-600">
+                            Page {currentPage} of {totalPages} ({intakes.length} /{" "}
+                            {totalRows} intake windows)
+                        </span>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentPage <= 1}
+                                onClick={() =>
+                                    router.push(buildUrl(currentPage - 1))
+                                }
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentPage >= totalPages}
+                                onClick={() =>
+                                    router.push(buildUrl(currentPage + 1))
+                                }
+                            >
+                                Next
+                            </Button>
+                        </div>
                     </div>
                 )}
             </div>

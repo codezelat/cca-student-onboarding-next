@@ -16,11 +16,16 @@ interface AdminUser {
 
 export default function AdminAccountsList({
     initialUsers,
+    currentPage,
+    totalPages,
+    totalRows,
 }: {
     initialUsers: AdminUser[];
+    currentPage: number;
+    totalPages: number;
+    totalRows: number;
 }) {
     const router = useRouter();
-    const [users, setUsers] = useState<AdminUser[]>(initialUsers);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -31,8 +36,10 @@ export default function AdminAccountsList({
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
 
+    const users = initialUsers;
+
     // Check if this is the last admin account
-    const isLastAdmin = users.length <= 1;
+    const isLastAdmin = totalRows <= 1;
 
     async function handleAddAdmin(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -46,20 +53,6 @@ export default function AdminAccountsList({
             setError(result.error);
             setIsLoading(false);
         } else {
-            const createdUser = result.user;
-            if (createdUser) {
-                setUsers((prev) => [
-                    {
-                        id: createdUser.id,
-                        email: createdUser.email,
-                        name: createdUser.user_metadata?.name || "Unknown",
-                        role: createdUser.user_metadata?.role || "admin",
-                        lastSignIn: createdUser.last_sign_in_at,
-                        createdAt: createdUser.created_at,
-                    },
-                    ...prev,
-                ]);
-            }
             e.currentTarget.reset();
             setIsModalOpen(false);
             setIsLoading(false);
@@ -101,10 +94,13 @@ export default function AdminAccountsList({
             setDeleteError(result.error);
             setIsDeleting(false);
         } else {
-            setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
             closeDeleteModal();
             router.refresh();
         }
+    }
+
+    function buildUrl(page: number) {
+        return page > 1 ? `/admin/accounts?page=${page}` : "/admin/accounts";
     }
 
     return (
@@ -283,6 +279,36 @@ export default function AdminAccountsList({
                         </tbody>
                     </table>
                 </div>
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white/40">
+                        <span className="text-sm text-gray-600">
+                            Page {currentPage} of {totalPages} ({users.length} /{" "}
+                            {totalRows} admins)
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                disabled={currentPage <= 1}
+                                onClick={() =>
+                                    router.push(buildUrl(currentPage - 1))
+                                }
+                                className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                type="button"
+                                disabled={currentPage >= totalPages}
+                                onClick={() =>
+                                    router.push(buildUrl(currentPage + 1))
+                                }
+                                className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Add Admin Modal */}

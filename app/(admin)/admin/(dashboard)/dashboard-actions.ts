@@ -200,8 +200,10 @@ export async function getRegistrationById(
   params?: {
     paymentsPage?: number;
     paymentsPageSize?: number;
+    includePayments?: boolean;
   },
 ) {
+  const includePayments = params?.includePayments ?? true;
   const requestedPaymentsPage = Math.max(1, params?.paymentsPage ?? 1);
   const safePaymentsPageSize = Math.min(
     Math.max(1, params?.paymentsPageSize ?? 20),
@@ -224,39 +226,53 @@ export async function getRegistrationById(
 
   if (!registration) return null;
 
-  const [paymentsTotal, activePaymentsTotal, paymentsTotalCount] =
-    await Promise.all([
-      prisma.registrationPayment.count({
-        where: { ccaRegistrationId: BigInt(id) },
-      }),
-      prisma.registrationPayment.aggregate({
-        where: {
-          ccaRegistrationId: BigInt(id),
-          status: "active",
-        },
-        _sum: { amount: true },
-      }),
-      prisma.registrationPayment.count({
-        where: {
-          ccaRegistrationId: BigInt(id),
-          status: "active",
-        },
-      }),
-    ]);
+  let paymentsTotal = 0;
+  let paymentsTotalPages = 1;
+  let safePaymentsPage = 1;
+  let calculatedPaidAmount = 0;
+  let calculatedPaidTransactions = 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let payments: any[] = [];
 
-  const paymentsTotalPages = Math.max(
-    1,
-    Math.ceil(paymentsTotal / safePaymentsPageSize),
-  );
-  const safePaymentsPage = Math.min(requestedPaymentsPage, paymentsTotalPages);
-  const paymentsSkip = (safePaymentsPage - 1) * safePaymentsPageSize;
+  if (includePayments) {
+    const [resolvedPaymentsTotal, activePaymentsTotal, paymentsTotalCount] =
+      await Promise.all([
+        prisma.registrationPayment.count({
+          where: { ccaRegistrationId: BigInt(id) },
+        }),
+        prisma.registrationPayment.aggregate({
+          where: {
+            ccaRegistrationId: BigInt(id),
+            status: "active",
+          },
+          _sum: { amount: true },
+        }),
+        prisma.registrationPayment.count({
+          where: {
+            ccaRegistrationId: BigInt(id),
+            status: "active",
+          },
+        }),
+      ]);
 
-  const payments = await prisma.registrationPayment.findMany({
-    where: { ccaRegistrationId: BigInt(id) },
-    orderBy: { createdAt: "desc" },
-    skip: paymentsSkip,
-    take: safePaymentsPageSize,
-  });
+    paymentsTotal = resolvedPaymentsTotal;
+    paymentsTotalPages = Math.max(
+      1,
+      Math.ceil(paymentsTotal / safePaymentsPageSize),
+    );
+    safePaymentsPage = Math.min(requestedPaymentsPage, paymentsTotalPages);
+    const paymentsSkip = (safePaymentsPage - 1) * safePaymentsPageSize;
+
+    payments = await prisma.registrationPayment.findMany({
+      where: { ccaRegistrationId: BigInt(id) },
+      orderBy: { createdAt: "desc" },
+      skip: paymentsSkip,
+      take: safePaymentsPageSize,
+    });
+
+    calculatedPaidAmount = Number(activePaymentsTotal._sum.amount || 0);
+    calculatedPaidTransactions = paymentsTotalCount;
+  }
 
   return s({
     ...registration,
@@ -265,8 +281,8 @@ export async function getRegistrationById(
     paymentsPageSize: safePaymentsPageSize,
     paymentsTotal,
     paymentsTotalPages,
-    calculatedPaidAmount: Number(activePaymentsTotal._sum.amount || 0),
-    calculatedPaidTransactions: paymentsTotalCount,
+    calculatedPaidAmount,
+    calculatedPaidTransactions,
     programName: registration.program?.name ?? null,
     programYear: registration.program?.yearLabel ?? null,
     programDuration: registration.program?.durationLabel ?? null,

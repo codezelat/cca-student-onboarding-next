@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Edit,
   Trash2,
@@ -38,16 +38,33 @@ import { useRouter } from "next/navigation";
 import { formatAppDate } from "@/lib/formatters";
 
 interface ProgramsListClientProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialPrograms: any[];
+  currentSearch: string;
+  currentPage: number;
+  totalPages: number;
+  totalRows: number;
 }
 
 export default function ProgramsListClient({
   initialPrograms,
+  currentSearch,
+  currentPage,
+  totalPages,
+  totalRows,
 }: ProgramsListClientProps) {
   const router = useRouter();
   const [programs, setPrograms] = useState(initialPrograms);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchQuery, setSearchQuery] = useState(currentSearch);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setPrograms(initialPrograms);
+  }, [initialPrograms]);
+
+  useEffect(() => {
+    setSearchQuery(currentSearch);
+  }, [currentSearch]);
 
   async function handleToggleStatus(id: string, currentStatus: boolean) {
     try {
@@ -96,31 +113,63 @@ export default function ProgramsListClient({
     }
   }
 
-  const filteredPrograms = programs.filter((p) => {
-    const name = typeof p.name === "string" ? p.name : "";
-    const programId = typeof p.programId === "string" ? p.programId : "";
-    const term = searchTerm.toLowerCase();
-    return (
-      name.toLowerCase().includes(term) ||
-      programId.toLowerCase().includes(term)
-    );
-  });
+  function buildUrl(params: { search?: string; page?: number }) {
+    const sp = new URLSearchParams();
+    const nextSearch = params.search ?? currentSearch;
+    const nextPage = params.page ?? currentPage;
+
+    if (nextSearch) sp.set("search", nextSearch);
+    if (nextPage > 1) sp.set("page", String(nextPage));
+
+    const query = sp.toString();
+    return query ? `/admin/programs?${query}` : "/admin/programs";
+  }
+
+  const handleFilterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    router.push(buildUrl({ search: searchQuery, page: 1 }));
+  };
+
+  const hasFilters = Boolean(currentSearch || searchQuery);
+
+  const handleClearFilter = () => {
+    setSearchQuery("");
+    router.push("/admin/programs");
+  };
 
   return (
     <div className="space-y-6">
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <Input
-          placeholder="Search programs by name or code..."
-          className="pl-10 bg-white/50 backdrop-blur-sm border-white/60 rounded-xl"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
+      <form
+        onSubmit={handleFilterSubmit}
+        className="flex flex-wrap items-center gap-3"
+      >
+        <div className="relative max-w-md w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Input
+            placeholder="Search programs by name or code..."
+            className="pl-10 bg-white/50 backdrop-blur-sm border-white/60 rounded-xl"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <Button type="submit" variant="outline" className="rounded-xl">
+          Search
+        </Button>
+        {hasFilters && (
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-xl"
+            onClick={handleClearFilter}
+          >
+            Clear
+          </Button>
+        )}
+      </form>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <AnimatePresence mode="popLayout">
-          {filteredPrograms.map((program) => (
+          {programs.map((program) => (
             <motion.div
               key={program.id}
               layout
@@ -130,7 +179,6 @@ export default function ProgramsListClient({
               transition={{ duration: 0.2 }}
             >
               <Card className="group border-none shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-primary-100/30 transition-all duration-300 relative overflow-hidden bg-white/70 backdrop-blur-md">
-                {/* Status Glow */}
                 <div
                   className={`absolute top-0 right-0 w-32 h-32 blur-3xl opacity-20 transition-colors duration-500 ${program.isActive ? "bg-emerald-400" : "bg-rose-400"}`}
                 ></div>
@@ -142,9 +190,7 @@ export default function ProgramsListClient({
                         variant="outline"
                         className="bg-primary/5 text-primary-600 border-primary-200 uppercase text-[10px] font-bold tracking-widest px-2 py-0.5 mb-2"
                       >
-                        {program.programId ? (
-                          program.programId
-                        ) : (
+                        {program.programId || (
                           <span className="text-gray-400 italic">No Code</span>
                         )}
                       </Badge>
@@ -174,9 +220,7 @@ export default function ProgramsListClient({
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild className="rounded-lg">
-                            <Link
-                              href={`/admin/programs/${program.id}/intakes`}
-                            >
+                            <Link href={`/admin/programs/${program.id}/intakes`}>
                               <Calendar className="w-4 h-4 mr-2" />
                               Manage Intakes
                             </Link>
@@ -284,13 +328,40 @@ export default function ProgramsListClient({
         </AnimatePresence>
       </div>
 
-      {filteredPrograms.length === 0 && (
+      {programs.length === 0 && (
         <div className="text-center py-20 px-4 bg-white/30 backdrop-blur-sm rounded-3xl border border-dashed border-gray-300">
           <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-xl font-bold text-gray-600">No programs found</h3>
           <p className="text-gray-400">
             Try adjusting your search term or create a new program.
           </p>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-white/60 bg-white/40">
+          <span className="text-sm text-gray-600">
+            Page {currentPage} of {totalPages} ({programs.length} / {totalRows}{" "}
+            programs)
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage <= 1}
+              onClick={() => router.push(buildUrl({ page: currentPage - 1 }))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage >= totalPages}
+              onClick={() => router.push(buildUrl({ page: currentPage + 1 }))}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
     </div>

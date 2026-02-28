@@ -111,7 +111,7 @@ export default function FinanceLedgerClient({
         );
     };
 
-    const hasFilters = Boolean(currentSearch);
+    const hasFilters = Boolean(currentSearch || searchQuery);
 
     const handleClearFilter = () => {
         setSearchQuery("");

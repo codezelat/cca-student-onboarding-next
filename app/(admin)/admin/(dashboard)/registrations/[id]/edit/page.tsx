@@ -18,7 +18,7 @@ export default async function EditRegistrationPage({ params }: PageProps) {
     }
 
     const [registration, programs] = await Promise.all([
-        getRegistrationById(registrationId),
+        getRegistrationById(registrationId, { includePayments: false }),
         getActivePrograms(),
     ]);
 
