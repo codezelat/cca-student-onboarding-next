@@ -35,6 +35,7 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
+import { formatAppDate } from "@/lib/formatters";
 
 interface ProgramsListClientProps {
     initialPrograms: any[];
@@ -270,10 +271,10 @@ export default function ProgramsListClient({
                                                 <p className="text-[10px] text-indigo-600/80 flex items-center gap-1 mt-1">
                                                     <Clock className="w-3 h-3" />
                                                     Closing:{" "}
-                                                    {new Date(
+                                                    {formatAppDate(
                                                         program.intakeWindows[0]
                                                             .closesAt,
-                                                    ).toLocaleDateString()}
+                                                    )}
                                                 </p>
                                             </div>
                                         </div>

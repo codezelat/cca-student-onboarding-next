@@ -5,6 +5,7 @@ import { Search, CheckCircle, XCircle, ExternalLink, RefreshCw } from "lucide-re
 import { approvePaymentSlip, declinePaymentSlip } from "./received-payments-actions";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { formatAppDate } from "@/lib/formatters";
 
 export default function ReceivedPaymentsTable({
     initialPayments,
@@ -221,7 +222,7 @@ export default function ReceivedPaymentsTable({
                                                     </a>
                                                 </Button>
                                                 <p className="text-[10px] text-gray-400 mt-2">
-                                                    Uploaded: {new Date(payment.uploadedAt).toLocaleDateString()}
+                                                    Uploaded: {formatAppDate(payment.uploadedAt)}
                                                 </p>
                                             </td>
                                             <td className="px-6 py-4 text-center">

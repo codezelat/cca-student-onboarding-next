@@ -23,6 +23,7 @@ import {
     purgeRegistration,
 } from "./dashboard-actions";
 import { Button } from "@/components/ui/button";
+import { formatAppDate } from "@/lib/formatters";
 
 type Registration = {
     id: number;
@@ -147,7 +148,7 @@ export default function RegistrationTable({
             reg.whatsappNumber,
             reg.fullAmount || "0",
             reg.currentPaidAmount || "0",
-            new Date(reg.createdAt).toLocaleDateString(),
+            formatAppDate(reg.createdAt),
         ]);
 
         const csvContent = [headers, ...csvData]

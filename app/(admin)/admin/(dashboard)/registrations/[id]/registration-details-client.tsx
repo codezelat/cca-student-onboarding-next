@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -60,6 +59,12 @@ import {
 } from "@/components/ui/select";
 import { addPayment } from "@/app/(admin)/admin/(dashboard)/finance/finance-actions";
 import { useToast } from "@/hooks/use-toast";
+import {
+  formatAppDateLong,
+  formatAppDateShort,
+  formatAppMonthYear,
+  formatAppNumber,
+} from "@/lib/formatters";
 
 interface RegistrationDetailsClientProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -428,7 +433,7 @@ export default function RegistrationDetailsClient({
                             Pending Balance:
                           </span>
                           <span className="font-bold text-emerald-900">
-                            Rs. {balance.toLocaleString()}
+                            Rs. {formatAppNumber(balance)}
                           </span>
                         </div>
                       </div>
@@ -479,7 +484,7 @@ export default function RegistrationDetailsClient({
                     </p>
                     <p className="text-xl font-black text-emerald-600 mt-1">
                       LKR{" "}
-                      {fullAmount.toLocaleString(undefined, {
+                      {formatAppNumber(fullAmount, {
                         minimumFractionDigits: 2,
                       })}
                     </p>
@@ -490,7 +495,7 @@ export default function RegistrationDetailsClient({
                     </p>
                     <p className="text-xl font-black text-indigo-600 mt-1">
                       LKR{" "}
-                      {paidAmount.toLocaleString(undefined, {
+                      {formatAppNumber(paidAmount, {
                         minimumFractionDigits: 2,
                       })}
                     </p>
@@ -506,7 +511,7 @@ export default function RegistrationDetailsClient({
                         className={`text-xl font-black text-${balance > 0 ? "orange" : "emerald"}-600`}
                       >
                         LKR{" "}
-                        {Math.abs(balance).toLocaleString(undefined, {
+                        {formatAppNumber(Math.abs(balance), {
                           minimumFractionDigits: 2,
                         })}
                       </p>
@@ -570,10 +575,7 @@ export default function RegistrationDetailsClient({
                                 className="border-gray-100 group"
                               >
                                 <TableCell className="text-xs font-medium py-3">
-                                  {p.paymentDate &&
-                                    !isNaN(new Date(p.paymentDate).getTime())
-                                    ? format(new Date(p.paymentDate), "MMM d, yyyy")
-                                    : "—"}
+                                  {formatAppDateShort(p.paymentDate)}
                                 </TableCell>
                                 <TableCell className="text-[10px] font-black text-gray-500 py-3 uppercase">
                                   {p.paymentMethod}
@@ -583,9 +585,7 @@ export default function RegistrationDetailsClient({
                                 </TableCell>
                                 <TableCell className="text-sm font-black text-gray-900 py-3 text-right">
                                   Rs.{" "}
-                                  {parseFloat(
-                                    String(p.amount),
-                                  ).toLocaleString()}
+                                  {formatAppNumber(parseFloat(String(p.amount)))}
                                 </TableCell>
                                 <TableCell className="py-3 text-center">
                                   {p.status === "active" ? (
@@ -637,7 +637,7 @@ export default function RegistrationDetailsClient({
                 },
                 {
                   label: "Date of Birth",
-                  value: format(new Date(registration.dateOfBirth), "PPP"),
+                  value: formatAppDateLong(registration.dateOfBirth),
                 },
                 {
                   label: "NIC / Passport",
@@ -731,9 +731,8 @@ export default function RegistrationDetailsClient({
                       Completed Date
                     </p>
                     <p className="font-semibold text-gray-900 mt-1">
-                      {format(
-                        new Date(registration.qualificationCompletedDate),
-                        "MMMM yyyy",
+                      {formatAppMonthYear(
+                        registration.qualificationCompletedDate,
                       )}
                     </p>
                   </div>
@@ -809,13 +808,13 @@ export default function RegistrationDetailsClient({
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">Joined At</span>
                 <span className="font-medium">
-                  {format(new Date(registration.createdAt), "MMM d, yyyy")}
+                  {formatAppDateShort(registration.createdAt)}
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">Last Updated</span>
                 <span className="font-medium">
-                  {format(new Date(registration.updatedAt), "MMM d, yyyy")}
+                  {formatAppDateShort(registration.updatedAt)}
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm">

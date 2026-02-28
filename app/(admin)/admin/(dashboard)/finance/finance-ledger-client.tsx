@@ -36,6 +36,7 @@ import {
 import { voidPayment } from "./finance-actions";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
+import { formatAppDate, formatAppNumber } from "@/lib/formatters";
 
 interface FinanceLedgerClientProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,7 +105,7 @@ export default function FinanceLedgerClient({
             `"${p.registration.fullName.replace(/"/g, '""')}"`,
             p.registration.registerId,
             p.registration.programId,
-            new Date(p.paymentDate).toLocaleDateString(),
+            formatAppDate(p.paymentDate),
             p.paymentMethod,
             p.receiptReference || "N/A",
             parseFloat(p.amount).toString(),
@@ -229,9 +230,9 @@ export default function FinanceLedgerClient({
                                     <TableCell className="px-4 py-4">
                                         <div className="flex items-center gap-1.5 text-gray-700 font-medium">
                                             <Clock className="w-3.5 h-3.5 text-orange-400" />
-                                            {new Date(
+                                            {formatAppDate(
                                                 payment.paymentDate,
-                                            ).toLocaleDateString()}
+                                            )}
                                         </div>
                                         <p className="text-[10px] text-gray-400 uppercase font-black mt-0.5 ml-5">
                                             {payment.paymentMethod}
@@ -245,9 +246,9 @@ export default function FinanceLedgerClient({
                                     <TableCell className="px-4 py-4 text-right">
                                         <p className="font-black text-gray-900 flex items-center justify-end gap-1">
                                             Rs.{" "}
-                                            {parseFloat(
-                                                payment.amount,
-                                            ).toLocaleString()}
+                                            {formatAppNumber(
+                                                parseFloat(payment.amount),
+                                            )}
                                             <ArrowUpRight className="w-3 h-3 text-emerald-500" />
                                         </p>
                                     </TableCell>

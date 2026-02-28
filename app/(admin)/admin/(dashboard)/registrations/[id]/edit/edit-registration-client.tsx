@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
 import { motion } from "framer-motion";
 import {
   Save,
@@ -32,6 +31,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { updateRegistration } from "@/app/(admin)/admin/(dashboard)/dashboard-actions";
 import { useToast } from "@/hooks/use-toast";
+import { toDateInputValue } from "@/lib/formatters";
 
 const formSchema = z.object({
   fullName: z.string().min(2, "Full name is required"),
@@ -88,7 +88,7 @@ export default function EditRegistrationClient({
       fullName: registration.fullName,
       nameWithInitials: registration.nameWithInitials,
       gender: registration.gender,
-      dateOfBirth: format(new Date(registration.dateOfBirth), "yyyy-MM-dd"),
+      dateOfBirth: toDateInputValue(registration.dateOfBirth),
       nicNumber: registration.nicNumber,
       passportNumber: registration.passportNumber,
       nationality: registration.nationality,
@@ -105,10 +105,7 @@ export default function EditRegistrationClient({
       highestQualification: registration.highestQualification,
       qualificationStatus: registration.qualificationStatus,
       qualificationCompletedDate: registration.qualificationCompletedDate
-        ? format(
-          new Date(registration.qualificationCompletedDate),
-          "yyyy-MM-dd",
-        )
+        ? toDateInputValue(registration.qualificationCompletedDate)
         : null,
       programName: registration.programName,
       programYear: registration.programYear,

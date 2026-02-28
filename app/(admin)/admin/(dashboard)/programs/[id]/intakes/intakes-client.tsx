@@ -36,6 +36,11 @@ import {
     deleteIntakeWindow,
 } from "../../programs-actions";
 import { useToast } from "@/hooks/use-toast";
+import {
+    formatAppDate,
+    formatAppNumber,
+    toDateInputValue,
+} from "@/lib/formatters";
 
 interface IntakesClientProps {
     programId: string;
@@ -189,18 +194,18 @@ export default function IntakesClient({
                                                     <Calendar className="w-4 h-4 text-primary" />
                                                     Opens:{" "}
                                                     <span className="font-semibold text-gray-700">
-                                                        {new Date(
+                                                        {formatAppDate(
                                                             intake.opensAt,
-                                                        ).toLocaleDateString()}
+                                                        )}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center gap-1.5">
                                                     <Clock className="w-4 h-4 text-orange-500" />
                                                     Closes:{" "}
                                                     <span className="font-semibold text-gray-700">
-                                                        {new Date(
+                                                        {formatAppDate(
                                                             intake.closesAt,
-                                                        ).toLocaleDateString()}
+                                                        )}
                                                     </span>
                                                 </div>
                                                 {intake.priceOverride && (
@@ -209,9 +214,11 @@ export default function IntakesClient({
                                                         Override:{" "}
                                                         <span className="font-bold text-emerald-700">
                                                             Rs.{" "}
-                                                            {parseFloat(
-                                                                intake.priceOverride,
-                                                            ).toLocaleString()}
+                                                            {formatAppNumber(
+                                                                parseFloat(
+                                                                    intake.priceOverride,
+                                                                ),
+                                                            )}
                                                         </span>
                                                     </div>
                                                 )}
@@ -331,9 +338,9 @@ export default function IntakesClient({
                                         type="date"
                                         defaultValue={
                                             editingIntake
-                                                ? new Date(editingIntake.opensAt)
-                                                      .toISOString()
-                                                      .split("T")[0]
+                                                ? toDateInputValue(
+                                                      editingIntake.opensAt,
+                                                  )
                                                 : ""
                                         }
                                         className="rounded-xl"
@@ -350,9 +357,9 @@ export default function IntakesClient({
                                         type="date"
                                         defaultValue={
                                             editingIntake
-                                                ? new Date(editingIntake.closesAt)
-                                                      .toISOString()
-                                                      .split("T")[0]
+                                                ? toDateInputValue(
+                                                      editingIntake.closesAt,
+                                                  )
                                                 : ""
                                         }
                                         className="rounded-xl"

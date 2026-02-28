@@ -63,7 +63,7 @@ export default function ProgramForm({ program }: ProgramFormProps) {
             : {
                   code: "",
                   name: "",
-                  yearLabel: new Date().getFullYear().toString(),
+                  yearLabel: new Date().toISOString().slice(0, 4),
                   durationLabel: "6 Months",
                   basePrice: 0,
                   currency: "LKR",

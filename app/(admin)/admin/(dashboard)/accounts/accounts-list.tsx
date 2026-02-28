@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createAdminUser, deleteAdminUser } from "./actions";
 import { useRouter } from "next/navigation";
+import { formatAppDate, formatAppDateTime } from "@/lib/formatters";
 
 interface AdminUser {
     id: string;
@@ -217,15 +218,13 @@ export default function AdminAccountsList({
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                                         {user.lastSignIn
-                                            ? new Date(
+                                            ? formatAppDateTime(
                                                   user.lastSignIn,
-                                              ).toLocaleString()
+                                              )
                                             : "Never"}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                        {new Date(
-                                            user.createdAt,
-                                        ).toLocaleDateString()}
+                                        {formatAppDate(user.createdAt)}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                                         {isLastAdmin ? (
