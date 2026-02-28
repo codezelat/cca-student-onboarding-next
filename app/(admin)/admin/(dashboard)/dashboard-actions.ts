@@ -31,6 +31,46 @@ async function getRegistrationAuditSnapshot(id: number) {
   });
 }
 
+type RegistrationQueryFilters = {
+  scope?: string;
+  search?: string;
+  programFilter?: string;
+  tagFilter?: string;
+};
+
+function buildRegistrationWhere(filters: RegistrationQueryFilters) {
+  const { scope = "active", search, programFilter, tagFilter } = filters;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = {};
+
+  if (scope === "active") {
+    where.deletedAt = null;
+  } else if (scope === "trashed") {
+    where.NOT = { deletedAt: null };
+  }
+
+  if (search) {
+    where.OR = [
+      { registerId: { contains: search, mode: "insensitive" } },
+      { fullName: { contains: search, mode: "insensitive" } },
+      { emailAddress: { contains: search, mode: "insensitive" } },
+      { nicNumber: { contains: search, mode: "insensitive" } },
+      { whatsappNumber: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  if (programFilter) {
+    where.programId = programFilter;
+  }
+
+  if (tagFilter) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    where.tags = { path: [], array_contains: tagFilter } as any;
+  }
+
+  return where;
+}
+
 export async function getDashboardStats() {
   type StatsRow = {
     active: bigint;
@@ -100,38 +140,12 @@ export async function getRegistrations(params: {
   } = params;
   const requestedPage = Math.max(1, page);
   const safePageSize = Math.min(Math.max(1, pageSize), 100);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {};
-
-  // Scope handling
-  if (scope === "active") {
-    where.deletedAt = null;
-  } else if (scope === "trashed") {
-    where.NOT = { deletedAt: null };
-  }
-
-  // Search handling
-  if (search) {
-    where.OR = [
-      { registerId: { contains: search, mode: "insensitive" } },
-      { fullName: { contains: search, mode: "insensitive" } },
-      { emailAddress: { contains: search, mode: "insensitive" } },
-      { nicNumber: { contains: search, mode: "insensitive" } },
-      { whatsappNumber: { contains: search, mode: "insensitive" } },
-    ];
-  }
-
-  // Program Filter
-  if (programFilter) {
-    where.programId = programFilter;
-  }
-
-  // Tag Filter
-  if (tagFilter) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    where.tags = { path: [], array_contains: tagFilter } as any;
-  }
+  const where = buildRegistrationWhere({
+    scope,
+    search,
+    programFilter,
+    tagFilter,
+  });
 
   const total = await prisma.cCARegistration.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / safePageSize));
@@ -173,6 +187,36 @@ export async function getRegistrations(params: {
     pageSize: safePageSize,
     totalPages,
   });
+}
+
+export async function getRegistrationsForExport(
+  params: RegistrationQueryFilters = {},
+) {
+  const where = buildRegistrationWhere(params);
+  const registrations = await prisma.cCARegistration.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      registerId: true,
+      programId: true,
+      fullName: true,
+      nicNumber: true,
+      passportNumber: true,
+      emailAddress: true,
+      whatsappNumber: true,
+      fullAmount: true,
+      currentPaidAmount: true,
+      createdAt: true,
+      program: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  });
+
+  return s(registrations);
 }
 
 const _cachedPrograms = unstable_cache(
@@ -323,7 +367,12 @@ export async function getRegistrationById(
   let payments: any[] = [];
 
   if (includePayments) {
-    const [resolvedPaymentsTotal, activePaymentsTotal, paymentsTotalCount] =
+    const [
+      resolvedPaymentsTotal,
+      activePaymentsTotal,
+      deductionPaymentsTotal,
+      paymentsTotalCount,
+    ] =
       await Promise.all([
         prisma.registrationPayment.count({
           where: { ccaRegistrationId: BigInt(id) },
@@ -335,10 +384,24 @@ export async function getRegistrationById(
           },
           _sum: { amount: true },
         }),
+        prisma.registrationPayment.aggregate({
+          where: {
+            ccaRegistrationId: BigInt(id),
+            status: "void",
+            voidedAt: null,
+          },
+          _sum: { amount: true },
+        }),
         prisma.registrationPayment.count({
           where: {
             ccaRegistrationId: BigInt(id),
-            status: "active",
+            OR: [
+              { status: "active" },
+              {
+                status: "void",
+                voidedAt: null,
+              },
+            ],
           },
         }),
       ]);
@@ -358,7 +421,9 @@ export async function getRegistrationById(
       take: safePaymentsPageSize,
     });
 
-    calculatedPaidAmount = Number(activePaymentsTotal._sum.amount || 0);
+    calculatedPaidAmount =
+      Number(activePaymentsTotal._sum.amount || 0) -
+      Number(deductionPaymentsTotal._sum.amount || 0);
     calculatedPaidTransactions = paymentsTotalCount;
   }
 

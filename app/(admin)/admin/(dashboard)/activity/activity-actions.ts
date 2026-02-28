@@ -56,17 +56,15 @@ export type ActivityLogRow = {
   meta: unknown;
 };
 
-export async function getActivityLogs(params: ActivityQueryParams) {
-  await ensureActivityLogTable();
-
+function buildActivityWhere(
+  params: ActivityQueryParams,
+): Prisma.AdminActivityLogWhereInput {
   const search = params.search?.trim() || "";
   const actor = params.actor?.trim() || "";
   const category = params.category?.trim() || "";
   const action = params.action?.trim() || "";
   const status = params.status?.trim() || "";
   const subjectType = params.subjectType?.trim() || "";
-  const page = Math.max(1, params.page ?? 1);
-  const pageSize = Math.min(Math.max(1, params.pageSize ?? 25), 100);
   const dateFrom = parseDateBoundary(params.dateFrom, false);
   const dateTo = parseDateBoundary(params.dateTo, true);
 
@@ -121,6 +119,43 @@ export async function getActivityLogs(params: ActivityQueryParams) {
   if (andFilters.length > 0) {
     where.AND = andFilters;
   }
+
+  return where;
+}
+
+type AdminActivityLogRecord = Awaited<
+  ReturnType<typeof prisma.adminActivityLog.findMany>
+>[number];
+
+function mapActivityRows(rows: AdminActivityLogRecord[]): ActivityLogRow[] {
+  return rows.map((row) => ({
+    id: row.id.toString(),
+    createdAt: row.createdAt.toISOString(),
+    category: row.category,
+    action: row.action,
+    status: row.status,
+    actorNameSnapshot: row.actorNameSnapshot,
+    actorEmailSnapshot: row.actorEmailSnapshot,
+    subjectType: row.subjectType,
+    subjectId: row.subjectId ? row.subjectId.toString() : null,
+    subjectLabel: row.subjectLabel,
+    message: row.message,
+    routeName: row.routeName,
+    httpMethod: row.httpMethod,
+    requestId: row.requestId,
+    ipAddress: row.ipAddress,
+    beforeData: serialize(row.beforeData),
+    afterData: serialize(row.afterData),
+    meta: serialize(row.meta),
+  }));
+}
+
+export async function getActivityLogs(params: ActivityQueryParams) {
+  await ensureActivityLogTable();
+
+  const page = Math.max(1, params.page ?? 1);
+  const pageSize = Math.min(Math.max(1, params.pageSize ?? 25), 100);
+  const where = buildActivityWhere(params);
 
   const total = await prisma.adminActivityLog.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -180,26 +215,7 @@ export async function getActivityLogs(params: ActivityQueryParams) {
     ]);
 
   const uniqueActors = Number(uniqueActorsRows[0]?.total ?? BigInt(0));
-  const data: ActivityLogRow[] = rows.map((row) => ({
-    id: row.id.toString(),
-    createdAt: row.createdAt.toISOString(),
-    category: row.category,
-    action: row.action,
-    status: row.status,
-    actorNameSnapshot: row.actorNameSnapshot,
-    actorEmailSnapshot: row.actorEmailSnapshot,
-    subjectType: row.subjectType,
-    subjectId: row.subjectId ? row.subjectId.toString() : null,
-    subjectLabel: row.subjectLabel,
-    message: row.message,
-    routeName: row.routeName,
-    httpMethod: row.httpMethod,
-    requestId: row.requestId,
-    ipAddress: row.ipAddress,
-    beforeData: serialize(row.beforeData),
-    afterData: serialize(row.afterData),
-    meta: serialize(row.meta),
-  }));
+  const data = mapActivityRows(rows);
 
   return {
     data,
@@ -222,4 +238,17 @@ export async function getActivityLogs(params: ActivityQueryParams) {
       uniqueActors,
     },
   };
+}
+
+export async function getActivityLogsForExport(
+  params: ActivityQueryParams = {},
+) {
+  await ensureActivityLogTable();
+  const where = buildActivityWhere(params);
+  const rows = await prisma.adminActivityLog.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+  });
+
+  return mapActivityRows(rows);
 }

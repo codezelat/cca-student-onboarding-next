@@ -21,6 +21,7 @@ import {
 import {
     toggleRegistrationTrash,
     purgeRegistration,
+    getRegistrationsForExport,
 } from "./dashboard-actions";
 import { Button } from "@/components/ui/button";
 import { formatAppDate } from "@/lib/formatters";
@@ -70,6 +71,7 @@ export default function RegistrationTable({
     const router = useRouter();
     const [searchInput, setSearchInput] = useState(currentSearch);
     const [programInput, setProgramInput] = useState(currentProgram);
+    const [isExporting, setIsExporting] = useState(false);
 
     function buildUrl(params: {
         scope?: string;
@@ -125,52 +127,69 @@ export default function RegistrationTable({
         await purgeRegistration(id);
     }
 
-    function handleExport() {
-        if (initialRegistrations.length === 0) return;
+    async function handleExport() {
+        if (isExporting) return;
 
-        const headers = [
-            "ID",
-            "Program ID",
-            "Program Name",
-            "Full Name",
-            "NIC/Passport",
-            "Email",
-            "WhatsApp",
-            "Full Amount",
-            "Paid Amount",
-            "Created At",
-        ];
+        setIsExporting(true);
+        try {
+            const allRegistrations = await getRegistrationsForExport({
+                scope: currentScope,
+                search: currentSearch,
+                programFilter: currentProgram,
+                tagFilter: currentTag,
+            });
+            if (allRegistrations.length === 0) return;
 
-        const csvData = initialRegistrations.map((reg) => [
-            reg.registerId,
-            reg.programId,
-            reg.program?.name || "",
-            `"${reg.fullName.replace(/"/g, '""')}"`,
-            reg.nicNumber || reg.passportNumber || "N/A",
-            reg.emailAddress,
-            reg.whatsappNumber,
-            reg.fullAmount || "0",
-            reg.currentPaidAmount || "0",
-            formatAppDate(reg.createdAt),
-        ]);
+            const headers = [
+                "ID",
+                "Program ID",
+                "Program Name",
+                "Full Name",
+                "NIC/Passport",
+                "Email",
+                "WhatsApp",
+                "Full Amount",
+                "Paid Amount",
+                "Created At",
+            ];
 
-        const csvContent = [headers, ...csvData]
-            .map((row) => row.join(","))
-            .join("\n");
-        const blob = new Blob([csvContent], {
-            type: "text/csv;charset=utf-8;",
-        });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute(
-            "download",
-            `registrations_${new Date().toISOString().split("T")[0]}.csv`,
-        );
-        link.style.visibility = "hidden";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+            const csvData = allRegistrations.map((reg) => [
+                reg.registerId,
+                reg.programId,
+                reg.program?.name || "",
+                `"${reg.fullName.replace(/"/g, '""')}"`,
+                reg.nicNumber || reg.passportNumber || "N/A",
+                reg.emailAddress,
+                reg.whatsappNumber,
+                reg.fullAmount || "0",
+                reg.currentPaidAmount || "0",
+                formatAppDate(reg.createdAt),
+            ]);
+
+            const csvContent = [headers, ...csvData]
+                .map((row) => row.join(","))
+                .join("\n");
+            const blob = new Blob([csvContent], {
+                type: "text/csv;charset=utf-8;",
+            });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute(
+                "download",
+                `registrations_${new Date().toISOString().split("T")[0]}.csv`,
+            );
+            link.style.visibility = "hidden";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Failed to export registrations CSV:", error);
+            alert("Failed to export CSV. Please try again.");
+        } finally {
+            setIsExporting(false);
+        }
     }
 
     function getPaymentSlipUrl(paymentSlip: any): string | null {
@@ -288,10 +307,11 @@ export default function RegistrationTable({
                         <button
                             type="button"
                             onClick={handleExport}
+                            disabled={isExporting}
                             className="px-6 py-2.5 bg-emerald-600 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all flex items-center gap-2"
                         >
                             <Download className="w-4 h-4" />
-                            Export CSV
+                            {isExporting ? "Exporting..." : "Export CSV"}
                         </button>
 
                         {hasFilters && (

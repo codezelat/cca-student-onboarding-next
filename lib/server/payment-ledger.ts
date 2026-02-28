@@ -12,15 +12,29 @@ export async function getNextPaymentNo(tx: any, registrationId: bigint) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function syncRegistrationPaidAmount(tx: any, registrationId: bigint) {
-  const activePaymentsTotal = await tx.registrationPayment.aggregate({
-    where: {
-      ccaRegistrationId: registrationId,
-      status: "active",
-    },
-    _sum: { amount: true },
-  });
+  const [activePaymentsTotal, deductionPaymentsTotal] = await Promise.all([
+    tx.registrationPayment.aggregate({
+      where: {
+        ccaRegistrationId: registrationId,
+        status: "active",
+      },
+      _sum: { amount: true },
+    }),
+    tx.registrationPayment.aggregate({
+      where: {
+        ccaRegistrationId: registrationId,
+        status: "void",
+        // Deduction rows are manually entered as VOID.
+        // Rows voided later from an active payment have voidedAt set and should be neutral.
+        voidedAt: null,
+      },
+      _sum: { amount: true },
+    }),
+  ]);
 
-  const paidAmount = Number(activePaymentsTotal._sum.amount || 0);
+  const paidAmount =
+    Number(activePaymentsTotal._sum.amount || 0) -
+    Number(deductionPaymentsTotal._sum.amount || 0);
 
   await tx.cCARegistration.update({
     where: { id: registrationId },

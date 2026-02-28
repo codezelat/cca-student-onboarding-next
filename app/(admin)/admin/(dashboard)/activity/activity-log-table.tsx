@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Filter, Search, X } from "lucide-react";
 import { formatAppDateTime } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getPaginationRange } from "@/lib/pagination";
+import { getActivityLogsForExport } from "./activity-actions";
 
 type ActivityLogEntry = {
   id: string;
@@ -87,6 +89,7 @@ export default function ActivityLogTable({
   filterOptions: FilterOptions;
 }) {
   const router = useRouter();
+  const [isExporting, setIsExporting] = useState(false);
   const { start: paginationStart, end: paginationEnd } = getPaginationRange({
     currentPage,
     pageSize,
@@ -175,60 +178,80 @@ export default function ActivityLogTable({
     router.push("/admin/activity");
   }
 
-  function handleExportCsv() {
-    if (initialLogs.length === 0) return;
+  async function handleExportCsv() {
+    if (isExporting) return;
 
-    const headers = [
-      "Timestamp",
-      "Status",
-      "Category",
-      "Action",
-      "Actor Name",
-      "Actor Email",
-      "Subject Type",
-      "Subject ID",
-      "Subject Label",
-      "Route",
-      "Method",
-      "Message",
-      "Request ID",
-      "IP Address",
-    ];
+    setIsExporting(true);
+    try {
+      const exportRows = await getActivityLogsForExport({
+        search: currentSearch,
+        actor: currentActor,
+        category: currentCategory,
+        action: currentAction,
+        status: currentStatus,
+        subjectType: currentSubjectType,
+        dateFrom: currentDateFrom,
+        dateTo: currentDateTo,
+      });
+      if (exportRows.length === 0) return;
 
-    const rows = initialLogs.map((row) => [
-      formatAppDateTime(row.createdAt),
-      row.status,
-      row.category,
-      row.action,
-      row.actorNameSnapshot || "",
-      row.actorEmailSnapshot || "",
-      row.subjectType || "",
-      row.subjectId || "",
-      row.subjectLabel || "",
-      row.routeName || "",
-      row.httpMethod || "",
-      (row.message || "").replaceAll('"', '""'),
-      row.requestId || "",
-      row.ipAddress || "",
-    ]);
+      const headers = [
+        "Timestamp",
+        "Status",
+        "Category",
+        "Action",
+        "Actor Name",
+        "Actor Email",
+        "Subject Type",
+        "Subject ID",
+        "Subject Label",
+        "Route",
+        "Method",
+        "Message",
+        "Request ID",
+        "IP Address",
+      ];
 
-    const csv = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell)}"`).join(","))
-      .join("\n");
+      const rows = exportRows.map((row) => [
+        formatAppDateTime(row.createdAt),
+        row.status,
+        row.category,
+        row.action,
+        row.actorNameSnapshot || "",
+        row.actorEmailSnapshot || "",
+        row.subjectType || "",
+        row.subjectId || "",
+        row.subjectLabel || "",
+        row.routeName || "",
+        row.httpMethod || "",
+        (row.message || "").replaceAll('"', '""'),
+        row.requestId || "",
+        row.ipAddress || "",
+      ]);
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.setAttribute("href", url);
-    anchor.setAttribute(
-      "download",
-      `activity_log_${new Date().toISOString().slice(0, 10)}.csv`,
-    );
-    anchor.style.visibility = "hidden";
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+      const csv = [headers, ...rows]
+        .map((row) => row.map((cell) => `"${String(cell)}"`).join(","))
+        .join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.setAttribute("href", url);
+      anchor.setAttribute(
+        "download",
+        `activity_log_${new Date().toISOString().slice(0, 10)}.csv`,
+      );
+      anchor.style.visibility = "hidden";
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to export activity logs CSV:", error);
+      alert("Failed to export CSV. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
   }
 
   return (
@@ -379,10 +402,11 @@ export default function ActivityLogTable({
               type="button"
               variant="outline"
               onClick={handleExportCsv}
+              disabled={isExporting}
               className="rounded-xl border-white/70 bg-white/40"
             >
               <Download className="w-4 h-4 mr-2" />
-              Export CSV
+              {isExporting ? "Exporting..." : "Export CSV"}
             </Button>
           </div>
         </form>

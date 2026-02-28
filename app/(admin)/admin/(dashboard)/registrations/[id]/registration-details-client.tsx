@@ -114,8 +114,12 @@ export default function RegistrationDetailsClient({
       ? parseFloat(String(registration.calculatedPaidAmount))
       : payments.reduce(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (acc: number, p: any) =>
-            p.status === "active" ? acc + parseFloat(p.amount) : acc,
+          (acc: number, p: any) => {
+            const amount = parseFloat(p.amount);
+            if (p.status === "active") return acc + amount;
+            if (p.status === "void" && !p.voidedAt) return acc - amount;
+            return acc;
+          },
           0,
         );
 
@@ -430,7 +434,7 @@ export default function RegistrationDetailsClient({
                             <SelectContent>
                               <SelectItem value="PAID">Valid (Paid)</SelectItem>
                               <SelectItem value="VOID">
-                                Void (Cancelled, no balance change)
+                                Void (Deduct from balance)
                               </SelectItem>
                             </SelectContent>
                           </Select>
@@ -596,6 +600,7 @@ export default function RegistrationDetailsClient({
                               receiptReference?: string;
                               amount: string | number;
                               status: string;
+                              voidedAt?: string | null;
                             }) => (
                               <TableRow
                                 key={p.id}
@@ -611,10 +616,31 @@ export default function RegistrationDetailsClient({
                                   {p.receiptReference || "-"}
                                 </TableCell>
                                 <TableCell className="text-sm font-black text-gray-900 py-3 text-right">
-                                  Rs.{" "}
-                                  {formatAppNumber(
-                                    parseFloat(String(p.amount)),
-                                  )}
+                                  {(() => {
+                                    const amount = parseFloat(String(p.amount));
+                                    const signedAmount =
+                                      p.status === "active"
+                                        ? amount
+                                        : p.voidedAt
+                                          ? 0
+                                          : -amount;
+                                    const prefix =
+                                      signedAmount > 0
+                                        ? "+"
+                                        : signedAmount < 0
+                                          ? "-"
+                                          : "";
+
+                                    return (
+                                      <>
+                                        {prefix && <>{prefix} </>}
+                                        Rs.{" "}
+                                        {formatAppNumber(
+                                          Math.abs(signedAmount),
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                 </TableCell>
                                 <TableCell className="py-3 text-center">
                                   {p.status === "active" ? (

@@ -47,13 +47,13 @@ export default async function FinancePage({
                         </span>
                     </div>
                     <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-1">
-                        Total Paid
+                        Net Paid (VOID Deducted)
                     </p>
                     <p className="text-3xl font-black bg-linear-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
                         Rs. {parseFloat(stats.totalRevenue).toLocaleString()}
                     </p>
                     <p className="mt-2 text-xs font-semibold text-gray-400">
-                        Excludes voided: Rs.{" "}
+                        Already deducted as VOID: Rs.{" "}
                         {parseFloat(stats.voidedAmount).toLocaleString()}
                     </p>
                 </div>
@@ -72,7 +72,7 @@ export default async function FinancePage({
                         {stats.totalPayments}
                     </p>
                     <p className="mt-2 text-xs font-semibold text-gray-400">
-                        Voided hidden: {stats.voidedPayments}
+                        VOID deduction entries: {stats.voidedPayments}
                     </p>
                 </div>
 

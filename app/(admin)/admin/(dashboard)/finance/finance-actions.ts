@@ -37,55 +37,7 @@ async function getRegistrationBalanceSnapshot(registrationId: string | bigint) {
     });
 }
 
-export async function getFinanceStats() {
-    const [activePaymentsStats, voidPaymentsStats, activeRegCount] = await Promise.all([
-        prisma.registrationPayment.aggregate({
-            where: {
-                status: "active",
-                registration: {
-                    is: {
-                        deletedAt: null,
-                    },
-                },
-            },
-            _sum: { amount: true },
-            _count: { _all: true },
-        }),
-        prisma.registrationPayment.aggregate({
-            where: {
-                status: "void",
-                registration: {
-                    is: {
-                        deletedAt: null,
-                    },
-                },
-            },
-            _sum: { amount: true },
-            _count: { _all: true },
-        }),
-        prisma.cCARegistration.count({
-            where: { deletedAt: null },
-        }),
-    ]);
-
-    return {
-        totalRevenue: activePaymentsStats._sum.amount?.toString() || "0",
-        totalPayments: Number(activePaymentsStats._count._all || 0),
-        voidedAmount: voidPaymentsStats._sum.amount?.toString() || "0",
-        voidedPayments: Number(voidPaymentsStats._count._all || 0),
-        activeRegistrations: activeRegCount,
-    };
-}
-
-export async function getPaymentLedger(params?: {
-    search?: string;
-    page?: number;
-    pageSize?: number;
-}) {
-    const search = params?.search?.trim() || "";
-    const requestedPage = Math.max(1, params?.page ?? 1);
-    const safePageSize = Math.min(Math.max(1, params?.pageSize ?? 20), 100);
-
+function buildPaymentLedgerWhere(search: string) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {
         registration: {
@@ -94,6 +46,7 @@ export async function getPaymentLedger(params?: {
             },
         },
     };
+
     if (search) {
         where.AND = [
             {
@@ -145,6 +98,66 @@ export async function getPaymentLedger(params?: {
         ];
     }
 
+    return where;
+}
+
+export async function getFinanceStats() {
+    const [activePaymentsStats, deductionPaymentsStats, activeRegCount] = await Promise.all([
+        prisma.registrationPayment.aggregate({
+            where: {
+                status: "active",
+                registration: {
+                    is: {
+                        deletedAt: null,
+                    },
+                },
+            },
+            _sum: { amount: true },
+            _count: { _all: true },
+        }),
+        prisma.registrationPayment.aggregate({
+            where: {
+                status: "void",
+                voidedAt: null,
+                registration: {
+                    is: {
+                        deletedAt: null,
+                    },
+                },
+            },
+            _sum: { amount: true },
+            _count: { _all: true },
+        }),
+        prisma.cCARegistration.count({
+            where: { deletedAt: null },
+        }),
+    ]);
+
+    const activeTotal = Number(activePaymentsStats._sum.amount || 0);
+    const deductionTotal = Number(deductionPaymentsStats._sum.amount || 0);
+    const netTotal = activeTotal - deductionTotal;
+    const activeCount = Number(activePaymentsStats._count._all || 0);
+    const deductionCount = Number(deductionPaymentsStats._count._all || 0);
+
+    return {
+        totalRevenue: netTotal.toString(),
+        totalPayments: activeCount + deductionCount,
+        voidedAmount: deductionTotal.toString(),
+        voidedPayments: deductionCount,
+        activeRegistrations: activeRegCount,
+    };
+}
+
+export async function getPaymentLedger(params?: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+}) {
+    const search = params?.search?.trim() || "";
+    const requestedPage = Math.max(1, params?.page ?? 1);
+    const safePageSize = Math.min(Math.max(1, params?.pageSize ?? 20), 100);
+    const where = buildPaymentLedgerWhere(search);
+
     const total = await prisma.registrationPayment.count({ where });
     const totalPages = Math.max(1, Math.ceil(total / safePageSize));
     const page = Math.min(requestedPage, totalPages);
@@ -173,6 +186,27 @@ export async function getPaymentLedger(params?: {
         pageSize: safePageSize,
         totalPages,
     });
+}
+
+export async function getPaymentLedgerForExport(params?: { search?: string }) {
+    const search = params?.search?.trim() || "";
+    const where = buildPaymentLedgerWhere(search);
+
+    const payments = await prisma.registrationPayment.findMany({
+        where,
+        include: {
+            registration: {
+                select: {
+                    fullName: true,
+                    registerId: true,
+                    programId: true,
+                },
+            },
+        },
+        orderBy: { paymentDate: "desc" },
+    });
+
+    return serialize(payments);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

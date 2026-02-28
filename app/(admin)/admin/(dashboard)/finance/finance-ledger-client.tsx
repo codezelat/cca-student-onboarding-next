@@ -33,7 +33,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { voidPayment } from "./finance-actions";
+import { getPaymentLedgerForExport, voidPayment } from "./finance-actions";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { formatAppDate, formatAppNumber } from "@/lib/formatters";
@@ -61,6 +61,7 @@ export default function FinanceLedgerClient({
     const router = useRouter();
     const [ledger, setLedger] = useState(initialLedger);
     const [searchQuery, setSearchQuery] = useState(currentSearch);
+    const [isExporting, setIsExporting] = useState(false);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -82,7 +83,12 @@ export default function FinanceLedgerClient({
             setLedger((prev) =>
                 prev.map((p) =>
                     p.id === id
-                        ? { ...p, status: "void", note: `VOIDED: ${reason}` }
+                        ? {
+                              ...p,
+                              status: "void",
+                              note: `VOIDED: ${reason}`,
+                              voidedAt: new Date().toISOString(),
+                          }
                         : p,
                 ),
             );
@@ -126,52 +132,76 @@ export default function FinanceLedgerClient({
         router.push("/admin/finance");
     };
 
-    function handleExport() {
-        if (ledger.length === 0) return;
+    async function handleExport() {
+        if (isExporting) return;
 
-        const headers = [
-            "Transaction ID",
-            "Student Name",
-            "Registration ID",
-            "Program",
-            "Date",
-            "Method",
-            "Reference",
-            "Amount",
-            "Status",
-            "Remark",
-        ];
+        setIsExporting(true);
+        try {
+            const exportRows = await getPaymentLedgerForExport({
+                search: currentSearch,
+            });
+            if (exportRows.length === 0) return;
 
-        const csvData = ledger.map((p) => [
-            p.id.toString(),
-            `"${p.registration.fullName.replace(/"/g, '""')}"`,
-            p.registration.registerId,
-            p.registration.programId,
-            formatAppDate(p.paymentDate),
-            p.paymentMethod,
-            p.receiptReference || "N/A",
-            parseFloat(p.amount).toString(),
-            p.status,
-            `"${(p.note || "").replace(/"/g, '""')}"`,
-        ]);
+            const headers = [
+                "Transaction ID",
+                "Student Name",
+                "Registration ID",
+                "Program",
+                "Date",
+                "Method",
+                "Reference",
+                "Amount",
+                "Status",
+                "Remark",
+            ];
 
-        const csvContent = [headers, ...csvData]
-            .map((row) => row.join(","))
-            .join("\n");
-        const blob = new Blob([csvContent], {
-            type: "text/csv;charset=utf-8;",
-        });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute(
-            "download",
-            `finance_ledger_${new Date().toISOString().split("T")[0]}.csv`,
-        );
-        link.style.visibility = "hidden";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+            const csvData = exportRows.map((p: any) => [
+                p.id.toString(),
+                `"${(p.registration?.fullName || "").replace(/"/g, '""')}"`,
+                p.registration?.registerId || "",
+                p.registration?.programId || "",
+                formatAppDate(p.paymentDate),
+                p.paymentMethod,
+                p.receiptReference || "N/A",
+                (
+                    p.status === "active"
+                        ? parseFloat(p.amount)
+                        : p.voidedAt
+                          ? 0
+                          : -parseFloat(p.amount)
+                ).toString(),
+                p.status,
+                `"${(p.note || "").replace(/"/g, '""')}"`,
+            ]);
+
+            const csvContent = [headers, ...csvData]
+                .map((row) => row.join(","))
+                .join("\n");
+            const blob = new Blob([csvContent], {
+                type: "text/csv;charset=utf-8;",
+            });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute(
+                "download",
+                `finance_ledger_${new Date().toISOString().split("T")[0]}.csv`,
+            );
+            link.style.visibility = "hidden";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Failed to export finance ledger CSV:", error);
+            toast({
+                title: "Export failed",
+                description: "Unable to export CSV. Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsExporting(false);
+        }
     }
 
     return (
@@ -213,10 +243,11 @@ export default function FinanceLedgerClient({
                             type="button"
                             variant="outline"
                             onClick={handleExport}
+                            disabled={isExporting}
                             className="rounded-xl border-white/60 bg-white/40 hover:bg-white/60"
                         >
                             <Download className="w-4 h-4 mr-2" />
-                            Export CSV
+                            {isExporting ? "Exporting..." : "Export CSV"}
                         </Button>
                     </div>
                 </form>
@@ -304,13 +335,38 @@ export default function FinanceLedgerClient({
                                         </code>
                                     </TableCell>
                                     <TableCell className="px-4 py-4 text-right">
+                                        {(() => {
+                                            const amount = parseFloat(
+                                                payment.amount,
+                                            );
+                                            const signedAmount =
+                                                payment.status === "active"
+                                                    ? amount
+                                                    : payment.voidedAt
+                                                      ? 0
+                                                      : -amount;
+                                            const prefix =
+                                                signedAmount > 0
+                                                    ? "+"
+                                                    : signedAmount < 0
+                                                      ? "-"
+                                                      : "";
+                                            return (
                                         <p className="font-black text-gray-900 flex items-center justify-end gap-1">
-                                            Rs.{" "}
-                                            {formatAppNumber(
-                                                parseFloat(payment.amount),
-                                            )}
-                                            <ArrowUpRight className="w-3 h-3 text-emerald-500" />
+                                            {prefix && <>{prefix} </>}
+                                            Rs. {formatAppNumber(Math.abs(signedAmount))}
+                                            <ArrowUpRight
+                                                className={`w-3 h-3 ${
+                                                    signedAmount < 0
+                                                        ? "text-rose-500 rotate-90"
+                                                        : signedAmount === 0
+                                                          ? "text-gray-400"
+                                                          : "text-emerald-500"
+                                                }`}
+                                            />
                                         </p>
+                                            );
+                                        })()}
                                     </TableCell>
                                     <TableCell className="px-4 py-4 text-center">
                                         {payment.status === "active" ? (
