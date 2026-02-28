@@ -72,6 +72,18 @@ export default function AdminNavigation({
             ),
         },
         {
+            label: "Received Payments",
+            href: "/admin/received-payments",
+            icon: (
+                <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M9 14h6m-6-4h6m2 10H7a2 2 0 01-2-2V6a2 2 0 012-2h7l5 5v9a2 2 0 01-2 2z"
+                />
+            ),
+        },
+        {
             label: "Program Management",
             href: "/admin/programs",
             icon: (
