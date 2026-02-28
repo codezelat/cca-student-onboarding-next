@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 
 /**
  * Payment slip structure
@@ -29,6 +30,14 @@ interface PendingPaymentExtract {
   uploadedAt: string;
 }
 
+interface PendingPaymentsResult {
+  data: PendingPaymentExtract[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 /**
  * BigInt to JSON helper
  */
@@ -44,91 +53,130 @@ function serialize(data: any) {
 export async function getPendingPayments({
   search = "",
   status = "all",
+  page = 1,
+  pageSize = 25,
 }: {
   search?: string;
   status?: string;
-}) {
-  // 1. Fetch registrations that have basic text matching the search query (if provided)
-  const registrations = await prisma.cCARegistration.findMany({
-    where: {
-      deletedAt: null,
-      ...(search
-        ? {
-            OR: [
-              { fullName: { contains: search, mode: "insensitive" } },
-              { nicNumber: { contains: search, mode: "insensitive" } },
-              { emailAddress: { contains: search, mode: "insensitive" } },
-              { whatsappNumber: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    select: {
-      id: true,
-      registerId: true,
-      fullName: true,
-      nicNumber: true,
-      passportNumber: true,
-      emailAddress: true,
-      whatsappNumber: true,
-      paymentSlip: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
+  page?: number;
+  pageSize?: number;
+}): Promise<PendingPaymentsResult> {
+  const safePage = Math.max(1, page);
+  const safePageSize = Math.min(Math.max(1, pageSize), 100);
+  const offset = (safePage - 1) * safePageSize;
+
+  const normalizedStatus =
+    status === "pending" || status === "approved" || status === "declined"
+      ? status
+      : "all";
+  const searchTerm = search.trim();
+  const likeSearch = `%${searchTerm}%`;
+
+  const statusFilterSql =
+    normalizedStatus === "all"
+      ? Prisma.empty
+      : Prisma.sql`AND COALESCE(slip->>'status', 'pending') = ${normalizedStatus}`;
+
+  const searchFilterSql = searchTerm
+    ? Prisma.sql`
+      AND (
+        r.full_name ILIKE ${likeSearch}
+        OR COALESCE(r.nic_number, '') ILIKE ${likeSearch}
+        OR r.email_address ILIKE ${likeSearch}
+        OR r.whatsapp_number ILIKE ${likeSearch}
+      )
+    `
+    : Prisma.empty;
+
+  type CountRow = { total: bigint };
+  type PaymentRow = {
+    registration_id: string;
+    register_id: string;
+    full_name: string;
+    identifier: string;
+    email_address: string;
+    whatsapp_number: string;
+    slip_id: string;
+    slip_index: number;
+    slip_url: string;
+    status: string;
+    uploaded_at: string;
+  };
+
+  const [countRows, paymentRows] = await Promise.all([
+    prisma.$queryRaw<CountRow[]>`
+      SELECT COUNT(*) AS total
+      FROM cca_registrations r
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE
+          WHEN jsonb_typeof(r.payment_slip) = 'array' THEN r.payment_slip
+          WHEN jsonb_typeof(r.payment_slip) = 'object' THEN jsonb_build_array(r.payment_slip)
+          ELSE '[]'::jsonb
+        END
+      ) WITH ORDINALITY AS slips(slip, idx)
+      WHERE r.deleted_at IS NULL
+        AND slip ? 'id'
+        AND slip->>'id' LIKE 'slip_%'
+        ${statusFilterSql}
+        ${searchFilterSql}
+    `,
+    prisma.$queryRaw<PaymentRow[]>`
+      SELECT
+        r.id::text AS registration_id,
+        r.register_id,
+        r.full_name,
+        COALESCE(NULLIF(r.nic_number, ''), NULLIF(r.passport_number, ''), 'N/A') AS identifier,
+        r.email_address,
+        r.whatsapp_number,
+        slip->>'id' AS slip_id,
+        (idx - 1)::int AS slip_index,
+        COALESCE(slip->>'url', '') AS slip_url,
+        COALESCE(slip->>'status', 'pending') AS status,
+        COALESCE(
+          NULLIF(slip->>'uploadedAt', ''),
+          to_char(r.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+        ) AS uploaded_at
+      FROM cca_registrations r
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE
+          WHEN jsonb_typeof(r.payment_slip) = 'array' THEN r.payment_slip
+          WHEN jsonb_typeof(r.payment_slip) = 'object' THEN jsonb_build_array(r.payment_slip)
+          ELSE '[]'::jsonb
+        END
+      ) WITH ORDINALITY AS slips(slip, idx)
+      WHERE r.deleted_at IS NULL
+        AND slip ? 'id'
+        AND slip->>'id' LIKE 'slip_%'
+        ${statusFilterSql}
+        ${searchFilterSql}
+      ORDER BY uploaded_at ASC
+      OFFSET ${offset}
+      LIMIT ${safePageSize}
+    `,
+  ]);
+
+  const total = Number(countRows[0]?.total ?? 0);
+  const data: PendingPaymentExtract[] = paymentRows.map((row) => ({
+    registrationId: row.registration_id,
+    registerId: row.register_id,
+    fullName: row.full_name,
+    identifier: row.identifier,
+    emailAddress: row.email_address,
+    whatsappNumber: row.whatsapp_number,
+    slipId: row.slip_id,
+    slipIndex: row.slip_index,
+    slipUrl: row.slip_url,
+    status: row.status,
+    uploadedAt: row.uploaded_at,
+  }));
+
+  return serialize({
+    data,
+    total,
+    page: safePage,
+    pageSize: safePageSize,
+    totalPages: Math.max(1, Math.ceil(total / safePageSize)),
   });
-
-  // 2. Filter down to only those registrations whose paymentSlip array contains at least one "pending" slip
-  const pendingExtracts: PendingPaymentExtract[] = [];
-
-  for (const reg of registrations) {
-    if (!reg.paymentSlip) continue;
-
-    let slips: PaymentSlip[] = [];
-    if (Array.isArray(reg.paymentSlip)) {
-      slips = reg.paymentSlip as unknown as PaymentSlip[];
-    } else if (
-      typeof reg.paymentSlip === "object" &&
-      reg.paymentSlip !== null
-    ) {
-      // Edge case where it's a single object
-      slips = [reg.paymentSlip as unknown as PaymentSlip];
-    }
-
-    slips.forEach((slip, index) => {
-      // FILTER: Only show slips submitted via /cca/payment portal (not initial registration slips)
-      // Payment update slips have an 'id' field starting with 'slip_'
-      // Initial registration slips only have 'url' field
-      if (!slip.id || !slip.id.startsWith("slip_")) {
-        return; // Skip initial registration payment slips
-      }
-
-      const currentSlipStatus = slip.status || "pending";
-      if (status === "all" || currentSlipStatus === status) {
-        pendingExtracts.push({
-          registrationId: reg.id.toString(),
-          registerId: reg.registerId,
-          fullName: reg.fullName,
-          identifier: reg.nicNumber || reg.passportNumber || "N/A",
-          emailAddress: reg.emailAddress,
-          whatsappNumber: reg.whatsappNumber,
-          slipId: slip.id,
-          slipIndex: index,
-          slipUrl: slip.url,
-          status: currentSlipStatus,
-          uploadedAt: slip.uploadedAt || new Date().toISOString(),
-        });
-      }
-    });
-  }
-
-  // Sort by upload date (oldest first, to process queue fairly)
-  pendingExtracts.sort(
-    (a, b) =>
-      new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime(),
-  );
-
-  return serialize(pendingExtracts);
 }
 
 export async function approvePaymentSlip(

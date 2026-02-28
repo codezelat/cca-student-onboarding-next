@@ -9,8 +9,16 @@ export default async function ReceivedPaymentsPage({
   const params = await searchParams;
   const search = (params.search as string) || "";
   const status = (params.status as string) || "all";
+  const page = Math.max(
+    1,
+    Number.isFinite(Number(params.page)) ? Number(params.page) : 1,
+  );
 
-  const pendingPayments = await getPendingPayments({ search, status });
+  const pendingPaymentsResult = await getPendingPayments({
+    search,
+    status,
+    page,
+  });
 
   return (
     <div className="space-y-6">
@@ -50,7 +58,7 @@ export default async function ReceivedPaymentsPage({
                 Pending Slips
               </p>
               <p className="text-xl font-black text-gray-800">
-                {pendingPayments.length}
+                {pendingPaymentsResult.total}
               </p>
             </div>
           </div>
@@ -58,9 +66,12 @@ export default async function ReceivedPaymentsPage({
       </div>
 
       <ReceivedPaymentsTable
-        initialPayments={pendingPayments}
+        initialPayments={pendingPaymentsResult.data}
         currentSearch={search}
         currentStatus={status}
+        currentPage={pendingPaymentsResult.page}
+        totalPages={pendingPaymentsResult.totalPages}
+        totalRows={pendingPaymentsResult.total}
       />
     </div>
   );

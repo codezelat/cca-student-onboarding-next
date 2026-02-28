@@ -10,10 +10,16 @@ export default function ReceivedPaymentsTable({
     initialPayments,
     currentSearch,
     currentStatus = "all",
+    currentPage,
+    totalPages,
+    totalRows,
 }: {
     initialPayments: any[];
     currentSearch: string;
     currentStatus?: string;
+    currentPage: number;
+    totalPages: number;
+    totalRows: number;
 }) {
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState(currentSearch);
@@ -28,32 +34,35 @@ export default function ReceivedPaymentsTable({
     } | null>(null);
     const [approveAmount, setApproveAmount] = useState<string>("");
 
-    // --- Standard Pagination (25 items per page) ---
-    const ITEMS_PER_PAGE = 25;
-    const [currentPage, setCurrentPage] = useState(1);
+    function buildUrl(params: {
+        search?: string;
+        status?: string;
+        page?: number;
+    }) {
+        const sp = new URLSearchParams();
+        const nextSearch = params.search ?? currentSearch;
+        const nextStatus = params.status ?? currentStatus;
+        const nextPage = params.page ?? currentPage;
 
-    const totalPages = Math.ceil(initialPayments.length / ITEMS_PER_PAGE);
-    const paginatedPayments = initialPayments.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-    );
+        if (nextSearch) sp.set("search", nextSearch);
+        if (nextStatus && nextStatus !== "all") sp.set("status", nextStatus);
+        if (nextPage > 1) sp.set("page", String(nextPage));
+
+        const query = sp.toString();
+        return query
+            ? `/admin/received-payments?${query}`
+            : "/admin/received-payments";
+    }
 
     // Filter submit handler
     const handleFilterSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const params = new URLSearchParams();
-
-        if (searchQuery) params.set("search", searchQuery);
-        else params.delete("search");
-
-        if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
-        else params.delete("status"); // 'all' is the default, keep URL clean
-
-        const query = params.toString();
         router.push(
-            query
-                ? `/admin/received-payments?${query}`
-                : "/admin/received-payments",
+            buildUrl({
+                search: searchQuery,
+                status: statusFilter,
+                page: 1,
+            }),
         );
     };
 
@@ -144,7 +153,7 @@ export default function ReceivedPaymentsTable({
                         >
                             Filter
                         </button>
-                        {currentSearch && (
+                        {(currentSearch || currentStatus !== "all") && (
                             <button
                                 type="button"
                                 onClick={handleClearFilter}
@@ -173,14 +182,14 @@ export default function ReceivedPaymentsTable({
                             </tr>
                         </thead>
                         <tbody className="bg-white/20 divide-y divide-gray-100">
-                            {paginatedPayments.length === 0 ? (
+                            {initialPayments.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="px-6 py-16 text-center text-gray-500">
                                         No pending slips to review.
                                     </td>
                                 </tr>
                             ) : (
-                                paginatedPayments.map((payment) => {
+                                initialPayments.map((payment) => {
                                     const actionKeyId = `${payment.registrationId}-${payment.slipIndex}`;
                                     const loadingApprove = isApproving === actionKeyId;
                                     const loadingDecline = isDeclining === actionKeyId;
@@ -279,14 +288,18 @@ export default function ReceivedPaymentsTable({
                 {totalPages > 1 && (
                     <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white/40">
                         <span className="text-sm text-gray-600">
-                            Page {currentPage} of {totalPages}
+                            Page {currentPage} of {totalPages} ({initialPayments.length} / {totalRows} slips)
                         </span>
                         <div className="flex gap-2">
                             <Button
                                 variant="outline"
                                 size="sm"
                                 disabled={currentPage === 1}
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                onClick={() =>
+                                    router.push(
+                                        buildUrl({ page: currentPage - 1 }),
+                                    )
+                                }
                             >
                                 Previous
                             </Button>
@@ -294,7 +307,11 @@ export default function ReceivedPaymentsTable({
                                 variant="outline"
                                 size="sm"
                                 disabled={currentPage === totalPages}
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                onClick={() =>
+                                    router.push(
+                                        buildUrl({ page: currentPage + 1 }),
+                                    )
+                                }
                             >
                                 Next
                             </Button>

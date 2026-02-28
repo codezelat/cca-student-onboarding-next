@@ -16,24 +16,20 @@ function serialize(data: any) {
 }
 
 export async function getFinanceStats() {
-    // Total Expected (Sum of all registration program prices)
-    // Actually, we need to join registrations with their program's price or intake price
-    // For simplicity in this session, we'll sum the payments first.
-
-    // Total Paid
-    const totalPaid = await prisma.registrationPayment.aggregate({
-        where: { status: "active" },
-        _sum: { amount: true },
-    });
-
-    // Count registrations
-    const activeRegCount = await prisma.cCARegistration.count({
-        where: { deletedAt: null },
-    });
+    const [totalPaid, totalPayments, activeRegCount] = await Promise.all([
+        prisma.registrationPayment.aggregate({
+            where: { status: "active" },
+            _sum: { amount: true },
+        }),
+        prisma.registrationPayment.count(),
+        prisma.cCARegistration.count({
+            where: { deletedAt: null },
+        }),
+    ]);
 
     return {
         totalRevenue: totalPaid._sum.amount?.toString() || "0",
-        totalPayments: await prisma.registrationPayment.count(),
+        totalPayments,
         activeRegistrations: activeRegCount,
     };
 }
