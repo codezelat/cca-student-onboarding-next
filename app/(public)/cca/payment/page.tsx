@@ -3,12 +3,15 @@
 import { useState, ChangeEvent, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { Turnstile } from "@marsidev/react-turnstile";
 import { useFileUpload } from "@/lib/hooks/use-file-upload";
 import {
   ALLOWED_UPLOAD_ACCEPT,
   MAX_UPLOAD_SIZE_BYTES,
   MAX_UPLOAD_SIZE_MB,
 } from "@/lib/upload-config";
+
+const isDev = process.env.NODE_ENV === "development";
 
 export default function PaymentUpdatePage() {
   const [studentType, setStudentType] = useState<"local" | "international">(
@@ -36,9 +39,13 @@ export default function PaymentUpdatePage() {
   >("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [submitError, setSubmitError] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0);
 
   const { uploadFile } = useFileUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const turnstileEnabled = !isDev && Boolean(turnstileSiteKey);
 
   // Dynamic Labels based on Student Type
   const identifierLabel =
@@ -118,6 +125,18 @@ export default function PaymentUpdatePage() {
       setSubmitError("Please upload your payment slip before submitting.");
       return;
     }
+    if (!isDev && !turnstileSiteKey) {
+      setSubmitStatus("error");
+      setSubmitError(
+        "Security verification is not configured. Please contact support.",
+      );
+      return;
+    }
+    if (turnstileEnabled && !turnstileToken) {
+      setSubmitStatus("error");
+      setSubmitError("Please complete the security check before submitting.");
+      return;
+    }
 
     const currentRegistrationId = studentDetails.id;
     let progressInterval: ReturnType<typeof setInterval> | null = null;
@@ -152,6 +171,10 @@ export default function PaymentUpdatePage() {
       const submitData = new FormData();
       submitData.set("registration_id", currentRegistrationId);
       submitData.set("payment_url", fileUrl);
+      submitData.set(
+        "turnstile_token",
+        turnstileEnabled ? turnstileToken : "dev-bypass",
+      );
       const idempotencyKey =
         typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
           ? crypto.randomUUID()
@@ -184,6 +207,10 @@ export default function PaymentUpdatePage() {
     } finally {
       if (progressInterval) clearInterval(progressInterval);
       setIsSubmitting(false);
+      if (turnstileEnabled) {
+        setTurnstileToken("");
+        setTurnstileWidgetKey((prev) => prev + 1);
+      }
     }
   };
 
@@ -582,6 +609,44 @@ export default function PaymentUpdatePage() {
                       </div>
                     )}
                   </div>
+
+                  {!isDev && (
+                    <div className="mt-6 rounded-xl border border-slate-200 bg-white/80 p-4">
+                      <p className="text-sm font-semibold text-gray-700 mb-3">
+                        Security Check <span className="text-red-500">*</span>
+                      </p>
+                      {turnstileSiteKey ? (
+                        <Turnstile
+                          key={turnstileWidgetKey}
+                          siteKey={turnstileSiteKey}
+                          onSuccess={(token) => {
+                            setTurnstileToken(token);
+                            if (submitStatus === "error") {
+                              setSubmitStatus("idle");
+                              setSubmitError("");
+                            }
+                          }}
+                          onExpire={() => setTurnstileToken("")}
+                          onError={() => {
+                            setTurnstileToken("");
+                            setSubmitStatus("error");
+                            setSubmitError(
+                              "Security check failed to load. Disable blockers and refresh.",
+                            );
+                          }}
+                          options={{
+                            action: "public_payment_update",
+                            theme: "light",
+                            appearance: "always",
+                          }}
+                        />
+                      ) : (
+                        <p className="text-sm text-red-600">
+                          Security verification is not configured.
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Action Button */}
                   <button

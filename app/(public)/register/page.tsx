@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import ReCAPTCHA from "react-google-recaptcha";
+import { Turnstile } from "@marsidev/react-turnstile";
 import { useFileUpload } from "@/lib/hooks/use-file-upload";
 import { COUNTRIES, SRI_LANKA_DISTRICTS } from "@/lib/data/registration";
 import {
@@ -38,8 +38,9 @@ export default function RegisterPage() {
         "idle" | "uploading" | "submitting"
     >("idle");
 
-    const recaptchaRef = useRef<ReCAPTCHA>(null);
     const { uploadFile } = useFileUpload();
+    const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    const turnstileEnabled = !isDev && Boolean(turnstileSiteKey);
 
     // Form State mapped exactly to Alpine.js implementation
     const [formData, setFormData] = useState({
@@ -87,6 +88,8 @@ export default function RegisterPage() {
     const [programLookupError, setProgramLookupError] = useState("");
     const [isProgramLookupLoading, setIsProgramLookupLoading] = useState(false);
     const [programLookupTouched, setProgramLookupTouched] = useState(false);
+    const [turnstileToken, setTurnstileToken] = useState("");
+    const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0);
 
     const programLookupAbortRef = useRef<AbortController | null>(null);
     const programLookupDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -425,11 +428,16 @@ export default function RegisterPage() {
             return;
         }
 
-        // 1. ReCAPTCHA Verification (skip in dev)
-        if (!isDev && !process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+        // 1. Turnstile verification configuration
+        if (!isDev && !turnstileSiteKey) {
             setErrorMessage(
-                "reCAPTCHA is not configured. Submission disabled.",
+                "Security verification is not configured. Please contact support.",
             );
+            setSubmitStatus("error");
+            return;
+        }
+        if (turnstileEnabled && !turnstileToken) {
+            setErrorMessage("Please complete the security check before submitting.");
             setSubmitStatus("error");
             return;
         }
@@ -452,17 +460,7 @@ export default function RegisterPage() {
         setUploadProgress(0);
 
         try {
-            let token = "dev-bypass";
-            if (!isDev) {
-                const recaptchaToken =
-                    await recaptchaRef.current?.executeAsync();
-                if (!recaptchaToken) {
-                    throw new Error(
-                        "reCAPTCHA verification failed. Please try again.",
-                    );
-                }
-                token = recaptchaToken;
-            }
+            const token = turnstileEnabled ? turnstileToken : "dev-bypass";
             // Validations
             if (!uploadedFiles.academic_1)
                 throw new Error(
@@ -571,7 +569,7 @@ export default function RegisterPage() {
 
             // Construct FormData payload for backend
             const submitData = new FormData();
-            submitData.set("recaptcha_token", token);
+            submitData.set("turnstile_token", token);
 
             Object.entries(formData).forEach(([key, value]) => {
                 submitData.set(key, String(value));
@@ -616,7 +614,10 @@ export default function RegisterPage() {
             setUploadStatus("idle");
         } finally {
             setIsSubmitting(false);
-            if (recaptchaRef.current) recaptchaRef.current.reset();
+            if (turnstileEnabled) {
+                setTurnstileToken("");
+                setTurnstileWidgetKey((prev) => prev + 1);
+            }
         }
     };
 
@@ -2292,16 +2293,40 @@ export default function RegisterPage() {
                             )}
 
                             {!isDev && (
-                                <div className="fixed -bottom-[9999px] -left-[9999px] invisible">
-                                    <ReCAPTCHA
-                                        ref={recaptchaRef}
-                                        sitekey={
-                                            process.env
-                                                .NEXT_PUBLIC_RECAPTCHA_SITE_KEY!
-                                        }
-                                        size="invisible"
-                                        badge="inline"
-                                    />
+                                <div className="mb-6 rounded-xl border border-slate-200 bg-white/80 p-4">
+                                    <p className="text-sm font-semibold text-gray-700 mb-3">
+                                        Security Check <span className="text-red-500">*</span>
+                                    </p>
+                                    {turnstileSiteKey ? (
+                                        <Turnstile
+                                            key={turnstileWidgetKey}
+                                            siteKey={turnstileSiteKey}
+                                            onSuccess={(token) => {
+                                                setTurnstileToken(token);
+                                                if (submitStatus === "error") {
+                                                    setSubmitStatus("idle");
+                                                    setErrorMessage("");
+                                                }
+                                            }}
+                                            onExpire={() => setTurnstileToken("")}
+                                            onError={() => {
+                                                setTurnstileToken("");
+                                                setSubmitStatus("error");
+                                                setErrorMessage(
+                                                    "Security check failed to load. Disable blockers and refresh.",
+                                                );
+                                            }}
+                                            options={{
+                                                action: "public_registration",
+                                                theme: "light",
+                                                appearance: "always",
+                                            }}
+                                        />
+                                    ) : (
+                                        <p className="text-sm text-red-600">
+                                            Security verification is not configured.
+                                        </p>
+                                    )}
                                 </div>
                             )}
 
@@ -2358,10 +2383,9 @@ export default function RegisterPage() {
 
                             {!isDev && (
                                 <p className="mt-4 text-xs text-center text-gray-500">
-                                    This site is protected by reCAPTCHA and the
-                                    Google{" "}
+                                    This site is protected by Cloudflare Turnstile and the Cloudflare{" "}
                                     <a
-                                        href="https://policies.google.com/privacy"
+                                        href="https://www.cloudflare.com/privacypolicy/"
                                         className="text-secondary-600 hover:underline"
                                         target="_blank"
                                         rel="noopener noreferrer"
@@ -2370,7 +2394,7 @@ export default function RegisterPage() {
                                     </a>{" "}
                                     and{" "}
                                     <a
-                                        href="https://policies.google.com/terms"
+                                        href="https://www.cloudflare.com/website-terms/"
                                         className="text-secondary-600 hover:underline"
                                         target="_blank"
                                         rel="noopener noreferrer"

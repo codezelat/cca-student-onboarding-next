@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import ReCAPTCHA from "react-google-recaptcha";
+import { Turnstile } from "@marsidev/react-turnstile";
 import { loginAction } from "../actions";
 
 const isDev = process.env.NODE_ENV === "development";
@@ -24,9 +24,10 @@ function isNextRedirectError(error: unknown): boolean {
 export default function AdminLoginPage() {
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
-    const recaptchaRef = useRef<ReCAPTCHA>(null);
-    const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
-    const recaptchaEnabled = !isDev && Boolean(siteKey);
+    const [turnstileToken, setTurnstileToken] = useState("");
+    const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0);
+    const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    const turnstileEnabled = !isDev && Boolean(siteKey);
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -39,24 +40,20 @@ export default function AdminLoginPage() {
             if (!isDev) {
                 if (!siteKey) {
                     setError(
-                        "reCAPTCHA is not configured. Please contact support.",
+                        "Security verification is not configured. Please contact support.",
                     );
                     setIsLoading(false);
                     return;
                 }
 
-                // Execute reCAPTCHA in production only
-                const token = await recaptchaRef.current?.executeAsync();
-                if (!token) {
-                    setError(
-                        "reCAPTCHA verification failed. Please try again.",
-                    );
+                if (!turnstileToken) {
+                    setError("Please complete the security check.");
                     setIsLoading(false);
                     return;
                 }
-                formData.set("recaptcha_token", token);
+                formData.set("turnstile_token", turnstileToken);
             } else {
-                formData.set("recaptcha_token", "dev-bypass");
+                formData.set("turnstile_token", "dev-bypass");
             }
 
             const result = await loginAction(formData);
@@ -73,7 +70,10 @@ export default function AdminLoginPage() {
             setError("An unexpected error occurred. Please try again.");
             setIsLoading(false);
         } finally {
-            if (recaptchaRef.current) recaptchaRef.current.reset();
+            if (!isDev) {
+                setTurnstileToken("");
+                setTurnstileWidgetKey((prev) => prev + 1);
+            }
         }
     }
 
@@ -227,20 +227,37 @@ export default function AdminLoginPage() {
                                 </label>
                             </div>
 
-                            {/* Invisible reCAPTCHA (production only) */}
-                            {recaptchaEnabled && (
-                                <div className="fixed -bottom-[9999px] -left-[9999px] invisible">
-                                    <ReCAPTCHA
-                                        ref={recaptchaRef}
-                                        sitekey={siteKey!}
-                                        size="invisible"
-                                        badge="inline"
-                                        onErrored={() =>
-                                            setError(
-                                                "reCAPTCHA failed to load. Disable content blockers and refresh.",
-                                            )
-                                        }
-                                    />
+                            {!isDev && (
+                                <div className="rounded-xl border border-slate-200 bg-white/80 p-4">
+                                    <p className="text-sm font-semibold text-gray-700 mb-3">
+                                        Security Check <span className="text-red-500">*</span>
+                                    </p>
+                                    {siteKey ? (
+                                        <Turnstile
+                                            key={turnstileWidgetKey}
+                                            siteKey={siteKey}
+                                            onSuccess={(token) => {
+                                                setTurnstileToken(token);
+                                                setError(null);
+                                            }}
+                                            onExpire={() => setTurnstileToken("")}
+                                            onError={() => {
+                                                setTurnstileToken("");
+                                                setError(
+                                                    "Security check failed to load. Disable blockers and refresh.",
+                                                );
+                                            }}
+                                            options={{
+                                                action: "admin_login",
+                                                theme: "light",
+                                                appearance: "always",
+                                            }}
+                                        />
+                                    ) : (
+                                        <p className="text-sm text-red-600">
+                                            Security verification is not configured.
+                                        </p>
+                                    )}
                                 </div>
                             )}
 
@@ -295,13 +312,12 @@ export default function AdminLoginPage() {
                             </button>
                         </form>
 
-                        {/* reCAPTCHA Footer (production only) */}
+                        {/* Turnstile Footer (production only) */}
                         {!isDev && (
                             <p className="mt-6 text-[11px] text-gray-400 text-center leading-relaxed">
-                                This site is protected by reCAPTCHA and the
-                                Google{" "}
+                                This site is protected by Cloudflare Turnstile and the Cloudflare{" "}
                                 <a
-                                    href="https://policies.google.com/privacy"
+                                    href="https://www.cloudflare.com/privacypolicy/"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="underline hover:text-gray-600 transition-colors"
@@ -310,7 +326,7 @@ export default function AdminLoginPage() {
                                 </a>{" "}
                                 and{" "}
                                 <a
-                                    href="https://policies.google.com/terms"
+                                    href="https://www.cloudflare.com/website-terms/"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="underline hover:text-gray-600 transition-colors"

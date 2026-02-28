@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { turnstileService } from "@/lib/services/turnstile";
 import {
   beginIdempotency,
   checkRateLimit,
@@ -21,11 +22,13 @@ const PAYMENT_UPDATE_RATE_LIMIT = {
 const paymentUpdateSchema = z.object({
   registrationId: z.string().trim().regex(/^\d+$/, "Invalid registration ID"),
   paymentUrl: z.string().trim().url().max(2048),
+  turnstileToken: z.string().trim().min(1),
 });
 
 const paymentUpdateFieldLabels: Record<string, string> = {
   registrationId: "Registration reference",
   paymentUrl: "Payment slip URL",
+  turnstileToken: "Security verification",
 };
 
 function getPaymentUpdateValidationMessage(error: z.ZodError): {
@@ -117,6 +120,9 @@ export async function POST(request: Request) {
     const parsed = paymentUpdateSchema.safeParse({
       registrationId: String(formData.get("registration_id") || ""),
       paymentUrl: String(formData.get("payment_url") || ""),
+      turnstileToken: String(
+        formData.get("turnstile_token") || formData.get("recaptcha_token") || "",
+      ),
     });
 
     if (!parsed.success) {
@@ -144,7 +150,33 @@ export async function POST(request: Request) {
       );
     }
 
-    const { registrationId, paymentUrl } = parsed.data;
+    const { registrationId, paymentUrl, turnstileToken } = parsed.data;
+    const turnstileResult = await turnstileService.verify(
+      turnstileToken,
+      requestContext.ipAddress,
+    );
+    if (!turnstileResult.success) {
+      await logActivitySafe({
+        category: "payment_update",
+        action: "payment_update_turnstile_failed",
+        status: "failure",
+        subjectType: "PaymentSlipUpdate",
+        message: "Security check failed",
+        ...requestContext,
+        meta: {
+          errors: turnstileResult.errors,
+        },
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Security check failed. Please try again.",
+          field: "turnstileToken",
+        },
+        { status: 400 },
+      );
+    }
+
     const idempotencyState = await beginIdempotency({
       request,
       route: PAYMENT_UPDATE_ROUTE,

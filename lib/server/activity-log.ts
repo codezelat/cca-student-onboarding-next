@@ -20,6 +20,8 @@ const SENSITIVE_KEY_PATTERNS = [
   /api[-_]?key/i,
   /private[-_]?key/i,
   /recaptcha/i,
+  /turnstile/i,
+  /captcha/i,
 ];
 
 type BigIntLike = bigint | number | string | null | undefined;

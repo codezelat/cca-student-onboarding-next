@@ -61,7 +61,7 @@ The **Codezela Career Accelerator Student Onboarding Platform** is a comprehensi
 | 📝 **Multi-Step Registration** | Comprehensive form with program selection, personal info, contact details, qualifications, and document uploads |
 | 🎨 **3D Animated Homepage** | Interactive Three.js geometric shapes with mouse-responsive animations |
 | 📎 **Secure File Uploads** | Direct-to-cloud uploads with presigned URLs (academic docs, ID proof, photo, payment slip) |
-| 🛡️ **Spam Protection** | Google reCAPTCHA v2 integration |
+| 🛡️ **Spam Protection** | Cloudflare Turnstile integration |
 | 📱 **Responsive Design** | Mobile-first approach with Tailwind CSS |
 | 🌐 **International Support** | Country selection with dynamic Sri Lankan province/district fields |
 
@@ -119,7 +119,7 @@ The **Codezela Career Accelerator Student Onboarding Platform** is a comprehensi
 - **Tailwind CSS Animations** — Blob animations, hover effects, transitions
 
 ### Security
-- **[Google reCAPTCHA](https://www.google.com/recaptcha/)** — Bot protection
+- **[Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/)** — Bot protection
 - **[Supabase Auth](https://supabase.com/auth)** — Authentication and authorization
 - **[Row Level Security (RLS)](https://supabase.com/docs/guides/database/postgres/row-level-security)** — Database-level access control
 
@@ -159,7 +159,7 @@ The **Codezela Career Accelerator Student Onboarding Platform** is a comprehensi
 │                        External Services                                 │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────┐  │
-│  │    Supabase     │  │  Cloudflare R2  │  │   Google reCAPTCHA      │  │
+│  │    Supabase     │  │  Cloudflare R2  │  │   Cloudflare Turnstile   │  │
 │  │                 │  │                 │  │                         │  │
 │  │  PostgreSQL     │  │  Object Storage │  │   Bot Protection        │  │
 │  │  Auth           │  │  CDN            │  │                         │  │
@@ -332,12 +332,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `DIRECT_URL` | Direct PostgreSQL connection URL | Supabase Dashboard |
 | `AUTH_SECRET` | NextAuth.js secret | Generate with `openssl rand -base64 32` |
 
-### reCAPTCHA Configuration
+### Turnstile Configuration
 
 | Variable | Description | Source |
 |----------|-------------|--------|
-| `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` | reCAPTCHA site key | Google reCAPTCHA Console |
-| `RECAPTCHA_SECRET_KEY` | reCAPTCHA secret key | Google reCAPTCHA Console |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Turnstile site key | Cloudflare Dashboard |
+| `TURNSTILE_SECRET_KEY` | Turnstile secret key | Cloudflare Dashboard |
+| `TURNSTILE_ALLOWED_HOSTNAME` | Optional hostname pin for server validation | Your deployment hostname |
 
 ### Cloudflare R2 Configuration
 
@@ -491,7 +492,7 @@ The application uses Next.js Server Actions for all data mutations:
 ### Admin Actions (`actions.ts`)
 | Action | Description |
 |--------|-------------|
-| `loginAction()` | Authenticate admin user with reCAPTCHA |
+| `loginAction()` | Authenticate admin user with Turnstile |
 | `logoutAction()` | Sign out current user |
 | `getAdminUsers()` | List all admin users |
 | `createAdminUser()` | Create new admin account |
@@ -508,7 +509,7 @@ The application uses Next.js Server Actions for all data mutations:
 **Request Body:**
 ```typescript
 {
-  recaptcha_token: string;
+  turnstile_token: string;
   program_id: string;
   full_name: string;
   name_with_initials: string;
@@ -641,7 +642,7 @@ CMD ["node", "server.js"]
 | **Row Level Security (RLS)** | PostgreSQL RLS policies on all tables |
 | **Authentication** | Supabase Auth with session management |
 | **File Upload Security** | Presigned URLs with 5-minute expiration |
-| **Bot Protection** | Google reCAPTCHA v2 on registration |
+| **Bot Protection** | Cloudflare Turnstile on public submissions |
 | **Input Validation** | Zod schema validation on all inputs |
 | **SQL Injection Prevention** | Prisma ORM with parameterized queries |
 | **XSS Protection** | React's built-in escaping + CSP headers |

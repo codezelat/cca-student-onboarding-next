@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { recaptchaService } from "@/lib/services/recaptcha";
+import { turnstileService } from "@/lib/services/turnstile";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
@@ -26,10 +26,12 @@ export async function loginAction(formData: FormData) {
     };
     const email = (formData.get("email") as string) || "";
 
-    // 1. Verify reCAPTCHA
-    const recaptchaToken = formData.get("recaptcha_token") as string;
+    // 1. Verify Turnstile
+    const turnstileToken =
+        (formData.get("turnstile_token") as string) ||
+        (formData.get("recaptcha_token") as string);
 
-    if (!recaptchaToken) {
+    if (!turnstileToken) {
         await logActivitySafe({
             actor: { email: email || null },
             category: "auth",
@@ -43,9 +45,12 @@ export async function loginAction(formData: FormData) {
         return { error: "Security verification failed. Please try again." };
     }
 
-    const recaptchaResult = await recaptchaService.verify(recaptchaToken);
+    const turnstileResult = await turnstileService.verify(
+        turnstileToken,
+        requestMeta.ipAddress,
+    );
 
-    if (!recaptchaResult.success) {
+    if (!turnstileResult.success) {
         await logActivitySafe({
             actor: { email: email || null },
             category: "auth",
@@ -55,6 +60,9 @@ export async function loginAction(formData: FormData) {
             subjectLabel: email || "unknown",
             message: "Login rejected due to failed security challenge",
             ...requestMeta,
+            meta: {
+                errors: turnstileResult.errors,
+            },
         });
         return { error: "Security check failed. Please try again." };
     }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateRegisterId } from "@/lib/services/registration";
-import { recaptchaService } from "@/lib/services/recaptcha";
+import { turnstileService } from "@/lib/services/turnstile";
 import {
   beginIdempotency,
   checkRateLimit,
@@ -30,7 +30,7 @@ const qualificationValues = [
 ] as const;
 
 const registrationSchema = z.object({
-  recaptchaToken: z.string().min(1),
+  turnstileToken: z.string().min(1),
   programId: z.string().trim().min(1).max(50),
   fullName: z.string().trim().min(2).max(150),
   nameWithInitials: z.string().trim().min(2).max(100),
@@ -62,7 +62,7 @@ const registrationSchema = z.object({
 const urlArraySchema = z.array(z.string().url().max(2048)).max(10);
 
 const registrationFieldLabels: Record<string, string> = {
-  recaptchaToken: "Security verification",
+  turnstileToken: "Security verification",
   programId: "Program ID",
   fullName: "Full name",
   nameWithInitials: "Name with initials",
@@ -131,7 +131,7 @@ function getRegistrationValidationMessage(error: z.ZodError): {
     };
   }
 
-  if (rawField === "recaptchaToken") {
+  if (rawField === "turnstileToken") {
     return {
       message: "Security verification failed. Please refresh and try again.",
       field: rawField,
@@ -259,7 +259,9 @@ export async function POST(request: Request) {
     const formData = await request.formData();
 
     const rawPayload = {
-      recaptchaToken: String(formData.get("recaptcha_token") || ""),
+      turnstileToken: String(
+        formData.get("turnstile_token") || formData.get("recaptcha_token") || "",
+      ),
       programId: String(formData.get("program_id") || ""),
       fullName: String(formData.get("full_name") || ""),
       nameWithInitials: String(formData.get("name_with_initials") || ""),
@@ -529,7 +531,7 @@ export async function POST(request: Request) {
     }
 
     const hashablePayload = Object.fromEntries(
-      Object.entries(payload).filter(([key]) => key !== "recaptchaToken"),
+      Object.entries(payload).filter(([key]) => key !== "turnstileToken"),
     );
     const idempotencyState = await beginIdempotency({
       request,
@@ -572,17 +574,23 @@ export async function POST(request: Request) {
 
     activeIdempotencyKey = idempotencyState.key;
 
-    // 1. Verify reCAPTCHA
-    const recaptchaResult = await recaptchaService.verify(payload.recaptchaToken);
-    if (!recaptchaResult.success) {
+    // 1. Verify Turnstile
+    const turnstileResult = await turnstileService.verify(
+      payload.turnstileToken,
+      requestContext.ipAddress,
+    );
+    if (!turnstileResult.success) {
       await logActivitySafe({
         category: "public_registration",
-        action: "registration_recaptcha_failed",
+        action: "registration_turnstile_failed",
         status: "failure",
         subjectType: "RegistrationSubmission",
         subjectLabel: payload.emailAddress,
         message: "Security check failed",
         ...requestContext,
+        meta: {
+          errors: turnstileResult.errors,
+        },
       });
       await finalizeIdempotencyFailure({
         key: activeIdempotencyKey!,

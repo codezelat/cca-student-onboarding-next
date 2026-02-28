@@ -242,11 +242,6 @@ button {
     text-shadow: none;
 }
 
-/* Hide Google reCAPTCHA Badge since we add inline text */
-.grecaptcha-badge {
-    visibility: hidden !important;
-}
-
 /* Document Upload Areas */
 .upload-area {
     border: 2px dashed #cbd5e1;

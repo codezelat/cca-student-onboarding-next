@@ -4,7 +4,11 @@ export interface TurnstileResult {
 }
 
 export class TurnstileService {
-    async verify(token: string): Promise<TurnstileResult> {
+    async verify(token: string, remoteIp?: string): Promise<TurnstileResult> {
+        if (process.env.NODE_ENV === "development" && token === "dev-bypass") {
+            return { success: true, errors: [] };
+        }
+
         const secret = process.env.TURNSTILE_SECRET_KEY;
         if (!token || !secret) {
             return { success: false, errors: ["missing-input"] };
@@ -21,6 +25,7 @@ export class TurnstileService {
                     body: new URLSearchParams({
                         secret,
                         response: token,
+                        ...(remoteIp ? { remoteip: remoteIp } : {}),
                     }),
                 },
             );
@@ -33,10 +38,16 @@ export class TurnstileService {
             }
 
             const data = await res.json();
+            const expectedHostname = process.env.TURNSTILE_ALLOWED_HOSTNAME?.trim();
+            const hostnameMatches =
+                !expectedHostname ||
+                (typeof data.hostname === "string" && data.hostname === expectedHostname);
 
             return {
-                success: data.success === true,
-                errors: data["error-codes"] || [],
+                success: data.success === true && hostnameMatches,
+                errors: hostnameMatches
+                    ? data["error-codes"] || []
+                    : ["hostname-mismatch"],
             };
         } catch (error) {
             console.error("Turnstile validation error:", error);
