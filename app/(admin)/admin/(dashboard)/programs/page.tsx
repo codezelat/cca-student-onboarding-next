@@ -47,6 +47,7 @@ export default async function ProgramsPage({
                 initialPrograms={programsResult.data}
                 currentSearch={search}
                 currentPage={programsResult.page}
+                pageSize={programsResult.pageSize}
                 totalPages={programsResult.totalPages}
                 totalRows={programsResult.total}
             />

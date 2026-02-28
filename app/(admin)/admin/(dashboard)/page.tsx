@@ -94,6 +94,7 @@ export default async function AdminDashboardPage({
                 currentProgram={programFilter}
                 currentTag={tagFilter}
                 currentPage={registrationsResult.page}
+                pageSize={registrationsResult.pageSize}
                 totalPages={registrationsResult.totalPages}
                 totalRows={registrationsResult.total}
             />

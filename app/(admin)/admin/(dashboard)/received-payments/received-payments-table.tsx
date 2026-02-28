@@ -6,12 +6,14 @@ import { approvePaymentSlip, declinePaymentSlip } from "./received-payments-acti
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { formatAppDate } from "@/lib/formatters";
+import { getPaginationRange } from "@/lib/pagination";
 
 export default function ReceivedPaymentsTable({
     initialPayments,
     currentSearch,
     currentStatus = "all",
     currentPage,
+    pageSize,
     totalPages,
     totalRows,
 }: {
@@ -19,6 +21,7 @@ export default function ReceivedPaymentsTable({
     currentSearch: string;
     currentStatus?: string;
     currentPage: number;
+    pageSize: number;
     totalPages: number;
     totalRows: number;
 }) {
@@ -34,6 +37,11 @@ export default function ReceivedPaymentsTable({
         fullName: string;
     } | null>(null);
     const [approveAmount, setApproveAmount] = useState<string>("");
+    const { start: paginationStart, end: paginationEnd } = getPaginationRange({
+        currentPage,
+        pageSize,
+        totalRows,
+    });
 
     function buildUrl(params: {
         search?: string;
@@ -289,7 +297,8 @@ export default function ReceivedPaymentsTable({
                 {totalPages > 1 && (
                     <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white/40">
                         <span className="text-sm text-gray-600">
-                            Page {currentPage} of {totalPages} ({initialPayments.length} / {totalRows} slips)
+                            Showing {paginationStart}-{paginationEnd} of{" "}
+                            {totalRows} slips
                         </span>
                         <div className="flex gap-2">
                             <Button

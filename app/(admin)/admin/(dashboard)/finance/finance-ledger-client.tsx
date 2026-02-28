@@ -38,12 +38,14 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { formatAppDate, formatAppNumber } from "@/lib/formatters";
 import { useRouter } from "next/navigation";
+import { getPaginationRange } from "@/lib/pagination";
 
 interface FinanceLedgerClientProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     initialLedger: any[];
     currentSearch: string;
     currentPage: number;
+    pageSize: number;
     totalPages: number;
     totalRows: number;
 }
@@ -52,6 +54,7 @@ export default function FinanceLedgerClient({
     initialLedger,
     currentSearch,
     currentPage,
+    pageSize,
     totalPages,
     totalRows,
 }: FinanceLedgerClientProps) {
@@ -112,6 +115,11 @@ export default function FinanceLedgerClient({
     };
 
     const hasFilters = Boolean(currentSearch || searchQuery);
+    const { start: paginationStart, end: paginationEnd } = getPaginationRange({
+        currentPage,
+        pageSize,
+        totalRows,
+    });
 
     const handleClearFilter = () => {
         setSearchQuery("");
@@ -380,8 +388,8 @@ export default function FinanceLedgerClient({
                 {totalPages > 1 && (
                     <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white/40">
                         <span className="text-sm text-gray-600">
-                            Page {currentPage} of {totalPages} ({ledger.length} /{" "}
-                            {totalRows} transactions)
+                            Showing {paginationStart}-{paginationEnd} of{" "}
+                            {totalRows} transactions
                         </span>
                         <div className="flex gap-2">
                             <Button

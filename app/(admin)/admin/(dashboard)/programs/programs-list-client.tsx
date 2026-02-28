@@ -36,12 +36,14 @@ import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import { formatAppDate } from "@/lib/formatters";
+import { getPaginationRange } from "@/lib/pagination";
 
 interface ProgramsListClientProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialPrograms: any[];
   currentSearch: string;
   currentPage: number;
+  pageSize: number;
   totalPages: number;
   totalRows: number;
 }
@@ -50,6 +52,7 @@ export default function ProgramsListClient({
   initialPrograms,
   currentSearch,
   currentPage,
+  pageSize,
   totalPages,
   totalRows,
 }: ProgramsListClientProps) {
@@ -57,6 +60,11 @@ export default function ProgramsListClient({
   const [programs, setPrograms] = useState(initialPrograms);
   const [searchQuery, setSearchQuery] = useState(currentSearch);
   const { toast } = useToast();
+  const { start: paginationStart, end: paginationEnd } = getPaginationRange({
+    currentPage,
+    pageSize,
+    totalRows,
+  });
 
   useEffect(() => {
     setPrograms(initialPrograms);
@@ -341,8 +349,7 @@ export default function ProgramsListClient({
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-white/60 bg-white/40">
           <span className="text-sm text-gray-600">
-            Page {currentPage} of {totalPages} ({programs.length} / {totalRows}{" "}
-            programs)
+            Showing {paginationStart}-{paginationEnd} of {totalRows} programs
           </span>
           <div className="flex gap-2">
             <Button

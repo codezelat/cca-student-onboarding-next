@@ -42,11 +42,13 @@ import {
     formatAppNumber,
     toDateInputValue,
 } from "@/lib/formatters";
+import { getPaginationRange } from "@/lib/pagination";
 
 interface IntakesClientProps {
     programId: string;
     initialIntakes: any[];
     currentPage: number;
+    pageSize: number;
     totalPages: number;
     totalRows: number;
 }
@@ -55,6 +57,7 @@ export default function IntakesClient({
     programId,
     initialIntakes,
     currentPage,
+    pageSize,
     totalPages,
     totalRows,
 }: IntakesClientProps) {
@@ -64,6 +67,11 @@ export default function IntakesClient({
     const [editingIntake, setEditingIntake] = useState<any>(null);
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
+    const { start: paginationStart, end: paginationEnd } = getPaginationRange({
+        currentPage,
+        pageSize,
+        totalRows,
+    });
 
     useEffect(() => {
         setIntakes(initialIntakes);
@@ -319,8 +327,8 @@ export default function IntakesClient({
                 {totalPages > 1 && (
                     <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-white/60 bg-white/40">
                         <span className="text-sm text-gray-600">
-                            Page {currentPage} of {totalPages} ({intakes.length} /{" "}
-                            {totalRows} intake windows)
+                            Showing {paginationStart}-{paginationEnd} of{" "}
+                            {totalRows} intake windows
                         </span>
                         <div className="flex gap-2">
                             <Button

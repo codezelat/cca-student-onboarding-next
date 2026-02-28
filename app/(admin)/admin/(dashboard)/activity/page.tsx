@@ -95,6 +95,7 @@ export default async function ActivityPage({
         initialLogs={activityResult.data}
         totalRows={activityResult.total}
         currentPage={activityResult.page}
+        pageSize={activityResult.pageSize}
         totalPages={activityResult.totalPages}
         currentSearch={search}
         currentActor={actor}

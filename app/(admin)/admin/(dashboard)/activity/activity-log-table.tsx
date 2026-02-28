@@ -5,6 +5,7 @@ import { Download, Filter, Search, X } from "lucide-react";
 import { formatAppDateTime } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getPaginationRange } from "@/lib/pagination";
 
 type ActivityLogEntry = {
   id: string;
@@ -58,6 +59,7 @@ export default function ActivityLogTable({
   initialLogs,
   totalRows,
   currentPage,
+  pageSize,
   totalPages,
   currentSearch,
   currentActor,
@@ -72,6 +74,7 @@ export default function ActivityLogTable({
   initialLogs: ActivityLogEntry[];
   totalRows: number;
   currentPage: number;
+  pageSize: number;
   totalPages: number;
   currentSearch: string;
   currentActor: string;
@@ -84,6 +87,11 @@ export default function ActivityLogTable({
   filterOptions: FilterOptions;
 }) {
   const router = useRouter();
+  const { start: paginationStart, end: paginationEnd } = getPaginationRange({
+    currentPage,
+    pageSize,
+    totalRows,
+  });
   const hasFilters = Boolean(
     currentSearch ||
       currentActor ||
@@ -513,7 +521,7 @@ export default function ActivityLogTable({
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-4 bg-white/40 border-t border-white/60">
             <span className="text-sm text-gray-600">
-              Page {currentPage} of {totalPages} ({initialLogs.length} / {totalRows} logs)
+              Showing {paginationStart}-{paginationEnd} of {totalRows} logs
             </span>
             <div className="flex gap-2">
               <Button

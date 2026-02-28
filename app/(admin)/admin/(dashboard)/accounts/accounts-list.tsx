@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createAdminUser, deleteAdminUser } from "./actions";
 import { useRouter } from "next/navigation";
 import { formatAppDate, formatAppDateTime } from "@/lib/formatters";
+import { getPaginationRange } from "@/lib/pagination";
 
 interface AdminUser {
     id: string;
@@ -17,11 +18,13 @@ interface AdminUser {
 export default function AdminAccountsList({
     initialUsers,
     currentPage,
+    pageSize,
     totalPages,
     totalRows,
 }: {
     initialUsers: AdminUser[];
     currentPage: number;
+    pageSize: number;
     totalPages: number;
     totalRows: number;
 }) {
@@ -40,6 +43,11 @@ export default function AdminAccountsList({
 
     // Check if this is the last admin account
     const isLastAdmin = totalRows <= 1;
+    const { start: paginationStart, end: paginationEnd } = getPaginationRange({
+        currentPage,
+        pageSize,
+        totalRows,
+    });
 
     async function handleAddAdmin(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -282,8 +290,8 @@ export default function AdminAccountsList({
                 {totalPages > 1 && (
                     <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white/40">
                         <span className="text-sm text-gray-600">
-                            Page {currentPage} of {totalPages} ({users.length} /{" "}
-                            {totalRows} admins)
+                            Showing {paginationStart}-{paginationEnd} of{" "}
+                            {totalRows} admins
                         </span>
                         <div className="flex gap-2">
                             <button

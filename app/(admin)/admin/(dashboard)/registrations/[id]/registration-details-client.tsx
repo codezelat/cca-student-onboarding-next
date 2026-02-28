@@ -65,6 +65,7 @@ import {
   formatAppMonthYear,
   formatAppNumber,
 } from "@/lib/formatters";
+import { getPaginationRange } from "@/lib/pagination";
 
 interface RegistrationDetailsClientProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -96,8 +97,15 @@ export default function RegistrationDetailsClient({
   const fullAmount = parseFloat(registration.fullAmount || "0");
   const payments = registration.payments || [];
   const paymentsPage = registration.paymentsPage || 1;
+  const paymentsPageSize = registration.paymentsPageSize || 20;
   const paymentsTotalPages = registration.paymentsTotalPages || 1;
   const paymentsTotal = registration.paymentsTotal || payments.length;
+  const { start: paymentsRangeStart, end: paymentsRangeEnd } =
+    getPaginationRange({
+      currentPage: paymentsPage,
+      pageSize: paymentsPageSize,
+      totalRows: paymentsTotal,
+    });
 
   // Calculate total paid from actual transaction records
   const calculatedPaidAmount =
@@ -632,8 +640,8 @@ export default function RegistrationDetailsClient({
                   {paymentsTotalPages > 1 && (
                     <div className="flex items-center justify-between mt-3">
                       <p className="text-xs text-gray-500">
-                        Page {paymentsPage} of {paymentsTotalPages} (
-                        {payments.length} / {paymentsTotal} transactions)
+                        Showing {paymentsRangeStart}-{paymentsRangeEnd} of{" "}
+                        {paymentsTotal} transactions
                       </p>
                       <div className="flex gap-2">
                         <Button

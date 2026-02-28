@@ -24,6 +24,7 @@ import {
 } from "./dashboard-actions";
 import { Button } from "@/components/ui/button";
 import { formatAppDate } from "@/lib/formatters";
+import { getPaginationRange } from "@/lib/pagination";
 
 type Registration = {
     id: number;
@@ -48,6 +49,7 @@ interface RegistrationTableProps {
     currentProgram: string;
     currentTag: string;
     currentPage: number;
+    pageSize: number;
     totalPages: number;
     totalRows: number;
 }
@@ -61,6 +63,7 @@ export default function RegistrationTable({
     currentProgram,
     currentTag,
     currentPage,
+    pageSize,
     totalPages,
     totalRows,
 }: RegistrationTableProps) {
@@ -184,6 +187,11 @@ export default function RegistrationTable({
         currentProgram ||
         currentTag ||
         currentScope !== "active";
+    const { start: paginationStart, end: paginationEnd } = getPaginationRange({
+        currentPage,
+        pageSize,
+        totalRows,
+    });
 
     return (
         <div className="space-y-6">
@@ -609,8 +617,8 @@ export default function RegistrationTable({
                 {totalPages > 1 && (
                     <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white/40">
                         <span className="text-sm text-gray-600">
-                            Showing {initialRegistrations.length} of {totalRows}{" "}
-                            registrations
+                            Showing {paginationStart}-{paginationEnd} of{" "}
+                            {totalRows} registrations
                         </span>
                         <div className="flex gap-2">
                             <Button

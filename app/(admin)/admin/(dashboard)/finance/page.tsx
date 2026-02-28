@@ -89,6 +89,7 @@ export default async function FinancePage({
                 initialLedger={ledgerResult.data}
                 currentSearch={search}
                 currentPage={ledgerResult.page}
+                pageSize={ledgerResult.pageSize}
                 totalPages={ledgerResult.totalPages}
                 totalRows={ledgerResult.total}
             />

@@ -17,6 +17,7 @@ export default async function AccountsPage({
         <AdminAccountsList
             initialUsers={usersResult.data}
             currentPage={usersResult.page}
+            pageSize={usersResult.pageSize}
             totalPages={usersResult.totalPages}
             totalRows={usersResult.total}
         />

@@ -70,6 +70,7 @@ export default async function ReceivedPaymentsPage({
         currentSearch={search}
         currentStatus={status}
         currentPage={pendingPaymentsResult.page}
+        pageSize={pendingPaymentsResult.pageSize}
         totalPages={pendingPaymentsResult.totalPages}
         totalRows={pendingPaymentsResult.total}
       />

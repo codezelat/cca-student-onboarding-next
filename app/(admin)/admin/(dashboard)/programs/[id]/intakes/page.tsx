@@ -67,6 +67,7 @@ export default async function IntakesPage({ params, searchParams }: PageProps) {
                 programId={id}
                 initialIntakes={intakesResult.data}
                 currentPage={intakesResult.page}
+                pageSize={intakesResult.pageSize}
                 totalPages={intakesResult.totalPages}
                 totalRows={intakesResult.total}
             />
