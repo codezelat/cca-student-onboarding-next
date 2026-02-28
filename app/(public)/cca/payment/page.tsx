@@ -2,7 +2,6 @@
 
 import { useState, ChangeEvent, useRef } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useFileUpload } from "@/lib/hooks/use-file-upload";
 
 export default function PaymentUpdatePage() {
