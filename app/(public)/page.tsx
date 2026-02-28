@@ -47,7 +47,7 @@ export default function Home() {
 
                 <div className="flex flex-wrap gap-4">
                   <Link
-                    href="/register"
+                    href="/cca-register"
                     className="group px-8 py-4 rounded-2xl bg-linear-to-r from-primary-500 to-secondary-500 
                                               text-white font-semibold hover:from-primary-600 hover:to-secondary-600 
                                               transition-all duration-300 shadow-2xl hover:shadow-primary-500/50 
@@ -388,7 +388,7 @@ export default function Home() {
                 </h3>
                 <div className="space-y-4">
                   <Link
-                    href="/register"
+                    href="/cca-register"
                     className="flex items-center gap-4 p-4 rounded-2xl bg-linear-to-r from-primary-500 to-secondary-500 
                                               text-white hover:from-primary-600 hover:to-secondary-600 transition-all duration-300 
                                               shadow-lg hover:shadow-xl hover:scale-105 group"

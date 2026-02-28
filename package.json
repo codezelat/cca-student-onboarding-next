@@ -8,8 +8,7 @@
     "prebuild": "prisma generate",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "import:old-registrations": "node scripts/import-old-registrations.mjs"
+    "lint": "eslint"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.995.0",

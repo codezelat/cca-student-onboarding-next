@@ -216,7 +216,7 @@ export default function PaymentUpdatePage() {
 
   return (
     <div className="relative min-h-screen py-6 sm:py-12 px-3 sm:px-6 lg:px-8 overflow-hidden text-gray-800 antialiased">
-      {/* Premium Glassmorphic Background matching /register */}
+      {/* Premium Glassmorphic Background matching /cca-register */}
       <div className="fixed inset-0 bg-linear-to-br from-violet-50 via-purple-50 to-indigo-50 overflow-hidden -z-10">
         <div className="absolute top-0 -left-4 w-96 h-96 bg-violet-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
         <div

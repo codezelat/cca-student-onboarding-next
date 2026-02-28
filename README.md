@@ -137,7 +137,7 @@ The **Codezela Career Accelerator Student Onboarding Platform** is a comprehensi
 │  │   Public Pages  │  │   Admin Pages   │  │    API Routes           │  │
 │  │                 │  │                 │  │                         │  │
 │  │  / (Homepage)   │  │  /admin         │  │  /api/registrations     │  │
-│  │  /register      │  │  /admin/programs│  │  /api/upload/presign    │  │
+│  │  /cca-register  │  │  /admin/programs│  │  /api/upload/presign    │  │
 │  │                 │  │  /admin/finance │  │                         │  │
 │  └────────┬────────┘  └────────┬────────┘  └───────────┬─────────────┘  │
 └───────────┼────────────────────┼───────────────────────┼────────────────┘
@@ -239,7 +239,6 @@ cca-student-onboarding-next/
 │
 ├── 📁 scripts/                      # Utility scripts
 │   ├── enable-rls.ts               # Enable Row Level Security
-│   ├── import-old-registrations.mjs # Import legacy registration dump
 │   ├── seed-admin.ts               # Seed admin user
 │   ├── seed-programs.ts            # Seed program data
 │   └── test-db.ts                  # Database connection test
@@ -571,11 +570,6 @@ npx tsx scripts/seed-programs.ts
 # Create initial admin user
 npx tsx scripts/seed-admin.ts
 
-# Import legacy MySQL registration dump (registrations + payment ledger only)
-npm run import:old-registrations
-
-# Dry-run parse only (no DB writes)
-node scripts/import-old-registrations.mjs --dry-run
 ```
 
 ### Utility Scripts
@@ -586,7 +580,6 @@ node scripts/import-old-registrations.mjs --dry-run
 | `enable-rls.ts` | Enable RLS policies on all tables |
 | `seed-programs.ts` | Seed 30+ career programs |
 | `seed-admin.ts` | Create initial admin user |
-| `import-old-registrations.mjs` | Import `cca_registrations` and `registration_payments` from a legacy SQL dump |
 
 ---
 
