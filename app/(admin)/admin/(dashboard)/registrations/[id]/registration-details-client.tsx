@@ -430,7 +430,7 @@ export default function RegistrationDetailsClient({
                             <SelectContent>
                               <SelectItem value="PAID">Valid (Paid)</SelectItem>
                               <SelectItem value="VOID">
-                                Void (Cancelled)
+                                Void (Cancelled, no balance change)
                               </SelectItem>
                             </SelectContent>
                           </Select>

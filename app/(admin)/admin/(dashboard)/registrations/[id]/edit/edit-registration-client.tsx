@@ -440,8 +440,14 @@ export default function EditRegistrationClient({
                     type="number"
                     step="0.01"
                     id="currentPaidAmount"
+                    readOnly
+                    aria-readonly="true"
+                    className="bg-muted/60 text-muted-foreground cursor-not-allowed"
                     {...form.register("currentPaidAmount")}
                   />
+                  <p className="text-[10px] text-muted-foreground">
+                    Legacy field (read-only).
+                  </p>
                   <p className="text-[10px] text-muted-foreground">
                     Original: LKR {registration.currentPaidAmount || "0.00"}
                   </p>

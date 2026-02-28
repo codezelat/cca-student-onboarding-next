@@ -397,6 +397,8 @@ export async function updateRegistration(id: number, data: any) {
     program,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     payments,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    currentPaidAmount,
     ...updateData
   } = data;
 
@@ -415,8 +417,6 @@ export async function updateRegistration(id: number, data: any) {
   // Convert numbers/decimals
   if (updateData.fullAmount)
     updateData.fullAmount = parseFloat(updateData.fullAmount);
-  if (updateData.currentPaidAmount)
-    updateData.currentPaidAmount = parseFloat(updateData.currentPaidAmount);
 
   // Normalize enum fields to lowercase to match Prisma schema
   if (updateData.highestQualification)

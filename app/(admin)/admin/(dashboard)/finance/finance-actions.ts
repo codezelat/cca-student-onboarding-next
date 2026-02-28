@@ -36,10 +36,25 @@ async function getRegistrationBalanceSnapshot(registrationId: string | bigint) {
 export async function getFinanceStats() {
     const [totalPaid, totalPayments, activeRegCount] = await Promise.all([
         prisma.registrationPayment.aggregate({
-            where: { status: "active" },
+            where: {
+                status: "active",
+                registration: {
+                    is: {
+                        deletedAt: null,
+                    },
+                },
+            },
             _sum: { amount: true },
         }),
-        prisma.registrationPayment.count(),
+        prisma.registrationPayment.count({
+            where: {
+                registration: {
+                    is: {
+                        deletedAt: null,
+                    },
+                },
+            },
+        }),
         prisma.cCARegistration.count({
             where: { deletedAt: null },
         }),
@@ -62,41 +77,60 @@ export async function getPaymentLedger(params?: {
     const safePageSize = Math.min(Math.max(1, params?.pageSize ?? 20), 100);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {};
+    const where: any = {
+        registration: {
+            is: {
+                deletedAt: null,
+            },
+        },
+    };
     if (search) {
-        where.OR = [
+        where.AND = [
             {
-                receiptReference: {
-                    contains: search,
-                    mode: "insensitive",
-                },
-            },
-            {
-                paymentMethod: {
-                    contains: search,
-                    mode: "insensitive",
-                },
-            },
-            {
-                registration: {
-                    is: {
-                        fullName: { contains: search, mode: "insensitive" },
+                OR: [
+                    {
+                        receiptReference: {
+                            contains: search,
+                            mode: "insensitive",
+                        },
                     },
-                },
-            },
-            {
-                registration: {
-                    is: {
-                        registerId: { contains: search, mode: "insensitive" },
+                    {
+                        paymentMethod: {
+                            contains: search,
+                            mode: "insensitive",
+                        },
                     },
-                },
-            },
-            {
-                registration: {
-                    is: {
-                        programId: { contains: search, mode: "insensitive" },
+                    {
+                        registration: {
+                            is: {
+                                fullName: {
+                                    contains: search,
+                                    mode: "insensitive",
+                                },
+                            },
+                        },
                     },
-                },
+                    {
+                        registration: {
+                            is: {
+                                registerId: {
+                                    contains: search,
+                                    mode: "insensitive",
+                                },
+                            },
+                        },
+                    },
+                    {
+                        registration: {
+                            is: {
+                                programId: {
+                                    contains: search,
+                                    mode: "insensitive",
+                                },
+                            },
+                        },
+                    },
+                ],
             },
         ];
     }
@@ -138,6 +172,18 @@ export async function addPayment(data: any) {
         data;
     const numericAmount = parseFloat(amount);
     const beforeRegistration = await getRegistrationBalanceSnapshot(registrationId);
+    const registrationRecord = await prisma.cCARegistration.findUnique({
+        where: { id: BigInt(registrationId) },
+        select: {
+            id: true,
+            deletedAt: true,
+            currentPaidAmount: true,
+        },
+    });
+
+    if (!registrationRecord || registrationRecord.deletedAt) {
+        throw new Error("Cannot add payment to a trashed registration");
+    }
 
     try {
         // We need to determine the paymentNo. Logic: max(paymentNo) + 1 for this registration
@@ -161,34 +207,15 @@ export async function addPayment(data: any) {
         });
 
         if (payment.status === "active") {
-            const registration = await prisma.cCARegistration.findUnique({
+            const currentTotal = registrationRecord.currentPaidAmount
+                ? Number(registrationRecord.currentPaidAmount)
+                : 0;
+            await prisma.cCARegistration.update({
                 where: { id: BigInt(registrationId) },
+                data: {
+                    currentPaidAmount: currentTotal + numericAmount,
+                },
             });
-
-            if (registration) {
-                const currentTotal = registration.currentPaidAmount ? Number(registration.currentPaidAmount) : 0;
-                await prisma.cCARegistration.update({
-                    where: { id: BigInt(registrationId) },
-                    data: {
-                        currentPaidAmount: currentTotal + numericAmount,
-                    },
-                });
-            }
-        } else if (payment.status === "void") {
-            const registration = await prisma.cCARegistration.findUnique({
-                where: { id: BigInt(registrationId) },
-            });
-
-            if (registration && registration.currentPaidAmount) {
-                const currentTotal = Number(registration.currentPaidAmount);
-                const newTotal = Math.max(0, currentTotal - numericAmount);
-                await prisma.cCARegistration.update({
-                    where: { id: BigInt(registrationId) },
-                    data: {
-                        currentPaidAmount: newTotal,
-                    },
-                });
-            }
         }
 
         const afterRegistration = await getRegistrationBalanceSnapshot(registrationId);
