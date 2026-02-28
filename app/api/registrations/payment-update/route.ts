@@ -95,15 +95,6 @@ export async function POST(request: Request) {
     }
 
     if (idempotencyState.kind === "conflict") {
-      await logActivitySafe({
-        category: "payment_update",
-        action: "payment_update_idempotency_conflict",
-        status: "blocked",
-        subjectType: "PaymentSlipUpdate",
-        subjectId: registrationId,
-        message: idempotencyState.message,
-        ...requestContext,
-      });
       return NextResponse.json(
         { success: false, error: idempotencyState.message },
         { status: 409 },
@@ -111,15 +102,6 @@ export async function POST(request: Request) {
     }
 
     if (idempotencyState.kind === "in_progress") {
-      await logActivitySafe({
-        category: "payment_update",
-        action: "payment_update_idempotency_in_progress",
-        status: "blocked",
-        subjectType: "PaymentSlipUpdate",
-        subjectId: registrationId,
-        message: idempotencyState.message,
-        ...requestContext,
-      });
       return NextResponse.json(
         { success: false, error: idempotencyState.message },
         { status: 409 },

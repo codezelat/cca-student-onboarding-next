@@ -373,15 +373,6 @@ export async function POST(request: Request) {
     }
 
     if (idempotencyState.kind === "conflict") {
-      await logActivitySafe({
-        category: "public_registration",
-        action: "registration_idempotency_conflict",
-        status: "blocked",
-        subjectType: "RegistrationSubmission",
-        subjectLabel: payload.emailAddress,
-        message: idempotencyState.message,
-        ...requestContext,
-      });
       return NextResponse.json(
         { success: false, error: idempotencyState.message },
         { status: 409 },
@@ -389,15 +380,6 @@ export async function POST(request: Request) {
     }
 
     if (idempotencyState.kind === "in_progress") {
-      await logActivitySafe({
-        category: "public_registration",
-        action: "registration_idempotency_in_progress",
-        status: "blocked",
-        subjectType: "RegistrationSubmission",
-        subjectLabel: payload.emailAddress,
-        message: idempotencyState.message,
-        ...requestContext,
-      });
       return NextResponse.json(
         { success: false, error: idempotencyState.message },
         { status: 409 },
