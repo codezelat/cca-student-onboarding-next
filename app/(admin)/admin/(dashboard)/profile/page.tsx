@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import PasswordChangeForm from "./password-change-form";
 
 export default async function ProfilePage() {
     const headerStore = await headers();
@@ -84,6 +85,8 @@ export default async function ProfilePage() {
                         </p>
                     </div>
                 </div>
+
+                <PasswordChangeForm />
             </div>
         </>
     );

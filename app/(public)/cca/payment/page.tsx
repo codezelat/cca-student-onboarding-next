@@ -412,8 +412,8 @@ export default function PaymentUpdatePage() {
                         Locating Records...
                       </>
                     ) : (
-                      <>
-                        Fetch Details
+                        <>
+                        Find My Fee Details
                         <svg
                           className="w-5 h-5 group-hover:translate-x-1 transition-transform"
                           fill="none"
