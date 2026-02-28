@@ -138,6 +138,7 @@ export async function POST(request: Request) {
         {
           success: false,
           error: friendlyIssue.message,
+          field: friendlyIssue.field || null,
         },
         { status: 400 },
       );

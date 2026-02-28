@@ -93,19 +93,31 @@ export default function PaymentUpdatePage() {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-        alert(
-          `File "${file.name}" is too large! Maximum ${MAX_UPLOAD_SIZE_MB}MB.`,
+        setSubmitStatus("error");
+        setSubmitError(
+          `File "${file.name}" is too large. Maximum size is ${MAX_UPLOAD_SIZE_MB}MB.`,
         );
         e.target.value = "";
         setPaymentFile(null);
         return;
       }
+      setSubmitStatus("idle");
+      setSubmitError("");
       setPaymentFile(file);
     }
   };
 
   const handleSubmitPayment = async () => {
-    if (!paymentFile || !studentDetails) return;
+    if (!studentDetails) {
+      setSubmitStatus("error");
+      setSubmitError("Please fetch your student details before submitting.");
+      return;
+    }
+    if (!paymentFile) {
+      setSubmitStatus("error");
+      setSubmitError("Please upload your payment slip before submitting.");
+      return;
+    }
 
     const currentRegistrationId = studentDetails.id;
     let progressInterval: ReturnType<typeof setInterval> | null = null;
@@ -281,6 +293,8 @@ export default function PaymentUpdatePage() {
                       setStudentType("local");
                       setIdentifier("");
                       setStudentDetails(null);
+                      setSubmitStatus("idle");
+                      setSubmitError("");
                     }}
                     className={`flex-1 py-2.5 text-sm sm:text-base font-semibold rounded-lg transition-all duration-300 ${
                       studentType === "local"
@@ -296,6 +310,8 @@ export default function PaymentUpdatePage() {
                       setStudentType("international");
                       setIdentifier("");
                       setStudentDetails(null);
+                      setSubmitStatus("idle");
+                      setSubmitError("");
                     }}
                     className={`flex-1 py-2.5 text-sm sm:text-base font-semibold rounded-lg transition-all duration-300 ${
                       studentType === "international"
@@ -322,6 +338,10 @@ export default function PaymentUpdatePage() {
                     onChange={(e) => {
                       setIdentifier(e.target.value);
                       setFetchError("");
+                      if (submitStatus === "error") {
+                        setSubmitStatus("idle");
+                        setSubmitError("");
+                      }
                     }}
                     placeholder={identifierPlaceholder}
                     className="w-full px-4 py-3 rounded-xl bg-white/50 border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all outline-none uppercase"

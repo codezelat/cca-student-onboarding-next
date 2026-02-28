@@ -317,6 +317,7 @@ export async function POST(request: Request) {
         {
           success: false,
           error: friendlyIssue.message,
+          field: friendlyIssue.field || null,
         },
         { status: 400 },
       );
@@ -352,6 +353,46 @@ export async function POST(request: Request) {
       });
       return NextResponse.json(
         { success: false, error: "Passport number is required for international students" },
+        { status: 400 },
+      );
+    }
+
+    if (payload.country.toLowerCase() === "sri lanka" && !payload.province) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "Province is required for Sri Lanka addresses",
+        ...requestContext,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Province is required for Sri Lanka addresses",
+          field: "province",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (payload.country.toLowerCase() === "sri lanka" && !payload.district) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message: "District is required for Sri Lanka addresses",
+        ...requestContext,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "District is required for Sri Lanka addresses",
+          field: "district",
+        },
         { status: 400 },
       );
     }
@@ -558,13 +599,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const program = await prisma.program.findUnique({
-      where: { code: payload.programId },
+    const normalizedProgramCode = payload.programId.trim().toUpperCase();
+    const program = await prisma.program.findFirst({
+      where: {
+        code: {
+          equals: normalizedProgramCode,
+          mode: "insensitive",
+        },
+      },
       select: {
+        id: true,
+        code: true,
         name: true,
         yearLabel: true,
         durationLabel: true,
         basePrice: true,
+        isActive: true,
       },
     });
 
@@ -591,12 +641,36 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!program.isActive) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_program_inactive",
+        status: "failure",
+        subjectType: "Program",
+        subjectId: program.id,
+        subjectLabel: program.code,
+        message: "Selected program is inactive",
+        ...requestContext,
+        meta: { programId: normalizedProgramCode },
+      });
+      await finalizeIdempotencyFailure({
+        key: activeIdempotencyKey!,
+        httpStatus: 400,
+        errorMessage: "Selected program is currently inactive",
+        ttlSeconds: 10 * 60,
+      });
+      return NextResponse.json(
+        { success: false, error: "Selected program is currently inactive" },
+        { status: 400 },
+      );
+    }
+
     const registerId = await generateRegisterId();
     const nowIso = new Date().toISOString();
 
     const registrationData = {
       registerId,
-      programId: payload.programId,
+      programId: program.code,
       programName: program.name,
       programYear: program.yearLabel,
       programDuration: program.durationLabel,
@@ -659,7 +733,7 @@ export async function POST(request: Request) {
       ...requestContext,
       afterData: {
         registerId: result.registerId,
-        programId: payload.programId,
+        programId: program.code,
       },
       meta: {
         nationality: payload.nationality,

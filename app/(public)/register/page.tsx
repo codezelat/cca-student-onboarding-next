@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, ChangeEvent } from "react";
+import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import ReCAPTCHA from "react-google-recaptcha";
@@ -14,6 +14,18 @@ import {
 } from "@/lib/upload-config";
 
 const isDev = process.env.NODE_ENV === "development";
+const PROGRAM_LOOKUP_DEBOUNCE_MS = 350;
+
+type ProgramLookupData = {
+    code: string;
+    name: string;
+    yearLabel: string;
+    durationLabel: string;
+};
+
+function normalizeProgramCode(value: string): string {
+    return value.trim().toUpperCase();
+}
 
 export default function RegisterPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,6 +82,18 @@ export default function RegisterPage() {
         payment: null as File | null,
     });
 
+    const [programLookupData, setProgramLookupData] =
+        useState<ProgramLookupData | null>(null);
+    const [programLookupError, setProgramLookupError] = useState("");
+    const [isProgramLookupLoading, setIsProgramLookupLoading] = useState(false);
+    const [programLookupTouched, setProgramLookupTouched] = useState(false);
+
+    const programLookupAbortRef = useRef<AbortController | null>(null);
+    const programLookupDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
+    const programLookupRequestIdRef = useRef(0);
+
     const handleInputChange = (
         e: ChangeEvent<
             HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
@@ -78,7 +102,23 @@ export default function RegisterPage() {
         const { name, value, type } = e.target;
         const checked = (e.target as HTMLInputElement).checked;
         const val = type === "checkbox" ? checked : value;
-        setFormData((prev) => ({ ...prev, [name]: val }));
+        const normalizedValue =
+            name === "program_id" && typeof val === "string"
+                ? val.toUpperCase()
+                : val;
+
+        setFormData((prev) => ({ ...prev, [name]: normalizedValue }));
+        if (submitStatus === "error") {
+            setSubmitStatus("idle");
+            setErrorMessage("");
+        }
+
+        if (name === "program_id") {
+            setProgramLookupData(null);
+            if (programLookupTouched) {
+                setProgramLookupError("");
+            }
+        }
     };
 
     // Conditional districts logic
@@ -101,6 +141,170 @@ export default function RegisterPage() {
         }
     }, [formData.province, availableDistricts, formData.district]);
 
+    const lookupProgram = useCallback(
+        async (
+            rawCode: string,
+            options?: { showErrors?: boolean; force?: boolean },
+        ): Promise<boolean> => {
+            const normalizedCode = normalizeProgramCode(rawCode);
+            const showErrors = options?.showErrors ?? false;
+
+            if (!normalizedCode) {
+                setProgramLookupData(null);
+                setIsProgramLookupLoading(false);
+                if (showErrors) {
+                    setProgramLookupError("Program ID is required.");
+                } else {
+                    setProgramLookupError("");
+                }
+                return false;
+            }
+
+            if (normalizedCode.length < 3) {
+                setProgramLookupData(null);
+                setIsProgramLookupLoading(false);
+                if (showErrors) {
+                    setProgramLookupError(
+                        "Enter a valid Program ID (e.g., CCA-PM25).",
+                    );
+                } else {
+                    setProgramLookupError("");
+                }
+                return false;
+            }
+
+            if (
+                !options?.force &&
+                programLookupData &&
+                normalizeProgramCode(programLookupData.code) === normalizedCode
+            ) {
+                setProgramLookupError("");
+                return true;
+            }
+
+            programLookupAbortRef.current?.abort();
+            const controller = new AbortController();
+            programLookupAbortRef.current = controller;
+
+            const requestId = programLookupRequestIdRef.current + 1;
+            programLookupRequestIdRef.current = requestId;
+
+            setIsProgramLookupLoading(true);
+            if (!showErrors) {
+                setProgramLookupError("");
+            }
+
+            try {
+                const response = await fetch(
+                    `/api/programs/lookup?code=${encodeURIComponent(normalizedCode)}`,
+                    {
+                        signal: controller.signal,
+                        cache: "no-store",
+                    },
+                );
+                const result = await response.json().catch(() => null);
+
+                if (programLookupRequestIdRef.current !== requestId) {
+                    return false;
+                }
+
+                if (response.ok && result?.success && result?.data) {
+                    setProgramLookupData(result.data as ProgramLookupData);
+                    setProgramLookupError("");
+                    return true;
+                }
+
+                setProgramLookupData(null);
+                if (showErrors) {
+                    setProgramLookupError(
+                        typeof result?.error === "string" && result.error.trim()
+                            ? result.error
+                            : "Program ID is invalid. Please check and try again.",
+                    );
+                }
+                return false;
+            } catch (error) {
+                if (error instanceof Error && error.name === "AbortError") {
+                    return false;
+                }
+
+                if (programLookupRequestIdRef.current !== requestId) {
+                    return false;
+                }
+
+                setProgramLookupData(null);
+                if (showErrors) {
+                    setProgramLookupError(
+                        "Unable to verify Program ID right now. Please try again.",
+                    );
+                }
+                return false;
+            } finally {
+                if (programLookupRequestIdRef.current === requestId) {
+                    setIsProgramLookupLoading(false);
+                }
+            }
+        },
+        [programLookupData],
+    );
+
+    const handleProgramIdBlur = async () => {
+        setProgramLookupTouched(true);
+        if (programLookupDebounceRef.current) {
+            clearTimeout(programLookupDebounceRef.current);
+            programLookupDebounceRef.current = null;
+        }
+        await lookupProgram(formData.program_id, { showErrors: true });
+    };
+
+    useEffect(() => {
+        if (programLookupDebounceRef.current) {
+            clearTimeout(programLookupDebounceRef.current);
+            programLookupDebounceRef.current = null;
+        }
+
+        const normalizedCode = normalizeProgramCode(formData.program_id);
+        if (!normalizedCode) {
+            programLookupAbortRef.current?.abort();
+            setProgramLookupData(null);
+            setProgramLookupError("");
+            setIsProgramLookupLoading(false);
+            return;
+        }
+
+        if (normalizedCode.length < 3) {
+            programLookupAbortRef.current?.abort();
+            setProgramLookupData(null);
+            setIsProgramLookupLoading(false);
+            if (!programLookupTouched) {
+                setProgramLookupError("");
+            }
+            return;
+        }
+
+        programLookupDebounceRef.current = setTimeout(() => {
+            void lookupProgram(normalizedCode, {
+                showErrors: programLookupTouched,
+            });
+        }, PROGRAM_LOOKUP_DEBOUNCE_MS);
+
+        return () => {
+            if (programLookupDebounceRef.current) {
+                clearTimeout(programLookupDebounceRef.current);
+                programLookupDebounceRef.current = null;
+            }
+        };
+    }, [formData.program_id, lookupProgram, programLookupTouched]);
+
+    useEffect(() => {
+        return () => {
+            if (programLookupDebounceRef.current) {
+                clearTimeout(programLookupDebounceRef.current);
+            }
+            programLookupAbortRef.current?.abort();
+        };
+    }, []);
+
     const handleFileSelect = (
         e: ChangeEvent<HTMLInputElement>,
         fieldName: keyof typeof uploadedFiles,
@@ -108,24 +312,116 @@ export default function RegisterPage() {
         const file = e.target.files?.[0];
         if (file) {
             if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-                alert(
-                    `File "${file.name}" is too large!\n\nMaximum file size is ${MAX_UPLOAD_SIZE_MB}MB.\nYour file is ${(file.size / (1024 * 1024)).toFixed(2)}MB.\n\nPlease compress or choose a smaller file.`,
+                setSubmitStatus("error");
+                setErrorMessage(
+                    `File "${file.name}" is too large. Maximum size is ${MAX_UPLOAD_SIZE_MB}MB.`,
                 );
                 e.target.value = "";
                 setUploadedFiles((prev) => ({ ...prev, [fieldName]: null }));
                 return;
             }
+            if (submitStatus === "error") {
+                setSubmitStatus("idle");
+                setErrorMessage("");
+            }
             setUploadedFiles((prev) => ({ ...prev, [fieldName]: file }));
         }
     };
+
+    function validateRegistrationForm(): string | null {
+        if (!formData.program_id.trim()) return "Program ID is required.";
+        if (!formData.full_name.trim()) return "Full Name is required.";
+        if (!formData.name_with_initials.trim())
+            return "Name with Initials is required.";
+        if (!formData.gender.trim()) return "Gender is required.";
+        if (!formData.date_of_birth.trim()) return "Date of Birth is required.";
+        if (!formData.nationality.trim()) return "Nationality is required.";
+        if (!formData.country_of_birth.trim())
+            return "Country of Birth is required.";
+        if (!formData.country_of_residence.trim())
+            return "Country of Permanent Residence is required.";
+        if (!formData.permanent_address.trim())
+            return "Permanent Address is required.";
+        if (formData.permanent_address.trim().length < 10) {
+            return "Permanent Address must be at least 10 characters.";
+        }
+        if (!formData.country.trim()) return "Country is required.";
+        if (!formData.postal_code.trim()) return "Postal Code is required.";
+        if (!formData.email_address.trim()) return "Email Address is required.";
+        if (
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email_address.trim())
+        ) {
+            return "Please enter a valid Email Address.";
+        }
+        if (!formData.whatsapp_number.trim())
+            return "WhatsApp Number is required.";
+        if (formData.whatsapp_number.trim().length < 7) {
+            return "WhatsApp Number must be at least 7 characters.";
+        }
+        if (!formData.guardian_contact_name.trim()) {
+            return "Guardian/Emergency Contact Name is required.";
+        }
+        if (!formData.guardian_contact_number.trim()) {
+            return "Guardian/Emergency Contact Number is required.";
+        }
+        if (formData.guardian_contact_number.trim().length < 7) {
+            return "Guardian/Emergency Contact Number must be at least 7 characters.";
+        }
+        if (!formData.highest_qualification.trim()) {
+            return "Highest Qualification is required.";
+        }
+        if (!formData.qualification_status.trim()) {
+            return "Qualification Status is required.";
+        }
+        if (
+            formData.highest_qualification === "other" &&
+            !formData.qualification_other_details.trim()
+        ) {
+            return "Please provide details for the selected qualification.";
+        }
+        if (
+            formData.qualification_status === "completed" &&
+            !formData.qualification_completed_date.trim()
+        ) {
+            return "Qualification completed date is required.";
+        }
+        if (
+            formData.qualification_status === "ongoing" &&
+            !formData.qualification_expected_completion_date.trim()
+        ) {
+            return "Expected completion date is required for ongoing qualifications.";
+        }
+        if (formData.country === "Sri Lanka" && !formData.province.trim()) {
+            return "Province is required when Country is Sri Lanka.";
+        }
+        if (formData.country === "Sri Lanka" && !formData.district.trim()) {
+            return "District is required when Country is Sri Lanka.";
+        }
+
+        const isSriLankanNationality =
+            formData.nationality.trim().toLowerCase() === "sri lankan";
+        if (isSriLankanNationality && !formData.nic_number.trim()) {
+            return "NIC number is required for Sri Lankan nationals.";
+        }
+        if (!isSriLankanNationality && !formData.passport_number.trim()) {
+            return "Passport number is required for international students.";
+        }
+        if (!formData.terms_accepted) {
+            return "You must accept the terms to continue.";
+        }
+
+        return null;
+    }
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
         if (isSubmitting) return;
 
-        if (!formData.terms_accepted) {
-            alert("You must accept the terms to proceed.");
+        const validationError = validateRegistrationForm();
+        if (validationError) {
+            setSubmitStatus("error");
+            setErrorMessage(validationError);
             return;
         }
 
@@ -135,6 +431,17 @@ export default function RegisterPage() {
                 "reCAPTCHA is not configured. Submission disabled.",
             );
             setSubmitStatus("error");
+            return;
+        }
+
+        setProgramLookupTouched(true);
+        const isProgramValid = await lookupProgram(formData.program_id, {
+            showErrors: true,
+            force: true,
+        });
+        if (!isProgramValid) {
+            setSubmitStatus("error");
+            setErrorMessage("Please enter a valid Program ID to continue.");
             return;
         }
 
@@ -383,6 +690,7 @@ export default function RegisterPage() {
                 ) : (
                     <form
                         onSubmit={handleSubmit}
+                        noValidate
                         className="space-y-6 sm:space-y-8 text-gray-800"
                     >
                         {/* Section 1: Program Information */}
@@ -436,10 +744,68 @@ export default function RegisterPage() {
                                     name="program_id"
                                     value={formData.program_id}
                                     onChange={handleInputChange}
+                                    onBlur={handleProgramIdBlur}
                                     placeholder="Enter your program ID (E.g., CCA-PM25)"
-                                    className="w-full px-4 py-3 rounded-xl bg-white/50 border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all outline-none uppercase"
+                                    className={`w-full px-4 py-3 rounded-xl bg-white/50 border transition-all outline-none uppercase ${
+                                        programLookupError && programLookupTouched
+                                            ? "border-red-300 focus:border-red-500 focus:ring-red-200"
+                                            : "border-gray-200 focus:border-primary-500 focus:ring-primary-200"
+                                    }`}
+                                    aria-invalid={
+                                        programLookupError && programLookupTouched
+                                            ? "true"
+                                            : "false"
+                                    }
                                     required
                                 />
+                                {isProgramLookupLoading && (
+                                    <p className="mt-2 text-xs text-gray-500">
+                                        Validating program ID...
+                                    </p>
+                                )}
+                                {programLookupError && programLookupTouched && (
+                                    <p className="mt-2 text-sm text-red-600">
+                                        {programLookupError}
+                                    </p>
+                                )}
+                                {programLookupData &&
+                                    !programLookupError &&
+                                    !isProgramLookupLoading && (
+                                        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+                                            <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
+                                                Program verified
+                                            </p>
+                                            <h3 className="mt-1 text-base font-bold text-emerald-900">
+                                                {programLookupData.name}
+                                            </h3>
+                                            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                                <div>
+                                                    <p className="text-[10px] uppercase tracking-wider text-emerald-700/80">
+                                                        Code
+                                                    </p>
+                                                    <p className="text-sm font-semibold text-emerald-900">
+                                                        {programLookupData.code}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] uppercase tracking-wider text-emerald-700/80">
+                                                        Year
+                                                    </p>
+                                                    <p className="text-sm font-semibold text-emerald-900">
+                                                        {programLookupData.yearLabel}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] uppercase tracking-wider text-emerald-700/80">
+                                                        Duration
+                                                    </p>
+                                                    <p className="text-sm font-semibold text-emerald-900">
+                                                        {programLookupData.durationLabel}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                             </div>
                         </div>
 
