@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Search,
     Filter,
@@ -37,18 +37,36 @@ import { voidPayment } from "./finance-actions";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { formatAppDate, formatAppNumber } from "@/lib/formatters";
+import { useRouter } from "next/navigation";
 
 interface FinanceLedgerClientProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     initialLedger: any[];
+    currentSearch: string;
+    currentPage: number;
+    totalPages: number;
+    totalRows: number;
 }
 
 export default function FinanceLedgerClient({
     initialLedger,
+    currentSearch,
+    currentPage,
+    totalPages,
+    totalRows,
 }: FinanceLedgerClientProps) {
+    const router = useRouter();
     const [ledger, setLedger] = useState(initialLedger);
-    const [searchTerm, setSearchTerm] = useState("");
+    const [searchQuery, setSearchQuery] = useState(currentSearch);
     const { toast } = useToast();
+
+    useEffect(() => {
+        setLedger(initialLedger);
+    }, [initialLedger]);
+
+    useEffect(() => {
+        setSearchQuery(currentSearch);
+    }, [currentSearch]);
 
     async function handleVoid(id: string) {
         const reason = prompt(
@@ -71,21 +89,37 @@ export default function FinanceLedgerClient({
         }
     }
 
-    const filteredLedger = ledger.filter(
-        (p) =>
-            p.registration.fullName
-                .toLowerCase()
-                .includes(searchTerm.toLowerCase()) ||
-            p.receiptReference
-                ?.toLowerCase()
-                .includes(searchTerm.toLowerCase()) ||
-            p.registration.registerId
-                .toLowerCase()
-                .includes(searchTerm.toLowerCase()),
-    );
+    function buildUrl(params: { search?: string; page?: number }) {
+        const sp = new URLSearchParams();
+        const nextSearch = params.search ?? currentSearch;
+        const nextPage = params.page ?? currentPage;
+
+        if (nextSearch) sp.set("search", nextSearch);
+        if (nextPage > 1) sp.set("page", String(nextPage));
+
+        const query = sp.toString();
+        return query ? `/admin/finance?${query}` : "/admin/finance";
+    }
+
+    const handleFilterSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        router.push(
+            buildUrl({
+                search: searchQuery,
+                page: 1,
+            }),
+        );
+    };
+
+    const hasFilters = Boolean(currentSearch);
+
+    const handleClearFilter = () => {
+        setSearchQuery("");
+        router.push("/admin/finance");
+    };
 
     function handleExport() {
-        if (filteredLedger.length === 0) return;
+        if (ledger.length === 0) return;
 
         const headers = [
             "Transaction ID",
@@ -100,7 +134,7 @@ export default function FinanceLedgerClient({
             "Remark",
         ];
 
-        const csvData = filteredLedger.map((p) => [
+        const csvData = ledger.map((p) => [
             p.id.toString(),
             `"${p.registration.fullName.replace(/"/g, '""')}"`,
             p.registration.registerId,
@@ -135,32 +169,49 @@ export default function FinanceLedgerClient({
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="relative max-w-sm w-full">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                        placeholder="Search by student, ID, or reference..."
-                        className="pl-10 bg-white/50 backdrop-blur-sm border-white/60 rounded-xl"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        className="rounded-xl border-white/60 bg-white/40 hover:bg-white/60"
-                    >
-                        <Filter className="w-4 h-4 mr-2" />
-                        Filter
-                    </Button>
-                    <Button
-                        variant="outline"
-                        onClick={handleExport}
-                        className="rounded-xl border-white/60 bg-white/40 hover:bg-white/60"
-                    >
-                        <Download className="w-4 h-4 mr-2" />
-                        Export CSV
-                    </Button>
-                </div>
+                <form
+                    onSubmit={handleFilterSubmit}
+                    className="flex flex-col md:flex-row md:items-center gap-3 w-full"
+                >
+                    <div className="relative max-w-sm w-full">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Input
+                            placeholder="Search by student, ID, or reference..."
+                            className="pl-10 bg-white/50 backdrop-blur-sm border-white/60 rounded-xl"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="submit"
+                            variant="outline"
+                            className="rounded-xl border-white/60 bg-white/40 hover:bg-white/60"
+                        >
+                            <Filter className="w-4 h-4 mr-2" />
+                            Filter
+                        </Button>
+                        {hasFilters && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleClearFilter}
+                                className="rounded-xl border-white/60 bg-white/40 hover:bg-white/60"
+                            >
+                                Clear
+                            </Button>
+                        )}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleExport}
+                            className="rounded-xl border-white/60 bg-white/40 hover:bg-white/60"
+                        >
+                            <Download className="w-4 h-4 mr-2" />
+                            Export CSV
+                        </Button>
+                    </div>
+                </form>
             </div>
 
             <div className="bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-xl overflow-hidden">
@@ -190,7 +241,7 @@ export default function FinanceLedgerClient({
                     </TableHeader>
                     <TableBody>
                         <AnimatePresence mode="popLayout">
-                            {filteredLedger.map((payment) => (
+                            {ledger.map((payment) => (
                                 <motion.tr
                                     key={payment.id}
                                     layout
@@ -313,7 +364,7 @@ export default function FinanceLedgerClient({
                     </TableBody>
                 </Table>
 
-                {filteredLedger.length === 0 && (
+                {ledger.length === 0 && (
                     <div className="text-center py-20 bg-white/40">
                         <Receipt className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-lg font-bold text-gray-500">
@@ -322,6 +373,40 @@ export default function FinanceLedgerClient({
                         <p className="text-gray-400">
                             Try adjusting your search filters.
                         </p>
+                    </div>
+                )}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white/40">
+                        <span className="text-sm text-gray-600">
+                            Page {currentPage} of {totalPages} ({ledger.length} /{" "}
+                            {totalRows} transactions)
+                        </span>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentPage <= 1}
+                                onClick={() =>
+                                    router.push(
+                                        buildUrl({ page: currentPage - 1 }),
+                                    )
+                                }
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentPage >= totalPages}
+                                onClick={() =>
+                                    router.push(
+                                        buildUrl({ page: currentPage + 1 }),
+                                    )
+                                }
+                            >
+                                Next
+                            </Button>
+                        </div>
                     </div>
                 )}
             </div>

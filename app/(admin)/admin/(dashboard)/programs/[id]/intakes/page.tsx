@@ -7,13 +7,20 @@ import { Button } from "@/components/ui/button";
 
 interface PageProps {
     params: Promise<{ id: string }>;
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default async function IntakesPage({ params }: PageProps) {
+export default async function IntakesPage({ params, searchParams }: PageProps) {
     const { id } = await params;
-    const [program, intakes] = await Promise.all([
+    const query = await searchParams;
+    const page = Math.max(
+        1,
+        Number.isFinite(Number(query.page)) ? Number(query.page) : 1,
+    );
+
+    const [program, intakesResult] = await Promise.all([
         getProgramById(id),
-        getProgramIntakes(id),
+        getProgramIntakes(id, { page, pageSize: 20 }),
     ]);
 
     if (!program) {
@@ -56,7 +63,13 @@ export default async function IntakesPage({ params }: PageProps) {
                 </div>
             </div>
 
-            <IntakesClient programId={id} initialIntakes={intakes} />
+            <IntakesClient
+                programId={id}
+                initialIntakes={intakesResult.data}
+                currentPage={intakesResult.page}
+                totalPages={intakesResult.totalPages}
+                totalRows={intakesResult.total}
+            />
         </div>
     );
 }

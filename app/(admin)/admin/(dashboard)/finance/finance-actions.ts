@@ -34,8 +34,62 @@ export async function getFinanceStats() {
     };
 }
 
-export async function getPaymentLedger() {
+export async function getPaymentLedger(params?: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+}) {
+    const search = params?.search?.trim() || "";
+    const requestedPage = Math.max(1, params?.page ?? 1);
+    const safePageSize = Math.min(Math.max(1, params?.pageSize ?? 20), 100);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = {};
+    if (search) {
+        where.OR = [
+            {
+                receiptReference: {
+                    contains: search,
+                    mode: "insensitive",
+                },
+            },
+            {
+                paymentMethod: {
+                    contains: search,
+                    mode: "insensitive",
+                },
+            },
+            {
+                registration: {
+                    is: {
+                        fullName: { contains: search, mode: "insensitive" },
+                    },
+                },
+            },
+            {
+                registration: {
+                    is: {
+                        registerId: { contains: search, mode: "insensitive" },
+                    },
+                },
+            },
+            {
+                registration: {
+                    is: {
+                        programId: { contains: search, mode: "insensitive" },
+                    },
+                },
+            },
+        ];
+    }
+
+    const total = await prisma.registrationPayment.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const skip = (page - 1) * safePageSize;
+
     const payments = await prisma.registrationPayment.findMany({
+        where,
         include: {
             registration: {
                 select: {
@@ -46,10 +100,17 @@ export async function getPaymentLedger() {
             },
         },
         orderBy: { paymentDate: "desc" },
-        take: 100,
+        skip,
+        take: safePageSize,
     });
 
-    return serialize(payments);
+    return serialize({
+        data: payments,
+        total,
+        page,
+        pageSize: safePageSize,
+        totalPages,
+    });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

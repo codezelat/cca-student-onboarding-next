@@ -2,10 +2,21 @@ import { getFinanceStats, getPaymentLedger } from "./finance-actions";
 import FinanceLedgerClient from "./finance-ledger-client";
 import { Wallet, TrendingUp, Users, Receipt } from "lucide-react";
 
-export default async function FinancePage() {
-    const [stats, ledger] = await Promise.all([
+export default async function FinancePage({
+    searchParams,
+}: {
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+    const params = await searchParams;
+    const search = (params.search as string) || "";
+    const page = Math.max(
+        1,
+        Number.isFinite(Number(params.page)) ? Number(params.page) : 1,
+    );
+
+    const [stats, ledgerResult] = await Promise.all([
         getFinanceStats(),
-        getPaymentLedger(),
+        getPaymentLedger({ search, page, pageSize: 20 }),
     ]);
 
     return (
@@ -74,7 +85,13 @@ export default async function FinancePage() {
                 </div>
             </div>
 
-            <FinanceLedgerClient initialLedger={ledger} />
+            <FinanceLedgerClient
+                initialLedger={ledgerResult.data}
+                currentSearch={search}
+                currentPage={ledgerResult.page}
+                totalPages={ledgerResult.totalPages}
+                totalRows={ledgerResult.total}
+            />
         </div>
     );
 }

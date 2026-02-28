@@ -14,8 +14,31 @@ function serialize(data: any) {
     );
 }
 
-export async function getAllPrograms() {
+export async function getAllPrograms(params?: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+}) {
+    const search = params?.search?.trim() || "";
+    const requestedPage = Math.max(1, params?.page ?? 1);
+    const safePageSize = Math.min(Math.max(1, params?.pageSize ?? 20), 100);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = {};
+    if (search) {
+        where.OR = [
+            { name: { contains: search, mode: "insensitive" } },
+            { code: { contains: search, mode: "insensitive" } },
+        ];
+    }
+
+    const total = await prisma.program.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const skip = (page - 1) * safePageSize;
+
     const programs = await prisma.program.findMany({
+        where,
         include: {
             _count: {
                 select: {
@@ -29,9 +52,22 @@ export async function getAllPrograms() {
             },
         },
         orderBy: { name: "asc" },
+        skip,
+        take: safePageSize,
     });
 
-    return serialize(programs);
+    const normalizedPrograms = programs.map((program) => ({
+        ...program,
+        programId: program.code,
+    }));
+
+    return serialize({
+        data: normalizedPrograms,
+        total,
+        page,
+        pageSize: safePageSize,
+        totalPages,
+    });
 }
 
 export async function getProgramById(id: string) {
@@ -45,7 +81,10 @@ export async function getProgramById(id: string) {
     });
 
     if (!program) return null;
-    return serialize(program);
+    return serialize({
+        ...program,
+        programId: program.code,
+    });
 }
 
 export async function toggleProgramStatus(id: string, currentStatus: boolean) {
@@ -110,12 +149,36 @@ export async function deleteProgram(id: string) {
     revalidatePath("/admin/programs");
 }
 
-export async function getProgramIntakes(programId: string) {
+export async function getProgramIntakes(
+    programId: string,
+    params?: {
+        page?: number;
+        pageSize?: number;
+    },
+) {
+    const requestedPage = Math.max(1, params?.page ?? 1);
+    const safePageSize = Math.min(Math.max(1, params?.pageSize ?? 20), 100);
+    const where = { programId: BigInt(programId) };
+
+    const total = await prisma.programIntakeWindow.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const skip = (page - 1) * safePageSize;
+
     const intakes = await prisma.programIntakeWindow.findMany({
-        where: { programId: BigInt(programId) },
+        where,
         orderBy: { opensAt: "desc" },
+        skip,
+        take: safePageSize,
     });
-    return serialize(intakes);
+
+    return serialize({
+        data: intakes,
+        total,
+        page,
+        pageSize: safePageSize,
+        totalPages,
+    });
 }
 
 export async function upsertIntakeWindow(data: any) {
