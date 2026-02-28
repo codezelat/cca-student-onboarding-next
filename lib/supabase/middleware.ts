@@ -1,8 +1,26 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+function hasSupabaseAuthCookie(request: NextRequest): boolean {
+    return request.cookies
+        .getAll()
+        .some(
+            (cookie) =>
+                cookie.name.startsWith("sb-") &&
+                cookie.name.endsWith("-auth-token"),
+        );
+}
+
 export async function updateSession(request: NextRequest) {
     const requestHeaders = new Headers(request.headers);
+    requestHeaders.delete("x-admin-user-id");
+    requestHeaders.delete("x-admin-user-email");
+    requestHeaders.delete("x-admin-user-name");
+
+    const pathname = request.nextUrl.pathname;
+    const isAdminRoute = pathname.startsWith("/admin");
+    const isAdminLoginRoute = pathname === "/admin/login";
+    const hasAuthCookie = hasSupabaseAuthCookie(request);
 
     const nextWithHeaders = () =>
         NextResponse.next({
@@ -10,6 +28,16 @@ export async function updateSession(request: NextRequest) {
                 headers: requestHeaders,
             },
         });
+
+    // Fast path: unauthenticated request to admin routes does not need Supabase roundtrip.
+    if (!hasAuthCookie && isAdminRoute) {
+        if (!isAdminLoginRoute) {
+            const url = request.nextUrl.clone();
+            url.pathname = "/admin/login";
+            return NextResponse.redirect(url);
+        }
+        return nextWithHeaders();
+    }
 
     let supabaseResponse = nextWithHeaders();
 
@@ -80,18 +108,14 @@ export async function updateSession(request: NextRequest) {
     refreshResponseWithHeaders();
 
     // Protect admin routes — redirect to login if not authenticated
-    if (
-        !user &&
-        request.nextUrl.pathname.startsWith("/admin") &&
-        !request.nextUrl.pathname.startsWith("/admin/login")
-    ) {
+    if (!user && isAdminRoute && !isAdminLoginRoute) {
         const url = request.nextUrl.clone();
         url.pathname = "/admin/login";
         return NextResponse.redirect(url);
     }
 
     // Redirect authenticated users away from login page
-    if (user && request.nextUrl.pathname === "/admin/login") {
+    if (user && isAdminLoginRoute) {
         const url = request.nextUrl.clone();
         url.pathname = "/admin";
         return NextResponse.redirect(url);

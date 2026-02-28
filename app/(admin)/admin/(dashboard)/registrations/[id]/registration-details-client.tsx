@@ -302,7 +302,7 @@ export default function RegistrationDetailsClient({
             asChild
             className="mb-2 -ml-2 text-muted-foreground hover:text-primary"
           >
-            <Link href="/admin">
+            <Link prefetch={false} href="/admin">
               <ArrowLeft className="w-4 h-4 mr-1" />
               Back to Dashboard
             </Link>
@@ -327,7 +327,7 @@ export default function RegistrationDetailsClient({
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
-            <Link href={`/admin/registrations/${registration.id}/edit`}>
+            <Link prefetch={false} href={`/admin/registrations/${registration.id}/edit`}>
               <Edit className="w-4 h-4 mr-2" />
               Edit details
             </Link>

@@ -214,13 +214,13 @@ export default function ProgramsListClient({
                           className="w-48 p-1 rounded-xl shadow-2xl border-white/60 bg-white/90 backdrop-blur-xl"
                         >
                           <DropdownMenuItem asChild className="rounded-lg">
-                            <Link href={`/admin/programs/${program.id}/edit`}>
+                            <Link prefetch={false} href={`/admin/programs/${program.id}/edit`}>
                               <Edit className="w-4 h-4 mr-2" />
                               Edit Program
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild className="rounded-lg">
-                            <Link href={`/admin/programs/${program.id}/intakes`}>
+                            <Link prefetch={false} href={`/admin/programs/${program.id}/intakes`}>
                               <Calendar className="w-4 h-4 mr-2" />
                               Manage Intakes
                             </Link>
@@ -317,7 +317,7 @@ export default function ProgramsListClient({
                     variant="outline"
                     className="w-full bg-white/40 hover:bg-primary hover:text-white border-white/60 rounded-xl transition-all font-bold"
                   >
-                    <Link href={`/admin/programs/${program.id}/intakes`}>
+                    <Link prefetch={false} href={`/admin/programs/${program.id}/intakes`}>
                       Manage Windows
                     </Link>
                   </Button>

@@ -35,7 +35,7 @@ export default async function ProgramsPage({
                         asChild
                         className="bg-primary hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all rounded-xl px-6"
                     >
-                        <Link href="/admin/programs/create">
+                        <Link prefetch={false} href="/admin/programs/create">
                             <Plus className="w-4 h-4 mr-2" />
                             Add New Program
                         </Link>

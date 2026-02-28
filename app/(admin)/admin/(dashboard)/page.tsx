@@ -43,6 +43,7 @@ export default async function AdminDashboardPage({
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                     <Link
+                        prefetch={false}
                         href="/admin/programs"
                         className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-300 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center space-x-2"
                     >
@@ -62,6 +63,7 @@ export default async function AdminDashboardPage({
                         <span>Programs</span>
                     </Link>
                     <Link
+                        prefetch={false}
                         href="/admin/activity"
                         className="px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white font-semibold rounded-xl focus:outline-none focus:ring-4 focus:ring-slate-300 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center space-x-2"
                     >

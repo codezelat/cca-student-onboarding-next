@@ -37,7 +37,7 @@ export default async function IntakesPage({ params, searchParams }: PageProps) {
                         asChild
                         className="rounded-xl -ml-2 mb-2"
                     >
-                        <Link href="/admin/programs">
+                        <Link prefetch={false} href="/admin/programs">
                             <ArrowLeft className="w-4 h-4 mr-1" />
                             All Programs
                         </Link>

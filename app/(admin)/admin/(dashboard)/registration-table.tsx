@@ -190,6 +190,7 @@ export default function RegistrationTable({
             {/* Scope Switch */}
             <div className="flex flex-wrap items-center gap-3">
                 <Link
+                    prefetch={false}
                     href={buildUrl({ scope: "active", page: 1 })}
                     className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                         currentScope === "active"
@@ -200,6 +201,7 @@ export default function RegistrationTable({
                     Active ({initialStats.activeRegistrations})
                 </Link>
                 <Link
+                    prefetch={false}
                     href={buildUrl({ scope: "trashed", page: 1 })}
                     className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                         currentScope === "trashed"
@@ -210,6 +212,7 @@ export default function RegistrationTable({
                     Trash ({initialStats.trashedRegistrations})
                 </Link>
                 <Link
+                    prefetch={false}
                     href={buildUrl({ scope: "all", page: 1 })}
                     className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                         currentScope === "all"
@@ -316,6 +319,7 @@ export default function RegistrationTable({
                 </div>
 
                 <Link
+                    prefetch={false}
                     href={buildUrl({
                         tag:
                             currentTag === "General Rate" ? "" : "General Rate",
@@ -349,6 +353,7 @@ export default function RegistrationTable({
                 </Link>
 
                 <Link
+                    prefetch={false}
                     href={buildUrl({
                         tag:
                             currentTag === "Special 50% Offer"
@@ -558,6 +563,7 @@ export default function RegistrationTable({
                                                                 className="h-9 w-9 bg-white shadow-sm hover:border-primary hover:text-primary"
                                                             >
                                                                 <Link
+                                                                    prefetch={false}
                                                                     href={`/admin/registrations/${reg.id}`}
                                                                 >
                                                                     <Eye className="w-4 h-4" />
@@ -570,6 +576,7 @@ export default function RegistrationTable({
                                                                 className="h-9 w-9 bg-white shadow-sm hover:border-amber-500 hover:text-amber-500"
                                                             >
                                                                 <Link
+                                                                    prefetch={false}
                                                                     href={`/admin/registrations/${reg.id}/edit`}
                                                                 >
                                                                     <Edit className="w-4 h-4" />

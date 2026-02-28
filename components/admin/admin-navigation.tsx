@@ -115,6 +115,7 @@ export default function AdminNavigation({
                 <div className="flex justify-between h-16">
                     <div className="flex items-center">
                         <Link
+                            prefetch={false}
                             href="/admin"
                             className="flex items-center space-x-3 group"
                         >
@@ -204,6 +205,7 @@ export default function AdminNavigation({
                                         {menuItems.map((item) => (
                                             <Link
                                                 key={item.href}
+                                                prefetch={false}
                                                 href={item.href}
                                                 onClick={() =>
                                                     setDropdownOpen(false)

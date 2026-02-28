@@ -255,6 +255,7 @@ export default function FinanceLedgerClient({
                                     </TableCell>
                                     <TableCell className="px-4 py-4">
                                         <Link
+                                            prefetch={false}
                                             href={`/admin/registrations/${payment.ccaRegistrationId}`}
                                             className="group/link block"
                                         >
@@ -336,6 +337,7 @@ export default function FinanceLedgerClient({
                                                     className="rounded-lg"
                                                 >
                                                     <Link
+                                                        prefetch={false}
                                                         href={`/admin/registrations/${payment.ccaRegistrationId}`}
                                                     >
                                                         <User className="w-4 h-4 mr-2" />
