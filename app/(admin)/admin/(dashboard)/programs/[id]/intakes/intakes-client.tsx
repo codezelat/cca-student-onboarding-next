@@ -37,6 +37,7 @@ import {
 } from "../../programs-actions";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
     formatAppDate,
     formatAppNumber,
@@ -66,6 +67,8 @@ export default function IntakesClient({
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingIntake, setEditingIntake] = useState<any>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [deleteConfirm, setDeleteConfirm] = useState<{ id: string } | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
     const { toast } = useToast();
     const { start: paginationStart, end: paginationEnd } = getPaginationRange({
         currentPage,
@@ -131,19 +134,22 @@ export default function IntakesClient({
     }
 
     async function handleDelete(id: string) {
-        if (
-            !confirm(
-                "Are you sure? This will permanently remove this intake window.",
-            )
-        )
-            return;
+        setDeleteConfirm({ id });
+    }
+
+    async function confirmDelete() {
+        if (!deleteConfirm) return;
+        setIsDeleting(true);
         try {
-            await deleteIntakeWindow(id, programId);
-            setIntakes((prev) => prev.filter((i) => i.id !== id));
+            await deleteIntakeWindow(deleteConfirm.id, programId);
+            setIntakes((prev) => prev.filter((i) => i.id !== deleteConfirm.id));
+            setDeleteConfirm(null);
             toast({ title: "Deleted" });
             router.refresh();
         } catch (error) {
             toast({ title: "Error", variant: "destructive" });
+        } finally {
+            setIsDeleting(false);
         }
     }
 
@@ -484,6 +490,17 @@ export default function IntakesClient({
                     </form>
                 </DialogContent>
             </Dialog>
+
+            <ConfirmDialog
+                open={!!deleteConfirm}
+                onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}
+                title="Delete Intake Window"
+                description="Are you sure? This will permanently remove this intake window."
+                confirmLabel="Delete Window"
+                variant="destructive"
+                isPending={isDeleting}
+                onConfirm={confirmDelete}
+            />
         </div>
     );
 }

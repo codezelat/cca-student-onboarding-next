@@ -39,6 +39,7 @@ import Link from "next/link";
 import { formatAppDate, formatAppNumber } from "@/lib/formatters";
 import { useRouter } from "next/navigation";
 import { getPaginationRange } from "@/lib/pagination";
+import { PromptDialog } from "@/components/ui/prompt-dialog";
 
 interface FinanceLedgerClientProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,6 +63,8 @@ export default function FinanceLedgerClient({
     const [ledger, setLedger] = useState(initialLedger);
     const [searchQuery, setSearchQuery] = useState(currentSearch);
     const [isExporting, setIsExporting] = useState(false);
+    const [voidPrompt, setVoidPrompt] = useState<{ id: string } | null>(null);
+    const [isVoiding, setIsVoiding] = useState(false);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -73,16 +76,17 @@ export default function FinanceLedgerClient({
     }, [currentSearch]);
 
     async function handleVoid(id: string) {
-        const reason = prompt(
-            "Are you sure you want to void this payment? Please provide a reason:",
-        );
-        if (!reason) return;
+        setVoidPrompt({ id });
+    }
 
+    async function confirmVoid(reason: string) {
+        if (!voidPrompt) return;
+        setIsVoiding(true);
         try {
-            await voidPayment(id, reason);
+            await voidPayment(voidPrompt.id, reason);
             setLedger((prev) =>
                 prev.map((p) =>
-                    p.id === id
+                    p.id === voidPrompt.id
                         ? {
                               ...p,
                               status: "void",
@@ -92,9 +96,12 @@ export default function FinanceLedgerClient({
                         : p,
                 ),
             );
+            setVoidPrompt(null);
             toast({ title: "Payment Voided" });
         } catch (error) {
             toast({ title: "Error", variant: "destructive" });
+        } finally {
+            setIsVoiding(false);
         }
     }
 
@@ -476,6 +483,18 @@ export default function FinanceLedgerClient({
                     </div>
                 )}
             </div>
+
+            <PromptDialog
+                open={!!voidPrompt}
+                onOpenChange={(open) => { if (!open) setVoidPrompt(null); }}
+                title="Void Payment"
+                description="Please provide a reason for voiding this payment."
+                label="Reason"
+                placeholder="e.g., Duplicate entry, incorrect amount..."
+                confirmLabel="Void Payment"
+                isPending={isVoiding}
+                onConfirm={confirmVoid}
+            />
         </div>
     );
 }
