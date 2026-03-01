@@ -86,6 +86,12 @@ export default function ReceivedPaymentsTable({
         router.push("/admin/received-payments");
     };
 
+    const handleCloseApproveModal = () => {
+        setApproveModal(null);
+        setApproveAmount("");
+        setApproveAmountError("");
+    };
+
     const handleDecline = async (registrationId: string, slipIndex: number) => {
         setDeclineConfirm({ registrationId, slipIndex });
     };
@@ -119,9 +125,7 @@ export default function ReceivedPaymentsTable({
         setIsApproving(`${approveModal.registrationId}-${approveModal.slipIndex}`);
         try {
             await approvePaymentSlip(approveModal.registrationId, approveModal.slipIndex, amountNum);
-            setApproveModal(null);
-            setApproveAmount("");
-            setApproveAmountError("");
+            handleCloseApproveModal();
             router.refresh();
         } catch (error) {
             console.error(error);
@@ -381,7 +385,7 @@ export default function ReceivedPaymentsTable({
                                     <div className="pt-4 flex gap-3">
                                         <button
                                             type="button"
-                                            onClick={() => { setApproveModal(null); setApproveAmount(""); setApproveAmountError(""); }}
+                                            onClick={() => handleCloseApproveModal()}
                                             className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
                                         >
                                             Cancel
