@@ -61,6 +61,10 @@ export default function AdminLoginPage() {
             if (result?.error) {
                 setError(result.error);
                 setIsLoading(false);
+                if (!isDev) {
+                    setTurnstileToken("");
+                    setTurnstileWidgetKey((prev) => prev + 1);
+                }
             }
         } catch (err) {
             if (isNextRedirectError(err)) {
@@ -69,7 +73,6 @@ export default function AdminLoginPage() {
 
             setError("An unexpected error occurred. Please try again.");
             setIsLoading(false);
-        } finally {
             if (!isDev) {
                 setTurnstileToken("");
                 setTurnstileWidgetKey((prev) => prev + 1);
