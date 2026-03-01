@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toggleProgramStatus, deleteProgram } from "./programs-actions";
 import { useToast } from "@/hooks/use-toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
@@ -60,6 +61,8 @@ export default function ProgramsListClient({
   const [programs, setPrograms] = useState(initialPrograms);
   const [searchQuery, setSearchQuery] = useState(currentSearch);
   const { toast } = useToast();
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { start: paginationStart, end: paginationEnd } = getPaginationRange({
     currentPage,
     pageSize,
@@ -98,15 +101,16 @@ export default function ProgramsListClient({
   }
 
   async function handleDelete(id: string) {
-    if (
-      !confirm(
-        "Are you sure you want to delete this program? This cannot be undone if it has no registrations.",
-      )
-    )
-      return;
+    setDeleteConfirm({ id });
+  }
+
+  async function confirmDelete() {
+    if (!deleteConfirm) return;
+    setIsDeleting(true);
     try {
-      await deleteProgram(id);
-      setPrograms((prev) => prev.filter((p) => p.id !== id));
+      await deleteProgram(deleteConfirm.id);
+      setPrograms((prev) => prev.filter((p) => p.id !== deleteConfirm.id));
+      setDeleteConfirm(null);
       toast({
         title: "Deleted",
         description: "Program removed successfully.",
@@ -118,6 +122,8 @@ export default function ProgramsListClient({
         description: error.message,
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -371,6 +377,17 @@ export default function ProgramsListClient({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteConfirm}
+        onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}
+        title="Delete Program"
+        description="Are you sure you want to delete this program? This cannot be undone if it has no registrations."
+        confirmLabel="Delete Program"
+        variant="destructive"
+        isPending={isDeleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

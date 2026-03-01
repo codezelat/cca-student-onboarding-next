@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getPaginationRange } from "@/lib/pagination";
 import { getActivityLogsForExport } from "./activity-actions";
+import { useToast } from "@/hooks/use-toast";
 
 type ActivityLogEntry = {
   id: string;
@@ -89,6 +90,7 @@ export default function ActivityLogTable({
   filterOptions: FilterOptions;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
   const { start: paginationStart, end: paginationEnd } = getPaginationRange({
     currentPage,
@@ -248,7 +250,7 @@ export default function ActivityLogTable({
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Failed to export activity logs CSV:", error);
-      alert("Failed to export CSV. Please try again.");
+      toast({ title: "Export Failed", description: "Failed to export CSV. Please try again.", variant: "destructive" });
     } finally {
       setIsExporting(false);
     }

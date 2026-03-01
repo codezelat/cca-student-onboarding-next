@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { formatAppDate } from "@/lib/formatters";
 import { getPaginationRange } from "@/lib/pagination";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ReceivedPaymentsTable({
     initialPayments,
@@ -26,10 +28,12 @@ export default function ReceivedPaymentsTable({
     totalRows: number;
 }) {
     const router = useRouter();
+    const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState(currentSearch);
     const [statusFilter, setStatusFilter] = useState(currentStatus);
     const [isApproving, setIsApproving] = useState<string | null>(null);
     const [isDeclining, setIsDeclining] = useState<string | null>(null);
+    const [declineConfirm, setDeclineConfirm] = useState<{ registrationId: string; slipIndex: number } | null>(null);
     const [approveModal, setApproveModal] = useState<{
         registrationId: string;
         slipIndex: number;
@@ -37,6 +41,7 @@ export default function ReceivedPaymentsTable({
         fullName: string;
     } | null>(null);
     const [approveAmount, setApproveAmount] = useState<string>("");
+    const [approveAmountError, setApproveAmountError] = useState<string>("");
     const { start: paginationStart, end: paginationEnd } = getPaginationRange({
         currentPage,
         pageSize,
@@ -81,15 +86,27 @@ export default function ReceivedPaymentsTable({
         router.push("/admin/received-payments");
     };
 
+    const handleCloseApproveModal = () => {
+        setApproveModal(null);
+        setApproveAmount("");
+        setApproveAmountError("");
+    };
+
     const handleDecline = async (registrationId: string, slipIndex: number) => {
-        if (!confirm("Are you sure you want to decline this payment slip?")) return;
+        setDeclineConfirm({ registrationId, slipIndex });
+    };
+
+    const confirmDecline = async () => {
+        if (!declineConfirm) return;
+        const { registrationId, slipIndex } = declineConfirm;
         setIsDeclining(`${registrationId}-${slipIndex}`);
         try {
             await declinePaymentSlip(registrationId, slipIndex);
+            setDeclineConfirm(null);
             router.refresh();
         } catch (error) {
             console.error(error);
-            alert("Failed to decline slip.");
+            toast({ title: "Error", description: "Failed to decline slip.", variant: "destructive" });
         } finally {
             setIsDeclining(null);
         }
@@ -101,19 +118,18 @@ export default function ReceivedPaymentsTable({
 
         const amountNum = parseFloat(approveAmount);
         if (amountNum <= 0 || isNaN(amountNum)) {
-            alert("Please enter a valid amount greater than 0.");
+            setApproveAmountError("Please enter a valid amount greater than 0.");
             return;
         }
 
         setIsApproving(`${approveModal.registrationId}-${approveModal.slipIndex}`);
         try {
             await approvePaymentSlip(approveModal.registrationId, approveModal.slipIndex, amountNum);
-            setApproveModal(null);
-            setApproveAmount("");
+            handleCloseApproveModal();
             router.refresh();
         } catch (error) {
             console.error(error);
-            alert("Failed to approve and log payment.");
+            toast({ title: "Error", description: "Failed to approve and log payment.", variant: "destructive" });
         } finally {
             setIsApproving(null);
         }
@@ -357,18 +373,19 @@ export default function ReceivedPaymentsTable({
                                                 min="0"
                                                 step="0.01"
                                                 value={approveAmount}
-                                                onChange={(e) => setApproveAmount(e.target.value)}
+                                            onChange={(e) => { setApproveAmount(e.target.value); setApproveAmountError(""); }}
                                                 className="w-full pl-12 pr-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all outline-none"
                                                 placeholder="e.g., 25000"
                                                 required
                                             />
                                         </div>
+                                        {approveAmountError && <p className="text-xs text-rose-500 mt-1">{approveAmountError}</p>}
                                     </div>
 
                                     <div className="pt-4 flex gap-3">
                                         <button
                                             type="button"
-                                            onClick={() => setApproveModal(null)}
+                                            onClick={() => handleCloseApproveModal()}
                                             className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
                                         >
                                             Cancel
@@ -387,6 +404,17 @@ export default function ReceivedPaymentsTable({
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog
+                open={!!declineConfirm}
+                onOpenChange={(open) => { if (!open) setDeclineConfirm(null); }}
+                title="Decline Payment Slip"
+                description="Are you sure you want to decline this payment slip?"
+                confirmLabel="Decline"
+                variant="destructive"
+                isPending={isDeclining !== null}
+                onConfirm={confirmDecline}
+            />
         </div>
     );
 }

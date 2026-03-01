@@ -26,6 +26,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatAppDate } from "@/lib/formatters";
 import { getPaginationRange } from "@/lib/pagination";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 type Registration = {
     id: number;
@@ -69,9 +71,14 @@ export default function RegistrationTable({
     totalRows,
 }: RegistrationTableProps) {
     const router = useRouter();
+    const { toast } = useToast();
     const [searchInput, setSearchInput] = useState(currentSearch);
     const [programInput, setProgramInput] = useState(currentProgram);
     const [isExporting, setIsExporting] = useState(false);
+    const [trashConfirm, setTrashConfirm] = useState<{ id: number; restore: boolean } | null>(null);
+    const [purgeConfirm, setPurgeConfirm] = useState<{ id: number } | null>(null);
+    const [isTrashPending, setIsTrashPending] = useState(false);
+    const [isPurgePending, setIsPurgePending] = useState(false);
 
     function buildUrl(params: {
         scope?: string;
@@ -112,19 +119,39 @@ export default function RegistrationTable({
     }
 
     async function handleTrash(id: number, restore: boolean) {
-        if (
-            !confirm(
-                `Are you sure you want to ${restore ? "restore" : "trash"} this registration?`,
-            )
-        )
-            return;
-        await toggleRegistrationTrash(id, restore);
+        setTrashConfirm({ id, restore });
+    }
+
+    async function confirmTrash() {
+        if (!trashConfirm) return;
+        setIsTrashPending(true);
+        try {
+            await toggleRegistrationTrash(trashConfirm.id, trashConfirm.restore);
+            setTrashConfirm(null);
+            router.refresh();
+        } catch {
+            toast({ title: "Error", description: "Action failed. Please try again.", variant: "destructive" });
+        } finally {
+            setIsTrashPending(false);
+        }
     }
 
     async function handlePurge(id: number) {
-        if (!confirm("PERMANENT DELETE: Are you sure? This cannot be undone."))
-            return;
-        await purgeRegistration(id);
+        setPurgeConfirm({ id });
+    }
+
+    async function confirmPurge() {
+        if (!purgeConfirm) return;
+        setIsPurgePending(true);
+        try {
+            await purgeRegistration(purgeConfirm.id);
+            setPurgeConfirm(null);
+            router.refresh();
+        } catch {
+            toast({ title: "Error", description: "Action failed. Please try again.", variant: "destructive" });
+        } finally {
+            setIsPurgePending(false);
+        }
     }
 
     async function handleExport() {
@@ -186,7 +213,7 @@ export default function RegistrationTable({
             URL.revokeObjectURL(url);
         } catch (error) {
             console.error("Failed to export registrations CSV:", error);
-            alert("Failed to export CSV. Please try again.");
+            toast({ title: "Export Failed", description: "Failed to export CSV. Please try again.", variant: "destructive" });
         } finally {
             setIsExporting(false);
         }
@@ -213,6 +240,7 @@ export default function RegistrationTable({
     });
 
     return (
+        <>
         <div className="space-y-6">
             {/* Scope Switch */}
             <div className="flex flex-wrap items-center gap-3">
@@ -670,5 +698,28 @@ export default function RegistrationTable({
                 )}
             </div>
         </div>
+
+        <ConfirmDialog
+            open={!!trashConfirm}
+            onOpenChange={(open) => { if (!open) setTrashConfirm(null); }}
+            title={trashConfirm?.restore ? "Restore Registration" : "Trash Registration"}
+            description={`Are you sure you want to ${trashConfirm?.restore ? "restore" : "trash"} this registration?`}
+            confirmLabel={trashConfirm?.restore ? "Restore" : "Move to Trash"}
+            variant={trashConfirm?.restore ? "default" : "destructive"}
+            isPending={isTrashPending}
+            onConfirm={confirmTrash}
+        />
+
+        <ConfirmDialog
+            open={!!purgeConfirm}
+            onOpenChange={(open) => { if (!open) setPurgeConfirm(null); }}
+            title="Permanently Delete Registration"
+            description="PERMANENT DELETE: Are you sure? This cannot be undone."
+            confirmLabel="Delete Permanently"
+            variant="destructive"
+            isPending={isPurgePending}
+            onConfirm={confirmPurge}
+        />
+        </>
     );
 }
