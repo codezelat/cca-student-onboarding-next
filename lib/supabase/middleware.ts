@@ -16,10 +16,13 @@ export async function updateSession(request: NextRequest) {
     requestHeaders.delete("x-admin-user-id");
     requestHeaders.delete("x-admin-user-email");
     requestHeaders.delete("x-admin-user-name");
+    requestHeaders.delete("x-admin-user-role");
 
     const pathname = request.nextUrl.pathname;
     const isAdminRoute = pathname.startsWith("/admin");
+    const isAdminApiRoute = pathname.startsWith("/api/admin");
     const isAdminLoginRoute = pathname === "/admin/login";
+    const isProtectedAdminTarget = isAdminRoute || isAdminApiRoute;
     const hasAuthCookie = hasSupabaseAuthCookie(request);
 
     const nextWithHeaders = () =>
@@ -29,8 +32,18 @@ export async function updateSession(request: NextRequest) {
             },
         });
 
-    // Fast path: unauthenticated request to admin routes does not need Supabase roundtrip.
-    if (!hasAuthCookie && isAdminRoute) {
+    // Fast path: unauthenticated request to protected admin targets does not need Supabase roundtrip.
+    if (!hasAuthCookie && isProtectedAdminTarget) {
+        if (isAdminApiRoute) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "Authentication required.",
+                },
+                { status: 401 },
+            );
+        }
+
         if (!isAdminLoginRoute) {
             const url = request.nextUrl.clone();
             url.pathname = "/admin/login";
@@ -40,6 +53,12 @@ export async function updateSession(request: NextRequest) {
     }
 
     let supabaseResponse = nextWithHeaders();
+
+    const withSupabaseCookies = (response: NextResponse) => {
+        const currentCookies = supabaseResponse.cookies.getAll();
+        currentCookies.forEach((cookie) => response.cookies.set(cookie));
+        return response;
+    };
 
     const refreshResponseWithHeaders = () => {
         const currentCookies = supabaseResponse.cookies.getAll();
@@ -53,7 +72,10 @@ export async function updateSession(request: NextRequest) {
             | {
                   id: string;
                   email?: string | null;
-                  user_metadata?: { name?: string | null } | null;
+                  user_metadata?: {
+                      name?: string | null;
+                      role?: string | null;
+                  } | null;
               }
             | null
             | undefined,
@@ -61,6 +83,7 @@ export async function updateSession(request: NextRequest) {
         requestHeaders.delete("x-admin-user-id");
         requestHeaders.delete("x-admin-user-email");
         requestHeaders.delete("x-admin-user-name");
+        requestHeaders.delete("x-admin-user-role");
 
         if (!user) return;
 
@@ -75,6 +98,17 @@ export async function updateSession(request: NextRequest) {
             requestHeaders.set(
                 "x-admin-user-name",
                 encodeURIComponent(nameFromMetadata),
+            );
+        }
+
+        const roleFromMetadata = user.user_metadata?.role;
+        if (
+            typeof roleFromMetadata === "string" &&
+            roleFromMetadata.trim().length
+        ) {
+            requestHeaders.set(
+                "x-admin-user-role",
+                roleFromMetadata.trim().toLowerCase(),
             );
         }
     };
@@ -106,19 +140,53 @@ export async function updateSession(request: NextRequest) {
     } = await supabase.auth.getUser();
     applyVerifiedUserHeaders(user);
     refreshResponseWithHeaders();
+    const userRole = requestHeaders.get("x-admin-user-role");
+    const isAdminUser = userRole === "admin";
+
+    if (isAdminApiRoute) {
+        if (!user) {
+            return withSupabaseCookies(
+                NextResponse.json(
+                    {
+                        success: false,
+                        error: "Authentication required.",
+                    },
+                    { status: 401 },
+                ),
+            );
+        }
+
+        if (!isAdminUser) {
+            return withSupabaseCookies(
+                NextResponse.json(
+                    {
+                        success: false,
+                        error: "Admin access required.",
+                    },
+                    { status: 403 },
+                ),
+            );
+        }
+    }
 
     // Protect admin routes — redirect to login if not authenticated
     if (!user && isAdminRoute && !isAdminLoginRoute) {
         const url = request.nextUrl.clone();
         url.pathname = "/admin/login";
-        return NextResponse.redirect(url);
+        return withSupabaseCookies(NextResponse.redirect(url));
+    }
+
+    if (user && !isAdminUser && isAdminRoute && !isAdminLoginRoute) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/admin/login";
+        return withSupabaseCookies(NextResponse.redirect(url));
     }
 
     // Redirect authenticated users away from login page
-    if (user && isAdminLoginRoute) {
+    if (user && isAdminLoginRoute && isAdminUser) {
         const url = request.nextUrl.clone();
         url.pathname = "/admin";
-        return NextResponse.redirect(url);
+        return withSupabaseCookies(NextResponse.redirect(url));
     }
 
     return supabaseResponse;

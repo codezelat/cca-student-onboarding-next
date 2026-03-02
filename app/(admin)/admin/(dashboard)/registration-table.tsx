@@ -8,6 +8,8 @@ import {
     Filter,
     Download,
     X,
+    Copy,
+    Check,
     Users,
     CheckCircle2,
     Gift,
@@ -28,24 +30,43 @@ import { formatAppDate } from "@/lib/formatters";
 import { getPaginationRange } from "@/lib/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
+import {
+    canonicalizeDocumentUrl,
+    normalizeDocumentCollection,
+} from "@/lib/registration-documents";
 
-type Registration = {
-    id: number;
+type RegistrationRow = {
+    id: number | string | bigint;
     registerId: string;
     programId: string;
-    programName: string;
     fullName: string;
     nicNumber: string | null;
     passportNumber: string | null;
     emailAddress: string;
     whatsappNumber: string;
-    paymentSlip: any;
-    deletedAt: string | null;
+    paymentSlip: unknown;
+    fullAmount?: string | number | { toString(): string } | null;
+    currentPaidAmount?: string | number | { toString(): string } | null;
+    createdAt: string | Date;
+    program?: {
+        name: string;
+        code: string;
+    } | null;
+    deletedAt: string | Date | null;
+};
+
+type DashboardStats = {
+    activeRegistrations: number;
+    trashedRegistrations: number;
+    totalRegistrations: number;
+    generalRateCount: number;
+    specialOfferCount: number;
+    topProgram: { id: string; count: number } | null;
 };
 
 interface RegistrationTableProps {
-    initialRegistrations: any[];
-    initialStats: any;
+    initialRegistrations: RegistrationRow[];
+    initialStats: DashboardStats;
     programs: { programId: string; programName: string }[];
     currentScope: string;
     currentSearch: string;
@@ -79,6 +100,7 @@ export default function RegistrationTable({
     const [purgeConfirm, setPurgeConfirm] = useState<{ id: number } | null>(null);
     const [isTrashPending, setIsTrashPending] = useState(false);
     const [isPurgePending, setIsPurgePending] = useState(false);
+    const [copiedWhatsappId, setCopiedWhatsappId] = useState<string | null>(null);
 
     function buildUrl(params: {
         scope?: string;
@@ -219,13 +241,31 @@ export default function RegistrationTable({
         }
     }
 
-    function getPaymentSlipUrl(paymentSlip: any): string | null {
-        if (!paymentSlip) return null;
-        if (Array.isArray(paymentSlip) && paymentSlip[0]?.url)
-            return paymentSlip[0].url;
-        if (typeof paymentSlip === "object" && paymentSlip?.url)
-            return paymentSlip.url;
-        return null;
+    function getPaymentSlipUrl(paymentSlip: unknown): string | null {
+        const slips = normalizeDocumentCollection(paymentSlip);
+        if (!slips.length) return null;
+        return canonicalizeDocumentUrl(slips[0].url);
+    }
+
+    async function handleCopyWhatsapp(registrationId: string, whatsappNumber: string) {
+        const value = whatsappNumber.trim();
+        if (!value) return;
+
+        try {
+            await navigator.clipboard.writeText(value);
+            setCopiedWhatsappId(registrationId);
+            setTimeout(() => {
+                setCopiedWhatsappId((current) =>
+                    current === registrationId ? null : current,
+                );
+            }, 1200);
+        } catch {
+            toast({
+                title: "Copy Failed",
+                description: "Unable to copy WhatsApp number.",
+                variant: "destructive",
+            });
+        }
     }
 
     const hasFilters =
@@ -525,9 +565,11 @@ export default function RegistrationTable({
                                     const paymentUrl = getPaymentSlipUrl(
                                         reg.paymentSlip,
                                     );
+                                    const registrationId = Number(reg.id);
+                                    const registrationIdLabel = String(reg.id);
                                     return (
                                         <tr
-                                            key={reg.id}
+                                            key={registrationIdLabel}
                                             className="hover:bg-white/50 transition-colors group"
                                         >
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-gray-900">
@@ -553,7 +595,33 @@ export default function RegistrationTable({
                                                 {reg.emailAddress}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">
-                                                {reg.whatsappNumber}
+                                                <div className="flex items-center gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() =>
+                                                            handleCopyWhatsapp(
+                                                                registrationIdLabel,
+                                                                reg.whatsappNumber,
+                                                            )
+                                                        }
+                                                        className="h-7 w-7 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                                        aria-label="Copy WhatsApp number"
+                                                    >
+                                                        {copiedWhatsappId === registrationIdLabel ? (
+                                                            <Check className="w-3.5 h-3.5" />
+                                                        ) : (
+                                                            <Copy className="w-3.5 h-3.5" />
+                                                        )}
+                                                    </Button>
+                                                    <span>{reg.whatsappNumber || "N/A"}</span>
+                                                    {copiedWhatsappId === registrationIdLabel && (
+                                                        <span className="text-[10px] font-semibold text-emerald-600">
+                                                            Copied
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 {paymentUrl ? (
@@ -587,7 +655,7 @@ export default function RegistrationTable({
                                                                 size="sm"
                                                                 onClick={() =>
                                                                     handleTrash(
-                                                                        reg.id,
+                                                                        registrationId,
                                                                         true,
                                                                     )
                                                                 }
@@ -601,7 +669,7 @@ export default function RegistrationTable({
                                                                 size="sm"
                                                                 onClick={() =>
                                                                     handlePurge(
-                                                                        reg.id,
+                                                                        registrationId,
                                                                     )
                                                                 }
                                                                 className="h-8"
@@ -620,7 +688,7 @@ export default function RegistrationTable({
                                                             >
                                                                 <Link
                                                                     prefetch={false}
-                                                                    href={`/admin/registrations/${reg.id}`}
+                                                                    href={`/admin/registrations/${registrationIdLabel}`}
                                                                 >
                                                                     <Eye className="w-4 h-4" />
                                                                 </Link>
@@ -633,7 +701,7 @@ export default function RegistrationTable({
                                                             >
                                                                 <Link
                                                                     prefetch={false}
-                                                                    href={`/admin/registrations/${reg.id}/edit`}
+                                                                    href={`/admin/registrations/${registrationIdLabel}/edit`}
                                                                 >
                                                                     <Edit className="w-4 h-4" />
                                                                 </Link>
@@ -643,7 +711,7 @@ export default function RegistrationTable({
                                                                 size="icon"
                                                                 onClick={() =>
                                                                     handleTrash(
-                                                                        reg.id,
+                                                                        registrationId,
                                                                         false,
                                                                     )
                                                                 }

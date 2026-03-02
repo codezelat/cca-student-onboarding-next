@@ -6,6 +6,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-    // Only protect the admin area. Running proxy globally adds avoidable latency.
-    matcher: ["/admin/:path*"],
+    // Protect admin pages and admin APIs without applying proxy globally.
+    matcher: ["/admin/:path*", "/api/admin/:path*"],
 };

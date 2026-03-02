@@ -20,8 +20,9 @@ export default async function AdminLayout({
 }) {
   const headerStore = await headers();
   const userId = headerStore.get("x-admin-user-id");
+  const role = headerStore.get("x-admin-user-role");
 
-  if (!userId) {
+  if (!userId || role !== "admin") {
     redirect("/admin/login");
   }
 

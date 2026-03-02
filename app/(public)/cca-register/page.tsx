@@ -478,6 +478,20 @@ export default function RegisterPage() {
                     "Please upload the front copy of your National ID.",
                 );
             }
+            if (formData.nic_number && !uploadedFiles.nic_2) {
+                throw new Error(
+                    "Please upload the back copy of your National ID.",
+                );
+            }
+            if (
+                formData.passport_number &&
+                !formData.nic_number &&
+                !uploadedFiles.passport_1
+            ) {
+                throw new Error(
+                    "Please upload the information page of your passport.",
+                );
+            }
 
             type UploadTask = {
                 slot: keyof typeof uploadedFiles;
@@ -604,11 +618,12 @@ export default function RegisterPage() {
             setUploadProgress(100);
             setSubmitStatus("success");
             setErrorMessage("");
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Submission failed:", error);
             setErrorMessage(
-                error.message ||
-                    "Failed to submit registration. Please try again.",
+                error instanceof Error
+                    ? error.message
+                    : "Failed to submit registration. Please try again.",
             );
             setSubmitStatus("error");
             setUploadStatus("idle");

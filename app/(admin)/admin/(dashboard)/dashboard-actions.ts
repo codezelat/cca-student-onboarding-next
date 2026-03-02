@@ -1,11 +1,26 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { fileUpload } from "@/lib/services/file-upload";
 import { revalidatePath, unstable_cache } from "next/cache";
 import {
   getAdminActorFromRequestHeaders,
   logActivitySafe,
 } from "@/lib/server/activity-log";
+import {
+  assertAdminFromServerHeaders,
+} from "@/lib/server/admin-auth";
+import {
+  DOCUMENT_CATEGORIES,
+  extractStorageKeyFromPublicUrl,
+  normalizeNicDocumentSide,
+  normalizeDocumentCollection,
+  normalizeDocumentEntry,
+  type RegistrationDocumentCategory,
+  type RegistrationDocumentEntry,
+} from "@/lib/registration-documents";
 
 function s<T>(data: T): T {
   return JSON.parse(
@@ -27,6 +42,11 @@ async function getRegistrationAuditSnapshot(id: number) {
       fullAmount: true,
       currentPaidAmount: true,
       updatedAt: true,
+      academicQualificationDocuments: true,
+      nicDocuments: true,
+      passportDocuments: true,
+      passportPhoto: true,
+      paymentSlip: true,
     },
   });
 }
@@ -70,6 +90,123 @@ function buildRegistrationWhere(filters: RegistrationQueryFilters) {
 
   return where;
 }
+
+function normalizeRegistrationDocuments<T extends Record<string, unknown>>(registration: T): T {
+  const normalized = {
+    ...registration,
+    academicQualificationDocuments: normalizeDocumentCollection(
+      registration.academicQualificationDocuments,
+    ),
+    nicDocuments: normalizeDocumentCollection(registration.nicDocuments),
+    passportDocuments: normalizeDocumentCollection(registration.passportDocuments),
+    passportPhoto: normalizeDocumentCollection(registration.passportPhoto),
+    paymentSlip: normalizeDocumentCollection(registration.paymentSlip),
+  };
+
+  return normalized as T;
+}
+
+function toNullableTrimmed(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function parseRequiredDate(value: string, fieldName: string): Date {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`${fieldName} is invalid.`);
+  }
+  return date;
+}
+
+function parseOptionalDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Provided date value is invalid.");
+  }
+  return date;
+}
+
+function parseOptionalAmount(value: string | number | null | undefined): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value < 0) {
+      throw new Error("Full amount must be a valid non-negative number.");
+    }
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed.length) return null;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error("Full amount must be a valid non-negative number.");
+  }
+  return parsed;
+}
+
+function buildDocumentFieldUpdate(
+  category: RegistrationDocumentCategory,
+  documents: RegistrationDocumentEntry[],
+): Prisma.CCARegistrationUpdateInput {
+  return {
+    [category]: documents as unknown as Prisma.InputJsonValue,
+  } as Prisma.CCARegistrationUpdateInput;
+}
+
+const registrationProfileUpdateSchema = z.object({
+  fullName: z.string().trim().min(2).max(150),
+  nameWithInitials: z.string().trim().min(2).max(100),
+  gender: z.enum(["male", "female"]),
+  dateOfBirth: z.string().trim().min(1),
+  nicNumber: z.string().trim().max(80).nullable().optional(),
+  passportNumber: z.string().trim().max(80).nullable().optional(),
+  nationality: z.string().trim().min(2).max(100),
+  countryOfBirth: z.string().trim().min(2).max(100),
+  emailAddress: z.string().trim().email().max(320),
+  whatsappNumber: z.string().trim().min(5).max(30),
+  homeContactNumber: z.string().trim().max(30).nullable().optional(),
+  permanentAddress: z.string().trim().min(5).max(400),
+  district: z.string().trim().max(100).nullable().optional(),
+  postalCode: z.string().trim().min(1).max(20),
+  country: z.string().trim().min(2).max(100),
+  guardianContactName: z.string().trim().min(2).max(150),
+  guardianContactNumber: z.string().trim().min(5).max(30),
+  highestQualification: z.enum([
+    "degree",
+    "diploma",
+    "postgraduate",
+    "msc",
+    "phd",
+    "work_experience",
+    "other",
+  ]),
+  qualificationStatus: z.enum(["completed", "ongoing"]),
+  qualificationCompletedDate: z.string().trim().nullable().optional(),
+  qualificationExpectedCompletionDate: z.string().trim().nullable().optional(),
+  programId: z.string().trim().min(1).max(50),
+  programName: z.string().trim().min(1).max(200),
+  programYear: z.string().trim().min(1).max(120),
+  programDuration: z.string().trim().min(1).max(120),
+  fullAmount: z.union([z.string(), z.number(), z.null()]).optional(),
+});
+
+const documentCategorySchema = z.enum(DOCUMENT_CATEGORIES);
+
+const documentAppendInputSchema = z.array(
+  z.object({
+    url: z.string().trim().min(1).max(2048),
+    key: z.string().trim().max(1024).nullable().optional(),
+    filename: z.string().trim().max(512).nullable().optional(),
+    contentType: z.string().trim().max(255).nullable().optional(),
+    fileSize: z.number().int().positive().nullable().optional(),
+    uploadedAt: z.string().trim().nullable().optional(),
+    source: z.string().trim().max(80).nullable().optional(),
+    side: z.enum(["front", "back"]).nullable().optional(),
+  }),
+);
 
 export async function getDashboardStats() {
   type StatsRow = {
@@ -180,8 +317,13 @@ export async function getRegistrations(params: {
     },
   });
 
+  const normalizedRegistrations = registrations.map((registration) => ({
+    ...registration,
+    paymentSlip: normalizeDocumentCollection(registration.paymentSlip),
+  }));
+
   return s({
-    data: registrations,
+    data: normalizedRegistrations,
     total,
     page: safePage,
     pageSize: safePageSize,
@@ -237,6 +379,7 @@ export async function getActivePrograms() {
 }
 
 export async function toggleRegistrationTrash(id: number, restore: boolean) {
+  await assertAdminFromServerHeaders();
   const actor = await getAdminActorFromRequestHeaders();
   const before = await getRegistrationAuditSnapshot(id);
 
@@ -287,6 +430,7 @@ export async function toggleRegistrationTrash(id: number, restore: boolean) {
 }
 
 export async function purgeRegistration(id: number) {
+  await assertAdminFromServerHeaders();
   const actor = await getAdminActorFromRequestHeaders();
   const before = await getRegistrationAuditSnapshot(id);
 
@@ -358,6 +502,8 @@ export async function getRegistrationById(
 
   if (!registration) return null;
 
+  const normalizedRegistration = normalizeRegistrationDocuments(registration);
+
   let paymentsTotal = 0;
   let paymentsTotalPages = 1;
   let safePaymentsPage = 1;
@@ -428,7 +574,7 @@ export async function getRegistrationById(
   }
 
   return s({
-    ...registration,
+    ...normalizedRegistration,
     payments,
     paymentsPage: safePaymentsPage,
     paymentsPageSize: safePaymentsPageSize,
@@ -436,64 +582,118 @@ export async function getRegistrationById(
     paymentsTotalPages,
     calculatedPaidAmount,
     calculatedPaidTransactions,
-    programName: registration.program?.name ?? null,
-    programYear: registration.program?.yearLabel ?? null,
-    programDuration: registration.program?.durationLabel ?? null,
+    programName: normalizedRegistration.program?.name ?? null,
+    programYear: normalizedRegistration.program?.yearLabel ?? null,
+    programDuration: normalizedRegistration.program?.durationLabel ?? null,
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function updateRegistration(id: number, data: any) {
+export async function updateRegistrationProfile(id: number, data: unknown) {
+  await assertAdminFromServerHeaders();
   const actor = await getAdminActorFromRequestHeaders();
   const before = await getRegistrationAuditSnapshot(id);
-  // Basic scrubbing of data to ensure we don't accidentally update system fields
-  const {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    id: _id,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    createdAt,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    updatedAt,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    deletedAt,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    registerId,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    program,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    payments,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    currentPaidAmount,
-    ...updateData
-  } = data;
 
-  // Convert string dates back to Date objects if they exist
-  if (updateData.dateOfBirth)
-    updateData.dateOfBirth = new Date(updateData.dateOfBirth);
-  if (updateData.qualificationCompletedDate)
-    updateData.qualificationCompletedDate = new Date(
-      updateData.qualificationCompletedDate,
+  const parsed = registrationProfileUpdateSchema.safeParse(data);
+  if (!parsed.success) {
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: "registration_update_validation_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before?.registerId || String(id),
+      message: "Registration profile update rejected due to invalid input",
+      routeName: `/admin/registrations/${id}/edit`,
+      meta: {
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      },
+    });
+    return { success: false, error: "Invalid registration update payload." };
+  }
+
+  const payload = parsed.data;
+  const normalizedProgramCode = payload.programId.toUpperCase();
+  const matchingProgram = await prisma.program.findFirst({
+    where: {
+      code: {
+        equals: normalizedProgramCode,
+        mode: "insensitive",
+      },
+    },
+    select: {
+      code: true,
+      name: true,
+    },
+  });
+
+  if (!matchingProgram) {
+    return { success: false, error: "Selected program is invalid." };
+  }
+
+  let fullAmount: number | null;
+  try {
+    fullAmount = parseOptionalAmount(payload.fullAmount);
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Invalid amount.",
+    };
+  }
+
+  let dateOfBirth: Date;
+  let qualificationCompletedDate: Date | null;
+  let qualificationExpectedCompletionDate: Date | null;
+  try {
+    dateOfBirth = parseRequiredDate(payload.dateOfBirth, "Date of birth");
+    qualificationCompletedDate = parseOptionalDate(
+      toNullableTrimmed(payload.qualificationCompletedDate),
     );
-  if (updateData.qualificationExpectedCompletionDate)
-    updateData.qualificationExpectedCompletionDate = new Date(
-      updateData.qualificationExpectedCompletionDate,
+    qualificationExpectedCompletionDate = parseOptionalDate(
+      toNullableTrimmed(payload.qualificationExpectedCompletionDate),
     );
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Invalid date value.",
+    };
+  }
 
-  // Convert numbers/decimals
-  if (updateData.fullAmount)
-    updateData.fullAmount = parseFloat(updateData.fullAmount);
-
-  // Normalize enum fields to lowercase to match Prisma schema
-  if (updateData.highestQualification)
-    updateData.highestQualification = String(
-      updateData.highestQualification,
-    ).toLowerCase();
-  if (updateData.qualificationStatus)
-    updateData.qualificationStatus = String(
-      updateData.qualificationStatus,
-    ).toLowerCase();
-  if (updateData.gender)
-    updateData.gender = String(updateData.gender).toLowerCase();
+  const updateData: Prisma.CCARegistrationUpdateInput = {
+    fullName: payload.fullName,
+    nameWithInitials: payload.nameWithInitials,
+    gender: payload.gender,
+    dateOfBirth,
+    nicNumber: toNullableTrimmed(payload.nicNumber),
+    passportNumber: toNullableTrimmed(payload.passportNumber),
+    nationality: payload.nationality,
+    countryOfBirth: payload.countryOfBirth,
+    emailAddress: payload.emailAddress,
+    whatsappNumber: payload.whatsappNumber,
+    homeContactNumber: toNullableTrimmed(payload.homeContactNumber),
+    permanentAddress: payload.permanentAddress,
+    district: toNullableTrimmed(payload.district),
+    postalCode: payload.postalCode,
+    country: payload.country,
+    guardianContactName: payload.guardianContactName,
+    guardianContactNumber: payload.guardianContactNumber,
+    highestQualification: payload.highestQualification,
+    qualificationStatus: payload.qualificationStatus,
+    qualificationCompletedDate,
+    qualificationExpectedCompletionDate,
+    program: {
+      connect: {
+        code: matchingProgram.code,
+      },
+    },
+    programName: matchingProgram.name,
+    programYear: payload.programYear,
+    programDuration: payload.programDuration,
+    fullAmount,
+  };
 
   try {
     const updated = await prisma.cCARegistration.update({
@@ -530,6 +730,7 @@ export async function updateRegistration(id: number, data: any) {
 
     revalidatePath("/admin");
     revalidatePath(`/admin/registrations/${id}`);
+    revalidatePath(`/admin/registrations/${id}/edit`);
     return { success: true, registration: s(updated) };
   } catch (error) {
     await logActivitySafe({
@@ -548,6 +749,255 @@ export async function updateRegistration(id: number, data: any) {
         error: error instanceof Error ? error.message : "Unknown error",
       },
     });
-    throw error;
+    return { success: false, error: "Failed to update registration profile." };
   }
+}
+
+export async function appendRegistrationDocuments(
+  id: number,
+  categoryInput: unknown,
+  documentsInput: unknown,
+) {
+  const admin = await assertAdminFromServerHeaders();
+  const actor = await getAdminActorFromRequestHeaders();
+  const categoryParse = documentCategorySchema.safeParse(categoryInput);
+  if (!categoryParse.success) {
+    return { success: false, error: "Invalid document category." };
+  }
+  const category = categoryParse.data;
+
+  const documentsParse = documentAppendInputSchema.safeParse(documentsInput);
+  if (!documentsParse.success || !documentsParse.data.length) {
+    return { success: false, error: "No valid document metadata provided." };
+  }
+
+  if (
+    category === "nicDocuments" &&
+    documentsParse.data.some((document) => !normalizeNicDocumentSide(document.side))
+  ) {
+    return {
+      success: false,
+      error: "NIC uploads must specify a side (front or back).",
+    };
+  }
+
+  const before = await prisma.cCARegistration.findUnique({
+    where: { id: BigInt(id) },
+    select: {
+      id: true,
+      registerId: true,
+      academicQualificationDocuments: true,
+      nicDocuments: true,
+      passportDocuments: true,
+      passportPhoto: true,
+      paymentSlip: true,
+    },
+  });
+
+  if (!before) {
+    return { success: false, error: "Registration not found." };
+  }
+
+  const existingDocuments = normalizeDocumentCollection(before[category]);
+  const preparedDocuments = documentsParse.data
+    .map((document, index) => {
+      const side =
+        category === "nicDocuments"
+          ? normalizeNicDocumentSide(document.side)
+          : undefined;
+
+      return normalizeDocumentEntry(
+        {
+          url: document.url,
+          key: toNullableTrimmed(document.key),
+          filename: toNullableTrimmed(document.filename),
+          contentType: toNullableTrimmed(document.contentType),
+          sizeBytes: document.fileSize ?? undefined,
+          uploadedAt: toNullableTrimmed(document.uploadedAt) ?? new Date().toISOString(),
+          source: toNullableTrimmed(document.source) ?? "admin",
+          uploadedBy: admin.userId,
+          side,
+        },
+        {
+          fallbackMs: Date.now() + index,
+        },
+      );
+    })
+    .filter((entry): entry is RegistrationDocumentEntry => Boolean(entry));
+
+  if (!preparedDocuments.length) {
+    return { success: false, error: "Uploaded document URLs are invalid or unsafe." };
+  }
+
+  const mergedDocuments = normalizeDocumentCollection([
+    ...existingDocuments,
+    ...preparedDocuments,
+  ]);
+
+  try {
+    await prisma.cCARegistration.update({
+      where: { id: BigInt(id) },
+      data: buildDocumentFieldUpdate(category, mergedDocuments),
+    });
+
+    await logActivitySafe({
+      actor,
+      category: "registration_document",
+      action: "registration_documents_appended",
+      status: "success",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before.registerId,
+      message: "Admin appended registration documents",
+      routeName: `/admin/registrations/${id}/edit`,
+      meta: {
+        category,
+        addedCount: preparedDocuments.length,
+        totalCount: mergedDocuments.length,
+      },
+    });
+
+    revalidatePath("/admin");
+    revalidatePath(`/admin/registrations/${id}`);
+    revalidatePath(`/admin/registrations/${id}/edit`);
+    return { success: true, documents: s(mergedDocuments) };
+  } catch (error) {
+    await logActivitySafe({
+      actor,
+      category: "registration_document",
+      action: "registration_documents_append_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before.registerId,
+      message: "Failed to append registration documents",
+      routeName: `/admin/registrations/${id}/edit`,
+      meta: {
+        category,
+        attemptedCount: preparedDocuments.length,
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
+
+    return { success: false, error: "Failed to append registration documents." };
+  }
+}
+
+export async function hardDeleteRegistrationDocument(
+  id: number,
+  categoryInput: unknown,
+  documentIdInput: unknown,
+) {
+  await assertAdminFromServerHeaders();
+  const actor = await getAdminActorFromRequestHeaders();
+  const categoryParse = documentCategorySchema.safeParse(categoryInput);
+  if (!categoryParse.success) {
+    return { success: false, error: "Invalid document category." };
+  }
+  const category = categoryParse.data;
+
+  const documentId = toNullableTrimmed(documentIdInput);
+  if (!documentId) {
+    return { success: false, error: "Invalid document identifier." };
+  }
+
+  const before = await prisma.cCARegistration.findUnique({
+    where: { id: BigInt(id) },
+    select: {
+      id: true,
+      registerId: true,
+      academicQualificationDocuments: true,
+      nicDocuments: true,
+      passportDocuments: true,
+      passportPhoto: true,
+      paymentSlip: true,
+    },
+  });
+
+  if (!before) {
+    return { success: false, error: "Registration not found." };
+  }
+
+  const existingDocuments = normalizeDocumentCollection(before[category]);
+  const documentToDelete = existingDocuments.find((entry) => entry.id === documentId);
+  if (!documentToDelete) {
+    return { success: false, error: "Document not found." };
+  }
+
+  const nextDocuments = existingDocuments.filter((entry) => entry.id !== documentId);
+  let deletedStorageKey: string | null = null;
+  let storageDeleteError: string | null = null;
+
+  try {
+    await prisma.cCARegistration.update({
+      where: { id: BigInt(id) },
+      data: buildDocumentFieldUpdate(category, nextDocuments),
+    });
+
+    const detectedStorageKey =
+      toNullableTrimmed(documentToDelete.key) ||
+      extractStorageKeyFromPublicUrl(documentToDelete.url, process.env.R2_PUBLIC_URL);
+
+    if (detectedStorageKey) {
+      deletedStorageKey = detectedStorageKey;
+      try {
+        await fileUpload.delete(detectedStorageKey);
+      } catch (error) {
+        storageDeleteError =
+          error instanceof Error ? error.message : "Failed to delete storage object.";
+      }
+    }
+
+    await logActivitySafe({
+      actor,
+      category: "registration_document",
+      action: "registration_document_deleted",
+      status: "success",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before.registerId,
+      message: "Admin removed registration document history entry",
+      routeName: `/admin/registrations/${id}/edit`,
+      meta: {
+        category,
+        documentId,
+        deletedStorageKey,
+        storageDeleteError,
+      },
+    });
+
+    revalidatePath("/admin");
+    revalidatePath(`/admin/registrations/${id}`);
+    revalidatePath(`/admin/registrations/${id}/edit`);
+    return {
+      success: true,
+      documents: s(nextDocuments),
+      warning: storageDeleteError
+        ? "Document removed from database, but storage deletion failed."
+        : undefined,
+    };
+  } catch (error) {
+    await logActivitySafe({
+      actor,
+      category: "registration_document",
+      action: "registration_document_delete_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before.registerId,
+      message: "Failed to delete registration document",
+      routeName: `/admin/registrations/${id}/edit`,
+      meta: {
+        category,
+        documentId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
+
+    return { success: false, error: "Failed to delete registration document." };
+  }
+}
+
+export async function updateRegistration(id: number, data: unknown) {
+  return updateRegistrationProfile(id, data);
 }

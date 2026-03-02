@@ -7,7 +7,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   Edit,
-  Download,
   Eye,
   CheckCircle2,
   AlertCircle,
@@ -66,6 +65,12 @@ import {
   formatAppNumber,
 } from "@/lib/formatters";
 import { getPaginationRange } from "@/lib/pagination";
+import {
+  canonicalizeDocumentUrl,
+  getNicDocumentCurrentIds,
+  getNicDocumentSideLabel,
+  normalizeDocumentCollection,
+} from "@/lib/registration-documents";
 
 interface RegistrationDetailsClientProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -133,126 +138,49 @@ export default function RegistrationDetailsClient({
   const balance = fullAmount - paidAmount;
   const isFullyPaid = balance <= 0 && fullAmount > 0;
 
+  const nicDocuments = normalizeDocumentCollection(registration.nicDocuments);
+  const currentNicDocumentIds = getNicDocumentCurrentIds(nicDocuments);
+
   const documents = [
-    ...(Array.isArray(registration.passportPhoto)
-      ? registration.passportPhoto.map(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (doc: any, i: number) => ({
-            url: typeof doc === "string" ? doc : doc.url,
-            title: `Passport Photo ${i + 1}`,
-            type: "image",
-            category: "Personal",
-          }),
-        )
-      : registration.passportPhoto
-        ? [
-            {
-              url:
-                typeof registration.passportPhoto === "string"
-                  ? registration.passportPhoto
-                  : (registration.passportPhoto as { url?: string })?.url,
-              title: "Passport Photo",
-              type: "image",
-              category: "Personal",
-            },
-          ]
-        : []),
-    ...(Array.isArray(registration.passportDocuments)
-      ? registration.passportDocuments.map(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (doc: any, i: number) => ({
-            url: typeof doc === "string" ? doc : doc.url,
-            title: `Passport Document ${i + 1}`,
-            type: "auto",
-            category: "Identity",
-          }),
-        )
-      : registration.passportDocuments
-        ? [
-            {
-              url:
-                typeof registration.passportDocuments === "string"
-                  ? registration.passportDocuments
-                  : (registration.passportDocuments as { url?: string })?.url,
-              title: "Passport Document",
-              type: "auto",
-              category: "Identity",
-            },
-          ]
-        : []),
-    ...(Array.isArray(registration.paymentSlip)
-      ? registration.paymentSlip.map(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (doc: any, i: number) => ({
-            url: typeof doc === "string" ? doc : doc.url,
-            title: `Payment Slip ${i + 1}`,
-            type: "auto",
-            category: "Payment",
-          }),
-        )
-      : registration.paymentSlip
-        ? [
-            {
-              url:
-                typeof registration.paymentSlip === "string"
-                  ? registration.paymentSlip
-                  : (registration.paymentSlip as { url?: string })?.url,
-              title: "Payment Slip",
-              type: "auto",
-              category: "Payment",
-            },
-          ]
-        : []),
-    ...(Array.isArray(registration.academicQualificationDocuments)
-      ? registration.academicQualificationDocuments.map(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (doc: any, i: number) => ({
-            url: typeof doc === "string" ? doc : doc.url,
-            title: `Academic Document ${i + 1}`,
-            type: "auto",
-            category: "Academic",
-          }),
-        )
-      : registration.academicQualificationDocuments
-        ? [
-            {
-              url:
-                typeof registration.academicQualificationDocuments === "string"
-                  ? registration.academicQualificationDocuments
-                  : (
-                      registration.academicQualificationDocuments as {
-                        url?: string;
-                      }
-                    )?.url,
-              title: "Academic Document",
-              type: "auto",
-              category: "Academic",
-            },
-          ]
-        : []),
-    ...(Array.isArray(registration.nicDocuments)
-      ? registration.nicDocuments.map(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (doc: any, i: number) => ({
-            url: typeof doc === "string" ? doc : doc.url,
-            title: `NIC/Passport ${i + 1}`,
-            type: "auto",
-            category: "Identity",
-          }),
-        )
-      : registration.nicDocuments
-        ? [
-            {
-              url:
-                typeof registration.nicDocuments === "string"
-                  ? registration.nicDocuments
-                  : (registration.nicDocuments as { url?: string })?.url,
-              title: "NIC/Passport",
-              type: "auto",
-              category: "Identity",
-            },
-          ]
-        : []),
+    ...normalizeDocumentCollection(registration.passportPhoto).map((doc, i) => ({
+      ...doc,
+      title: `Passport Photo ${i + 1}`,
+      type: "image",
+      category: "Personal",
+      isCurrent: i === 0,
+    })),
+    ...normalizeDocumentCollection(registration.passportDocuments).map(
+      (doc, i) => ({
+        ...doc,
+        title: `Passport Document ${i + 1}`,
+        type: "auto",
+        category: "Identity",
+        isCurrent: i === 0,
+      }),
+    ),
+    ...normalizeDocumentCollection(registration.paymentSlip).map((doc, i) => ({
+      ...doc,
+      title: `Payment Slip ${i + 1}`,
+      type: "auto",
+      category: "Payment",
+      isCurrent: i === 0,
+    })),
+    ...normalizeDocumentCollection(registration.academicQualificationDocuments).map(
+      (doc, i) => ({
+        ...doc,
+        title: `Academic Document ${i + 1}`,
+        type: "auto",
+        category: "Academic",
+        isCurrent: i === 0,
+      }),
+    ),
+    ...nicDocuments.map((doc, i) => ({
+      ...doc,
+      title: `NIC ${getNicDocumentSideLabel(doc.side)} ${i + 1}`,
+      type: "auto",
+      category: "Identity",
+      isCurrent: currentNicDocumentIds.has(doc.id),
+    })),
   ];
 
   const getFileType = (url: string) => {
@@ -266,8 +194,18 @@ export default function RegistrationDetailsClient({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleOpenDoc = (doc: any) => {
-    const type = getFileType(doc.url);
-    setSelectedDoc({ ...doc, detectedType: type });
+    const safeUrl = canonicalizeDocumentUrl(doc.url);
+    if (!safeUrl) {
+      toast({
+        title: "Blocked Document URL",
+        description: "This document URL is not in a safe network format.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const type = getFileType(safeUrl);
+    setSelectedDoc({ ...doc, url: safeUrl, detectedType: type });
     setZoom(1);
   };
 
@@ -925,7 +863,7 @@ export default function RegistrationDetailsClient({
             <CardContent className="space-y-3">
               {documents.map((doc, i) => (
                 <button
-                  key={i}
+                  key={`${doc.category}-${doc.id || i}`}
                   onClick={() => handleOpenDoc(doc)}
                   className="w-full group flex items-center justify-between p-3 rounded-xl border border-transparent bg-gray-50/50 hover:bg-primary/5 hover:border-primary/20 transition-all text-left"
                 >
@@ -941,9 +879,16 @@ export default function RegistrationDetailsClient({
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest leading-none mb-1">
                         {doc.category}
                       </p>
-                      <p className="text-sm font-bold text-gray-900 group-hover:text-primary transition-colors">
-                        {doc.title}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-gray-900 group-hover:text-primary transition-colors">
+                          {doc.title}
+                        </p>
+                        {doc.isCurrent && (
+                          <Badge className="text-[9px] px-1.5 py-0 bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                            Current
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <Maximize2 className="w-4 h-4 text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />

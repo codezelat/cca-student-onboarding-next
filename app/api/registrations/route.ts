@@ -10,6 +10,7 @@ import {
   finalizeIdempotencySuccess,
 } from "@/lib/server/public-api-guard";
 import { getRequestContext, logActivitySafe } from "@/lib/server/activity-log";
+import { canonicalizeDocumentUrl } from "@/lib/registration-documents";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +60,7 @@ const registrationSchema = z.object({
   termsAccepted: z.literal("true"),
 });
 
-const urlArraySchema = z.array(z.string().url().max(2048)).max(10);
+const urlArraySchema = z.array(z.string().trim().min(1).max(2048)).max(10);
 
 const registrationFieldLabels: Record<string, string> = {
   turnstileToken: "Security verification",
@@ -226,7 +227,17 @@ function parseUrlArray(raw: string | undefined, fieldName: string): string[] {
       `Uploaded ${fieldName} data is invalid. Please upload the file(s) again.`,
     );
   }
-  return result.data;
+  const normalizedUrls = result.data
+    .map((url) => canonicalizeDocumentUrl(url))
+    .filter((url): url is string => Boolean(url));
+
+  if (normalizedUrls.length !== result.data.length) {
+    throw new RequestValidationError(
+      `Uploaded ${fieldName} contains an invalid or unsafe URL.`,
+    );
+  }
+
+  return normalizedUrls;
 }
 
 export async function POST(request: Request) {
@@ -465,8 +476,12 @@ export async function POST(request: Request) {
       toOptionalString(formData.get("passport_urls")),
       "passport document URLs",
     );
-    const photoUrl = toOptionalString(formData.get("photo_url"));
-    const paymentUrl = toOptionalString(formData.get("payment_url"));
+    const photoUrlRaw = toOptionalString(formData.get("photo_url"));
+    const paymentUrlRaw = toOptionalString(formData.get("payment_url"));
+    const photoUrl = photoUrlRaw ? canonicalizeDocumentUrl(photoUrlRaw) : null;
+    const paymentUrl = paymentUrlRaw
+      ? canonicalizeDocumentUrl(paymentUrlRaw)
+      : null;
 
     if (!academicUrls.length) {
       await logActivitySafe({
@@ -483,7 +498,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (!photoUrl || !z.string().url().safeParse(photoUrl).success) {
+    if (!photoUrl) {
       await logActivitySafe({
         category: "public_registration",
         action: "registration_validation_failed",
@@ -498,7 +513,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (!paymentUrl || !z.string().url().safeParse(paymentUrl).success) {
+    if (!paymentUrl) {
       await logActivitySafe({
         category: "public_registration",
         action: "registration_validation_failed",
@@ -514,18 +529,43 @@ export async function POST(request: Request) {
       );
     }
 
-    if (payload.nicNumber && !nicUrls.length) {
+    if (payload.nicNumber && nicUrls.length < 2) {
       await logActivitySafe({
         category: "public_registration",
         action: "registration_validation_failed",
         status: "failure",
         subjectType: "RegistrationSubmission",
         subjectLabel: payload.emailAddress,
-        message: "NIC document is required when NIC number is provided",
+        message: "NIC front and back documents are required when NIC number is provided",
         ...requestContext,
       });
       return NextResponse.json(
-        { success: false, error: "NIC document upload is required when NIC number is provided" },
+        {
+          success: false,
+          error:
+            "NIC front and back uploads are required when NIC number is provided",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (payload.passportNumber && !payload.nicNumber && !passportUrls.length) {
+      await logActivitySafe({
+        category: "public_registration",
+        action: "registration_validation_failed",
+        status: "failure",
+        subjectType: "RegistrationSubmission",
+        subjectLabel: payload.emailAddress,
+        message:
+          "Passport document is required when passport number is provided without NIC",
+        ...requestContext,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Passport information page upload is required when passport number is provided.",
+        },
         { status: 400 },
       );
     }
@@ -714,7 +754,16 @@ export async function POST(request: Request) {
           )
         : null,
       academicQualificationDocuments: academicUrls.map((url) => ({ url })),
-      nicDocuments: nicUrls.length ? nicUrls.map((url) => ({ url })) : undefined,
+      nicDocuments: nicUrls.length
+        ? nicUrls.map((url, index) => ({
+            url,
+            ...(index === 0
+              ? { side: "front" as const }
+              : index === 1
+                ? { side: "back" as const }
+                : {}),
+          }))
+        : undefined,
       passportDocuments: passportUrls.length
         ? passportUrls.map((url) => ({ url }))
         : undefined,
