@@ -852,57 +852,61 @@ export default function RegistrationTable({
         />
 
         <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
-            <DialogContent className="sm:max-w-4xl rounded-3xl bg-white/95 backdrop-blur-xl border-white/60 shadow-2xl max-h-[85vh] overflow-hidden">
-                <DialogHeader>
-                    <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-                        <Columns3 className="w-5 h-5 text-emerald-600" />
-                        Export Registrations
-                    </DialogTitle>
-                    <DialogDescription>
-                        Pick the columns to include. Current scope and filters are applied to the export.
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent className="sm:max-w-4xl rounded-3xl bg-white/95 backdrop-blur-xl border-white/60 shadow-2xl max-h-[85vh] overflow-hidden flex flex-col p-0">
+                <div className="shrink-0 px-6 pt-6">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                            <Columns3 className="w-5 h-5 text-emerald-600" />
+                            Export Registrations
+                        </DialogTitle>
+                        <DialogDescription>
+                            Pick the columns to include. Current scope and filters are applied to the export.
+                        </DialogDescription>
+                    </DialogHeader>
+                </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
-                    <div className="text-sm text-emerald-900">
-                        <p className="font-semibold">
-                            {selectedExportFields.length} column(s) selected
-                        </p>
-                        <p className="text-xs text-emerald-700">
-                            Scope: {currentScope} {currentProgram ? `• Program: ${currentProgram}` : ""} {currentTag ? `• Tag: ${currentTag}` : ""} {currentSearch ? `• Search: ${currentSearch}` : ""}
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                                setSelectedExportFields([...ALL_EXPORT_FIELD_KEYS])
-                            }
-                            className="rounded-xl"
-                        >
-                            Select All
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                                setSelectedExportFields([
-                                    ...DEFAULT_REGISTRATION_EXPORT_FIELD_KEYS,
-                                ])
-                            }
-                            className="rounded-xl"
-                        >
-                            <RotateCcw className="w-3.5 h-3.5 mr-1" />
-                            Defaults
-                        </Button>
+                <div className="shrink-0 px-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                        <div className="text-sm text-emerald-900">
+                            <p className="font-semibold">
+                                {selectedExportFields.length} column(s) selected
+                            </p>
+                            <p className="text-xs text-emerald-700">
+                                Scope: {currentScope} {currentProgram ? `• Program: ${currentProgram}` : ""} {currentTag ? `• Tag: ${currentTag}` : ""} {currentSearch ? `• Search: ${currentSearch}` : ""}
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                    setSelectedExportFields([...ALL_EXPORT_FIELD_KEYS])
+                                }
+                                className="rounded-xl"
+                            >
+                                Select All
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                    setSelectedExportFields([
+                                        ...DEFAULT_REGISTRATION_EXPORT_FIELD_KEYS,
+                                    ])
+                                }
+                                className="rounded-xl"
+                            >
+                                <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                                Defaults
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
-                <div className="overflow-y-auto pr-1">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pr-5">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-4">
                         {EXPORT_FIELD_GROUPS.map((group) => (
                             <div
                                 key={group.key}
@@ -957,7 +961,7 @@ export default function RegistrationTable({
                     </div>
                 </div>
 
-                <DialogFooter>
+                <DialogFooter className="shrink-0 border-t border-gray-100 bg-white/90 px-6 py-4">
                     <Button
                         type="button"
                         variant="ghost"
