@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -20,6 +20,7 @@ import {
     Eye,
     Trash2,
     TrendingUp,
+    ChevronsUpDown,
 } from "lucide-react";
 import {
     toggleRegistrationTrash,
@@ -27,6 +28,7 @@ import {
     getRegistrationsForExport,
 } from "./dashboard-actions";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getPaginationRange } from "@/lib/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -40,6 +42,11 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 import {
     canonicalizeDocumentUrl,
     normalizeDocumentCollection,
@@ -88,7 +95,7 @@ interface RegistrationTableProps {
     programs: { programId: string; programName: string }[];
     currentScope: string;
     currentSearch: string;
-    currentProgram: string;
+    currentProgram: string[];
     currentTag: string;
     currentPage: number;
     pageSize: number;
@@ -125,7 +132,7 @@ export default function RegistrationTable({
     const router = useRouter();
     const { toast } = useToast();
     const [searchInput, setSearchInput] = useState(currentSearch);
-    const [programInput, setProgramInput] = useState(currentProgram);
+    const [programInput, setProgramInput] = useState<string[]>(currentProgram);
     const [isExporting, setIsExporting] = useState(false);
     const [trashConfirm, setTrashConfirm] = useState<{ id: number; restore: boolean } | null>(null);
     const [purgeConfirm, setPurgeConfirm] = useState<{ id: number } | null>(null);
@@ -133,14 +140,26 @@ export default function RegistrationTable({
     const [isPurgePending, setIsPurgePending] = useState(false);
     const [copiedWhatsappId, setCopiedWhatsappId] = useState<string | null>(null);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+    const [isProgramFilterOpen, setIsProgramFilterOpen] = useState(false);
+    const [programQuery, setProgramQuery] = useState("");
     const [selectedExportFields, setSelectedExportFields] = useState<
         RegistrationExportFieldKey[]
     >([...DEFAULT_REGISTRATION_EXPORT_FIELD_KEYS]);
+    const deferredProgramQuery = useDeferredValue(programQuery);
+    const normalizedProgramQuery = deferredProgramQuery.trim().toLowerCase();
+    const visibleProgramOptions = programs.filter((program) => {
+        if (!normalizedProgramQuery) return true;
+
+        return (
+            program.programId.toLowerCase().includes(normalizedProgramQuery) ||
+            program.programName.toLowerCase().includes(normalizedProgramQuery)
+        );
+    });
 
     function buildUrl(params: {
         scope?: string;
         search?: string;
-        program?: string;
+        program?: string[];
         tag?: string;
         page?: number;
     }) {
@@ -155,7 +174,11 @@ export default function RegistrationTable({
         const page = params.page !== undefined ? params.page : currentPage;
 
         if (search) sp.set("search", search);
-        if (program) sp.set("program_filter", program);
+        program.forEach((programId) => {
+            if (programId) {
+                sp.append("program_filter", programId);
+            }
+        });
         if (tag) sp.set("tag_filter", tag);
         if (page > 1) sp.set("page", String(page));
 
@@ -171,8 +194,81 @@ export default function RegistrationTable({
 
     function clearFilters() {
         setSearchInput("");
-        setProgramInput("");
+        setProgramInput([]);
+        setProgramQuery("");
+        setIsProgramFilterOpen(false);
         router.push("/admin?scope=active");
+    }
+
+    function handleProgramPopoverChange(open: boolean) {
+        setIsProgramFilterOpen(open);
+        if (!open) {
+            setProgramQuery("");
+        }
+    }
+
+    function handleProgramToggle(programId: string) {
+        setProgramInput((current) =>
+            current.includes(programId)
+                ? current.filter((value) => value !== programId)
+                : [...current, programId],
+        );
+    }
+
+    function clearProgramSelection() {
+        setProgramInput([]);
+        setProgramQuery("");
+    }
+
+    const selectedProgramLabels = programInput
+        .map((programId) =>
+            programs.find((program) => program.programId === programId),
+        )
+        .filter(
+            (
+                program,
+            ): program is { programId: string; programName: string } =>
+                Boolean(program),
+        );
+    const appliedProgramLabels = currentProgram
+        .map((programId) =>
+            programs.find((program) => program.programId === programId),
+        )
+        .filter(
+            (
+                program,
+            ): program is { programId: string; programName: string } =>
+                Boolean(program),
+        );
+
+    const programTriggerLabel =
+        selectedProgramLabels.length === 0
+            ? "All Programs"
+            : selectedProgramLabels.length === 1
+              ? `${selectedProgramLabels[0].programId} • ${selectedProgramLabels[0].programName}`
+              : `${selectedProgramLabels.length} programs selected`;
+
+    const programSummaryLabel =
+        selectedProgramLabels.length === 0
+            ? ""
+            : selectedProgramLabels.length <= 2
+              ? selectedProgramLabels
+                    .map((program) => program.programId)
+                    .join(", ")
+              : `${selectedProgramLabels.length} selected`;
+
+    const selectedProgramExportLabel =
+        appliedProgramLabels.length === 0
+            ? ""
+            : appliedProgramLabels.length <= 3
+              ? appliedProgramLabels
+                    .map((program) => program.programId)
+                    .join(", ")
+              : `${appliedProgramLabels.length} programs`;
+
+    function applyProgramSelectionAndClose() {
+        setProgramQuery("");
+        setIsProgramFilterOpen(false);
     }
 
     async function handleTrash(id: number, restore: boolean) {
@@ -332,7 +428,7 @@ export default function RegistrationTable({
 
     const hasFilters =
         currentSearch ||
-        currentProgram ||
+        currentProgram.length > 0 ||
         currentTag ||
         currentScope !== "active";
     const { start: paginationStart, end: paginationEnd } = getPaginationRange({
@@ -406,23 +502,175 @@ export default function RegistrationTable({
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                                 Program Filter
                             </label>
-                            <select
-                                value={programInput}
-                                onChange={(e) =>
-                                    setProgramInput(e.target.value)
-                                }
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none appearance-none"
+                            <Popover
+                                open={isProgramFilterOpen}
+                                onOpenChange={handleProgramPopoverChange}
                             >
-                                <option value="">All Programs</option>
-                                {programs.map((p) => (
-                                    <option
-                                        key={p.programId}
-                                        value={p.programId}
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="w-full justify-between rounded-xl border-gray-200 bg-white/50 px-4 py-2 font-medium text-gray-700 hover:bg-white/80"
                                     >
-                                        {p.programName}
-                                    </option>
-                                ))}
-                            </select>
+                                        <span className="min-w-0 text-left">
+                                            {programInput.length > 0 ? (
+                                                <>
+                                                    <span className="block truncate">
+                                                        {programTriggerLabel}
+                                                    </span>
+                                                    <span className="block text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                                                        {programSummaryLabel}
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <span className="text-gray-500">
+                                                    All Programs
+                                                </span>
+                                            )}
+                                        </span>
+                                        <ChevronsUpDown className="ml-3 h-4 w-4 shrink-0 text-gray-400" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                    align="start"
+                                    className="w-[var(--radix-popover-trigger-width)] rounded-2xl border-white/70 bg-white/95 p-3 shadow-2xl backdrop-blur-xl"
+                                >
+                                    <div className="space-y-3">
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                                            <Input
+                                                value={programQuery}
+                                                onChange={(event) =>
+                                                    setProgramQuery(
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                placeholder="Search by code or program name..."
+                                                className="rounded-xl border-gray-200 bg-white pl-10"
+                                            />
+                                        </div>
+
+                                        <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-1">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    clearProgramSelection()
+                                                }
+                                                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                                                    programInput.length === 0
+                                                        ? "bg-primary text-white"
+                                                        : "text-gray-700 hover:bg-white"
+                                                }`}
+                                            >
+                                                <div>
+                                                    <p className="font-semibold">
+                                                        All Programs
+                                                    </p>
+                                                    <p
+                                                        className={`text-xs ${
+                                                            programInput.length === 0
+                                                                ? "text-white/80"
+                                                                : "text-gray-500"
+                                                        }`}
+                                                    >
+                                                        Remove the program-specific filter.
+                                                    </p>
+                                                </div>
+                                                {programInput.length === 0 && (
+                                                    <Check className="h-4 w-4 shrink-0" />
+                                                )}
+                                            </button>
+                                        </div>
+
+                                        <div className="max-h-72 overflow-y-auto pr-1">
+                                            <div className="space-y-1">
+                                                {visibleProgramOptions.length ===
+                                                0 ? (
+                                                    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-8 text-center">
+                                                        <p className="text-sm font-semibold text-gray-700">
+                                                            No matching programs
+                                                        </p>
+                                                        <p className="mt-1 text-xs text-gray-500">
+                                                            Try a code or part of the program name.
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    visibleProgramOptions.map(
+                                                        (program) => {
+                                                            const isSelected =
+                                                                programInput.includes(
+                                                                    program.programId,
+                                                                );
+
+                                                            return (
+                                                                <button
+                                                                    key={
+                                                                        program.programId
+                                                                    }
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        handleProgramToggle(
+                                                                            program.programId,
+                                                                        )
+                                                                    }
+                                                                    className={`flex w-full items-start justify-between gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
+                                                                        isSelected
+                                                                            ? "border-primary bg-primary/8"
+                                                                            : "border-transparent bg-white/70 hover:border-gray-200 hover:bg-white"
+                                                                    }`}
+                                                                >
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-xs font-black uppercase tracking-widest text-primary/80">
+                                                                            {
+                                                                                program.programId
+                                                                            }
+                                                                        </p>
+                                                                        <p className="mt-1 text-sm font-semibold text-gray-900">
+                                                                            {
+                                                                                program.programName
+                                                                            }
+                                                                        </p>
+                                                                    </div>
+                                                                    {isSelected && (
+                                                                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        },
+                                                    )
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                                            <p className="text-xs text-gray-500">
+                                                {programInput.length === 0
+                                                    ? "All programs included"
+                                                    : `${programInput.length} program(s) selected`}
+                                            </p>
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={clearProgramSelection}
+                                                    className="rounded-xl"
+                                                >
+                                                    Clear
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    onClick={applyProgramSelectionAndClose}
+                                                    className="rounded-xl bg-primary hover:bg-primary/90"
+                                                >
+                                                    Done
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -872,7 +1120,7 @@ export default function RegistrationTable({
                                 {selectedExportFields.length} column(s) selected
                             </p>
                             <p className="text-xs text-emerald-700">
-                                Scope: {currentScope} {currentProgram ? `• Program: ${currentProgram}` : ""} {currentTag ? `• Tag: ${currentTag}` : ""} {currentSearch ? `• Search: ${currentSearch}` : ""}
+                                Scope: {currentScope} {selectedProgramExportLabel ? `• Programs: ${selectedProgramExportLabel}` : ""} {currentTag ? `• Tag: ${currentTag}` : ""} {currentSearch ? `• Search: ${currentSearch}` : ""}
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">

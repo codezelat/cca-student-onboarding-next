@@ -61,7 +61,7 @@ async function getRegistrationAuditSnapshot(id: number) {
 type RegistrationQueryFilters = {
   scope?: string;
   search?: string;
-  programFilter?: string;
+  programFilter?: string | string[];
   tagFilter?: string;
 };
 
@@ -69,6 +69,11 @@ function buildRegistrationWhere(filters: RegistrationQueryFilters) {
   const { scope = "active", search, programFilter, tagFilter } = filters;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {};
+  const normalizedProgramFilter = Array.isArray(programFilter)
+    ? programFilter.map((value) => value.trim()).filter(Boolean)
+    : typeof programFilter === "string" && programFilter.trim().length
+      ? [programFilter.trim()]
+      : [];
 
   if (scope === "active") {
     where.deletedAt = null;
@@ -86,8 +91,10 @@ function buildRegistrationWhere(filters: RegistrationQueryFilters) {
     ];
   }
 
-  if (programFilter) {
-    where.programId = programFilter;
+  if (normalizedProgramFilter.length === 1) {
+    where.programId = normalizedProgramFilter[0];
+  } else if (normalizedProgramFilter.length > 1) {
+    where.programId = { in: normalizedProgramFilter };
   }
 
   if (tagFilter) {
@@ -286,7 +293,7 @@ export async function getDashboardStats() {
 export async function getRegistrations(params: {
   scope?: string;
   search?: string;
-  programFilter?: string;
+  programFilter?: string | string[];
   tagFilter?: string;
   page?: number;
   pageSize?: number;

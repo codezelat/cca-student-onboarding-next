@@ -14,7 +14,17 @@ export default async function AdminDashboardPage({
     const params = await searchParams;
     const scope = (params.scope as string) || "active";
     const search = (params.search as string) || "";
-    const programFilter = (params.program_filter as string) || "";
+    const programFilter = Array.isArray(params.program_filter)
+        ? [...new Set(
+              params.program_filter.filter(
+                  (value): value is string =>
+                      typeof value === "string" && value.trim().length > 0,
+              ),
+          )]
+        : typeof params.program_filter === "string" &&
+            params.program_filter.trim().length > 0
+          ? [params.program_filter]
+          : [];
     const tagFilter = (params.tag_filter as string) || "";
     const page = Math.max(
         1,
