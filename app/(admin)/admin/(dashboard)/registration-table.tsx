@@ -10,6 +10,7 @@ import {
     X,
     Copy,
     Check,
+    Columns3,
     Users,
     CheckCircle2,
     Gift,
@@ -26,14 +27,31 @@ import {
     getRegistrationsForExport,
 } from "./dashboard-actions";
 import { Button } from "@/components/ui/button";
-import { formatAppDate } from "@/lib/formatters";
 import { getPaginationRange } from "@/lib/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import {
     canonicalizeDocumentUrl,
     normalizeDocumentCollection,
 } from "@/lib/registration-documents";
+import {
+    DEFAULT_REGISTRATION_EXPORT_FIELD_KEYS,
+    REGISTRATION_EXPORT_FIELDS,
+    getOrderedRegistrationExportFields,
+    getRegistrationExportCellValue,
+    getRegistrationExportFieldsByGroup,
+    type RegistrationExportFieldKey,
+} from "@/lib/registration-export";
 
 type RegistrationRow = {
     id: number | string | bigint;
@@ -78,6 +96,19 @@ interface RegistrationTableProps {
     totalRows: number;
 }
 
+const EXPORT_FIELD_GROUPS = getRegistrationExportFieldsByGroup();
+const ALL_EXPORT_FIELD_KEYS = REGISTRATION_EXPORT_FIELDS.map(
+    (field) => field.key,
+);
+
+function escapeCsvCell(value: string): string {
+    const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    if (/[",\n]/.test(normalized)) {
+        return `"${normalized.replace(/"/g, '""')}"`;
+    }
+    return normalized;
+}
+
 export default function RegistrationTable({
     initialRegistrations,
     initialStats,
@@ -101,6 +132,10 @@ export default function RegistrationTable({
     const [isTrashPending, setIsTrashPending] = useState(false);
     const [isPurgePending, setIsPurgePending] = useState(false);
     const [copiedWhatsappId, setCopiedWhatsappId] = useState<string | null>(null);
+    const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+    const [selectedExportFields, setSelectedExportFields] = useState<
+        RegistrationExportFieldKey[]
+    >([...DEFAULT_REGISTRATION_EXPORT_FIELD_KEYS]);
 
     function buildUrl(params: {
         scope?: string;
@@ -178,6 +213,18 @@ export default function RegistrationTable({
 
     async function handleExport() {
         if (isExporting) return;
+        const orderedFields = getOrderedRegistrationExportFields(
+            selectedExportFields,
+        );
+
+        if (!orderedFields.length) {
+            toast({
+                title: "Select Columns",
+                description: "Choose at least one column to export.",
+                variant: "destructive",
+            });
+            return;
+        }
 
         setIsExporting(true);
         try {
@@ -186,34 +233,27 @@ export default function RegistrationTable({
                 search: currentSearch,
                 programFilter: currentProgram,
                 tagFilter: currentTag,
-            });
-            if (allRegistrations.length === 0) return;
+            }, orderedFields.map((field) => field.key));
+            if (allRegistrations.length === 0) {
+                toast({
+                    title: "No Data",
+                    description:
+                        "No registrations match the current filters for export.",
+                });
+                return;
+            }
 
-            const headers = [
-                "ID",
-                "Program ID",
-                "Program Name",
-                "Full Name",
-                "NIC/Passport",
-                "Email",
-                "WhatsApp",
-                "Full Amount",
-                "Paid Amount",
-                "Created At",
-            ];
+            const headers = orderedFields.map((field) =>
+                escapeCsvCell(field.label),
+            );
 
-            const csvData = allRegistrations.map((reg) => [
-                reg.registerId,
-                reg.programId,
-                reg.program?.name || "",
-                `"${reg.fullName.replace(/"/g, '""')}"`,
-                reg.nicNumber || reg.passportNumber || "N/A",
-                reg.emailAddress,
-                reg.whatsappNumber,
-                reg.fullAmount || "0",
-                reg.currentPaidAmount || "0",
-                formatAppDate(reg.createdAt),
-            ]);
+            const csvData = allRegistrations.map((reg) =>
+                orderedFields.map((field) =>
+                    escapeCsvCell(
+                        getRegistrationExportCellValue(reg, field.key),
+                    ),
+                ),
+            );
 
             const csvContent = [headers, ...csvData]
                 .map((row) => row.join(","))
@@ -226,19 +266,41 @@ export default function RegistrationTable({
             link.setAttribute("href", url);
             link.setAttribute(
                 "download",
-                `registrations_${new Date().toISOString().split("T")[0]}.csv`,
+                `registrations_${currentScope}_${new Date().toISOString().split("T")[0]}.csv`,
             );
             link.style.visibility = "hidden";
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
+            setIsExportDialogOpen(false);
+            toast({
+                title: "Export Ready",
+                description: `${allRegistrations.length} registration(s) exported.`,
+            });
         } catch (error) {
             console.error("Failed to export registrations CSV:", error);
             toast({ title: "Export Failed", description: "Failed to export CSV. Please try again.", variant: "destructive" });
         } finally {
             setIsExporting(false);
         }
+    }
+
+    function handleToggleExportField(
+        fieldKey: RegistrationExportFieldKey,
+        checked: boolean,
+    ) {
+        setSelectedExportFields((current) => {
+            const next = new Set(current);
+
+            if (checked) {
+                next.add(fieldKey);
+            } else {
+                next.delete(fieldKey);
+            }
+
+            return ALL_EXPORT_FIELD_KEYS.filter((key) => next.has(key));
+        });
     }
 
     function getPaymentSlipUrl(paymentSlip: unknown): string | null {
@@ -374,12 +436,12 @@ export default function RegistrationTable({
 
                         <button
                             type="button"
-                            onClick={handleExport}
+                            onClick={() => setIsExportDialogOpen(true)}
                             disabled={isExporting}
                             className="px-6 py-2.5 bg-emerald-600 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all flex items-center gap-2"
                         >
                             <Download className="w-4 h-4" />
-                            {isExporting ? "Exporting..." : "Export CSV"}
+                            Export CSV
                         </button>
 
                         {hasFilters && (
@@ -788,6 +850,134 @@ export default function RegistrationTable({
             isPending={isPurgePending}
             onConfirm={confirmPurge}
         />
+
+        <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+            <DialogContent className="sm:max-w-4xl rounded-3xl bg-white/95 backdrop-blur-xl border-white/60 shadow-2xl max-h-[85vh] overflow-hidden">
+                <DialogHeader>
+                    <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                        <Columns3 className="w-5 h-5 text-emerald-600" />
+                        Export Registrations
+                    </DialogTitle>
+                    <DialogDescription>
+                        Pick the columns to include. Current scope and filters are applied to the export.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                    <div className="text-sm text-emerald-900">
+                        <p className="font-semibold">
+                            {selectedExportFields.length} column(s) selected
+                        </p>
+                        <p className="text-xs text-emerald-700">
+                            Scope: {currentScope} {currentProgram ? `• Program: ${currentProgram}` : ""} {currentTag ? `• Tag: ${currentTag}` : ""} {currentSearch ? `• Search: ${currentSearch}` : ""}
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                                setSelectedExportFields([...ALL_EXPORT_FIELD_KEYS])
+                            }
+                            className="rounded-xl"
+                        >
+                            Select All
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                                setSelectedExportFields([
+                                    ...DEFAULT_REGISTRATION_EXPORT_FIELD_KEYS,
+                                ])
+                            }
+                            className="rounded-xl"
+                        >
+                            <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                            Defaults
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {EXPORT_FIELD_GROUPS.map((group) => (
+                            <div
+                                key={group.key}
+                                className="rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm"
+                            >
+                                <div className="mb-3">
+                                    <h3 className="text-sm font-bold text-gray-900">
+                                        {group.label}
+                                    </h3>
+                                    <p className="text-xs text-gray-500">
+                                        Choose the columns from this section.
+                                    </p>
+                                </div>
+                                <div className="space-y-3">
+                                    {group.fields.map((field) => {
+                                        const isChecked =
+                                            selectedExportFields.includes(field.key);
+
+                                        return (
+                                            <div
+                                                key={field.key}
+                                                className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50/70 p-3"
+                                            >
+                                                <Checkbox
+                                                    id={`export-field-${field.key}`}
+                                                    checked={isChecked}
+                                                    onCheckedChange={(checked) =>
+                                                        handleToggleExportField(
+                                                            field.key,
+                                                            checked === true,
+                                                        )
+                                                    }
+                                                    className="mt-0.5"
+                                                />
+                                                <Label
+                                                    htmlFor={`export-field-${field.key}`}
+                                                    className="cursor-pointer space-y-1"
+                                                >
+                                                    <span className="block text-sm font-semibold text-gray-900">
+                                                        {field.label}
+                                                    </span>
+                                                    <span className="block text-xs font-normal text-gray-500">
+                                                        {field.description}
+                                                    </span>
+                                                </Label>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <DialogFooter>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setIsExportDialogOpen(false)}
+                        className="rounded-xl"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        type="button"
+                        onClick={handleExport}
+                        disabled={isExporting || selectedExportFields.length === 0}
+                        className="bg-emerald-600 hover:bg-emerald-700 rounded-xl px-8"
+                    >
+                        <Download className="w-4 h-4 mr-2" />
+                        {isExporting ? "Exporting..." : "Download CSV"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
         </>
     );
 }

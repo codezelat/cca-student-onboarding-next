@@ -21,6 +21,13 @@ import {
   type RegistrationDocumentCategory,
   type RegistrationDocumentEntry,
 } from "@/lib/registration-documents";
+import {
+  DEFAULT_REGISTRATION_EXPORT_FIELD_KEYS,
+  REGISTRATION_EXPORT_FIELD_KEYS,
+  getOrderedRegistrationExportFields,
+  type RegistrationExportDataKey,
+  type RegistrationExportFieldKey,
+} from "@/lib/registration-export";
 
 function s<T>(data: T): T {
   return JSON.parse(
@@ -208,6 +215,23 @@ const documentAppendInputSchema = z.array(
   }),
 );
 
+const registrationExportFieldSchema = z
+  .array(z.enum(REGISTRATION_EXPORT_FIELD_KEYS))
+  .min(1)
+  .max(REGISTRATION_EXPORT_FIELD_KEYS.length);
+
+function buildRegistrationExportSelect(
+  dataKeys: Iterable<RegistrationExportDataKey>,
+): Prisma.CCARegistrationSelect {
+  const select = {} as Prisma.CCARegistrationSelect;
+
+  for (const key of dataKeys) {
+    select[key] = true;
+  }
+
+  return select;
+}
+
 export async function getDashboardStats() {
   type StatsRow = {
     active: bigint;
@@ -333,29 +357,33 @@ export async function getRegistrations(params: {
 
 export async function getRegistrationsForExport(
   params: RegistrationQueryFilters = {},
+  selectedFieldsInput?: unknown,
 ) {
+  await assertAdminFromServerHeaders();
   const where = buildRegistrationWhere(params);
+  const selectedFieldsParse = registrationExportFieldSchema.safeParse(
+    selectedFieldsInput ?? DEFAULT_REGISTRATION_EXPORT_FIELD_KEYS,
+  );
+
+  if (!selectedFieldsParse.success) {
+    throw new Error("Invalid export field selection.");
+  }
+
+  const orderedFields = getOrderedRegistrationExportFields(
+    selectedFieldsParse.data as RegistrationExportFieldKey[],
+  );
+  const requiredDataKeys = new Set<RegistrationExportDataKey>();
+
+  orderedFields.forEach((field) => {
+    field.dataKeys.forEach((dataKey) => {
+      requiredDataKeys.add(dataKey);
+    });
+  });
+
   const registrations = await prisma.cCARegistration.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      registerId: true,
-      programId: true,
-      fullName: true,
-      nicNumber: true,
-      passportNumber: true,
-      emailAddress: true,
-      whatsappNumber: true,
-      fullAmount: true,
-      currentPaidAmount: true,
-      createdAt: true,
-      program: {
-        select: {
-          name: true,
-        },
-      },
-    },
+    select: buildRegistrationExportSelect(requiredDataKeys),
   });
 
   return s(registrations);
