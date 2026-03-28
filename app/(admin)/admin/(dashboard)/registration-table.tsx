@@ -199,6 +199,13 @@ export default function RegistrationTable({
         ),
     ).sort((left, right) => alphanumericCollator.compare(right, left));
     const visibleProgramOptions = programs.filter((program) => {
+        if (
+            programGroupInput &&
+            program.programGroup !== programGroupInput
+        ) {
+            return false;
+        }
+
         if (!normalizedProgramQuery) return true;
 
         return (
@@ -293,6 +300,23 @@ export default function RegistrationTable({
     function clearProgramSelection() {
         setProgramInput([]);
         setProgramQuery("");
+    }
+
+    function handleProgramGroupChange(nextProgramGroup: string) {
+        setProgramGroupInput(nextProgramGroup);
+        setProgramInput((current) =>
+            current.filter((programId) => {
+                if (!nextProgramGroup) return true;
+
+                const matchingProgram = programs.find(
+                    (program) => program.programId === programId,
+                );
+
+                return matchingProgram?.programGroup === nextProgramGroup;
+            }),
+        );
+        setProgramQuery("");
+        setIsProgramFilterOpen(false);
     }
 
     const selectedProgramLabels = programInput
@@ -620,6 +644,14 @@ export default function RegistrationTable({
                                     className="w-[var(--radix-popover-trigger-width)] rounded-2xl border-white/70 bg-white/95 p-3 shadow-2xl backdrop-blur-xl"
                                 >
                                     <div className="space-y-3">
+                                        {programGroupInput && (
+                                            <div className="rounded-xl border border-sky-100 bg-sky-50/80 px-3 py-2">
+                                                <p className="text-xs font-medium text-sky-800">
+                                                    Program options are limited by the selected track.
+                                                </p>
+                                            </div>
+                                        )}
+
                                         <div className="relative">
                                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                                             <Input
@@ -802,7 +834,7 @@ export default function RegistrationTable({
                                         programGroupInput || ALL_FILTER_VALUE
                                     }
                                     onValueChange={(value) =>
-                                        setProgramGroupInput(
+                                        handleProgramGroupChange(
                                             value === ALL_FILTER_VALUE
                                                 ? ""
                                                 : value,
