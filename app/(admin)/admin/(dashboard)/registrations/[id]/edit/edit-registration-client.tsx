@@ -40,7 +40,7 @@ import {
   updateRegistrationProfile,
 } from "@/app/(admin)/admin/(dashboard)/dashboard-actions";
 import { useToast } from "@/hooks/use-toast";
-import { toDateInputValue } from "@/lib/formatters";
+import { formatAppDateTime, toDateInputValue } from "@/lib/formatters";
 import {
   ALLOWED_UPLOAD_ACCEPT,
   ALLOWED_UPLOAD_MIME_TYPES,
@@ -219,9 +219,7 @@ function buildInitialDocumentState(registration: EditRegistrationClientProps["re
 }
 
 function formatUploadDate(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "Unknown date";
-  return parsed.toLocaleString();
+  return formatAppDateTime(value || null);
 }
 
 function getReadableFileName(doc: RegistrationDocumentEntry): string {

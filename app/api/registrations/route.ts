@@ -753,10 +753,14 @@ export async function POST(request: Request) {
             "qualification expected completion date",
           )
         : null,
-      academicQualificationDocuments: academicUrls.map((url) => ({ url })),
+      academicQualificationDocuments: academicUrls.map((url) => ({
+        url,
+        uploadedAt: nowIso,
+      })),
       nicDocuments: nicUrls.length
         ? nicUrls.map((url, index) => ({
             url,
+            uploadedAt: nowIso,
             ...(index === 0
               ? { side: "front" as const }
               : index === 1
@@ -765,9 +769,9 @@ export async function POST(request: Request) {
           }))
         : undefined,
       passportDocuments: passportUrls.length
-        ? passportUrls.map((url) => ({ url }))
+        ? passportUrls.map((url) => ({ url, uploadedAt: nowIso }))
         : undefined,
-      passportPhoto: [{ url: photoUrl }],
+      passportPhoto: [{ url: photoUrl, uploadedAt: nowIso }],
       paymentSlip: [{ url: paymentUrl, uploadedAt: nowIso, status: "submitted" }],
       fullAmount: program.basePrice,
       currentPaidAmount: 0,

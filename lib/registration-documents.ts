@@ -78,7 +78,11 @@ function normalizeDateToIso(value: unknown, fallbackMs: number): string {
     }
   }
 
-  return new Date(fallbackMs).toISOString();
+  if (Number.isFinite(fallbackMs) && fallbackMs > 0) {
+    return new Date(fallbackMs).toISOString();
+  }
+
+  return "";
 }
 
 export function canonicalizeDocumentUrl(raw: string): string | null {
@@ -122,7 +126,7 @@ export function normalizeDocumentEntry(
     return {
       id: fallbackId,
       url: normalizedUrl,
-      uploadedAt: new Date(fallbackMs).toISOString(),
+      uploadedAt: normalizeDateToIso(undefined, fallbackMs),
     };
   }
 
@@ -186,7 +190,7 @@ export function normalizeDocumentCollection(
 
   const normalizedItems = rawItems
     .map((item, index) => {
-      const fallbackMs = index * 1000;
+      const fallbackMs = 0;
       const normalized = normalizeDocumentEntry(item, {
         fallbackMs,
         fallbackIdSeed: `${index}`,
@@ -206,7 +210,11 @@ export function normalizeDocumentCollection(
   normalizedItems.sort((a, b) => {
     const left = new Date(a.item.uploadedAt).getTime();
     const right = new Date(b.item.uploadedAt).getTime();
-    if (left !== right) return right - left;
+    const leftIsValid = Number.isFinite(left);
+    const rightIsValid = Number.isFinite(right);
+
+    if (leftIsValid && rightIsValid && left !== right) return right - left;
+    if (leftIsValid !== rightIsValid) return leftIsValid ? -1 : 1;
     return b.index - a.index;
   });
 
