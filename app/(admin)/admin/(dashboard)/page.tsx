@@ -6,26 +6,52 @@ import {
 } from "./dashboard-actions";
 import RegistrationTable from "./registration-table";
 
+function getSingleSearchParamValue(
+    value: string | string[] | undefined,
+): string {
+    if (Array.isArray(value)) {
+        return value.find((entry) => entry.trim().length > 0)?.trim() ?? "";
+    }
+
+    return typeof value === "string" ? value.trim() : "";
+}
+
+function getMultiSearchParamValues(
+    value: string | string[] | undefined,
+): string[] {
+    if (Array.isArray(value)) {
+        return [
+            ...new Set(
+                value
+                    .map((entry) => entry.trim())
+                    .filter((entry) => entry.length > 0),
+            ),
+        ];
+    }
+
+    if (typeof value === "string" && value.trim().length > 0) {
+        return [value.trim()];
+    }
+
+    return [];
+}
+
 export default async function AdminDashboardPage({
     searchParams,
 }: {
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
     const params = await searchParams;
-    const scope = (params.scope as string) || "active";
-    const search = (params.search as string) || "";
-    const programFilter = Array.isArray(params.program_filter)
-        ? [...new Set(
-              params.program_filter.filter(
-                  (value): value is string =>
-                      typeof value === "string" && value.trim().length > 0,
-              ),
-          )]
-        : typeof params.program_filter === "string" &&
-            params.program_filter.trim().length > 0
-          ? [params.program_filter]
-          : [];
-    const tagFilter = (params.tag_filter as string) || "";
+    const scope = getSingleSearchParamValue(params.scope) || "active";
+    const search = getSingleSearchParamValue(params.search);
+    const programFilter = getMultiSearchParamValues(params.program_filter);
+    const programGroupFilter = getSingleSearchParamValue(
+        params.program_group_filter,
+    ).toUpperCase();
+    const intakeYearFilter = getSingleSearchParamValue(
+        params.intake_year_filter,
+    );
+    const tagFilter = getSingleSearchParamValue(params.tag_filter);
     const page = Math.max(
         1,
         Number.isFinite(Number(params.page))
@@ -35,7 +61,15 @@ export default async function AdminDashboardPage({
 
     const [stats, registrationsResult, programs] = await Promise.all([
         getDashboardStats(),
-        getRegistrations({ scope, search, programFilter, tagFilter, page }),
+        getRegistrations({
+            scope,
+            search,
+            programFilter,
+            programGroupFilter,
+            intakeYearFilter,
+            tagFilter,
+            page,
+        }),
         getActivePrograms(),
     ]);
 
@@ -122,6 +156,8 @@ export default async function AdminDashboardPage({
                 currentScope={scope}
                 currentSearch={search}
                 currentProgram={programFilter}
+                currentProgramGroup={programGroupFilter}
+                currentIntakeYear={intakeYearFilter}
                 currentTag={tagFilter}
                 currentPage={registrationsResult.page}
                 pageSize={registrationsResult.pageSize}

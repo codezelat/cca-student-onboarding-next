@@ -62,44 +62,126 @@ type RegistrationQueryFilters = {
   scope?: string;
   search?: string;
   programFilter?: string | string[];
+  programGroupFilter?: string;
+  intakeYearFilter?: string;
   tagFilter?: string;
 };
 
-function buildRegistrationWhere(filters: RegistrationQueryFilters) {
-  const { scope = "active", search, programFilter, tagFilter } = filters;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {};
-  const normalizedProgramFilter = Array.isArray(programFilter)
-    ? programFilter.map((value) => value.trim()).filter(Boolean)
-    : typeof programFilter === "string" && programFilter.trim().length
-      ? [programFilter.trim()]
-      : [];
+function normalizeSingleFilter(value: string | undefined): string | null {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeProgramFilter(
+  value: RegistrationQueryFilters["programFilter"],
+): string[] {
+  if (Array.isArray(value)) {
+    return [...new Set(
+      value
+        .map((entry) => entry.trim().toUpperCase())
+        .filter(Boolean),
+    )];
+  }
+
+  if (typeof value !== "string") {
+    return [];
+  }
+
+  const trimmed = value.trim().toUpperCase();
+  return trimmed ? [trimmed] : [];
+}
+
+function extractProgramGroupFromCode(programCode: string): string | null {
+  const normalizedProgramCode = programCode.trim().toUpperCase();
+  if (!normalizedProgramCode) return null;
+
+  const [prefix] = normalizedProgramCode.split("-", 1);
+  return prefix || null;
+}
+
+function buildRegistrationWhere(
+  filters: RegistrationQueryFilters,
+): Prisma.CCARegistrationWhereInput {
+  const {
+    scope = "active",
+    search,
+    programFilter,
+    programGroupFilter,
+    intakeYearFilter,
+    tagFilter,
+  } = filters;
+  const where: Prisma.CCARegistrationWhereInput = {};
+  const andConditions: Prisma.CCARegistrationWhereInput[] = [];
+  const normalizedSearch = normalizeSingleFilter(search);
+  const normalizedProgramFilter = normalizeProgramFilter(programFilter);
+  const normalizedProgramGroupFilter = normalizeSingleFilter(
+    programGroupFilter,
+  )?.toUpperCase();
+  const normalizedIntakeYearFilter = normalizeSingleFilter(intakeYearFilter);
+  const normalizedTagFilter = normalizeSingleFilter(tagFilter);
 
   if (scope === "active") {
     where.deletedAt = null;
   } else if (scope === "trashed") {
-    where.NOT = { deletedAt: null };
+    where.deletedAt = { not: null };
   }
 
-  if (search) {
-    where.OR = [
-      { registerId: { contains: search, mode: "insensitive" } },
-      { fullName: { contains: search, mode: "insensitive" } },
-      { emailAddress: { contains: search, mode: "insensitive" } },
-      { nicNumber: { contains: search, mode: "insensitive" } },
-      { whatsappNumber: { contains: search, mode: "insensitive" } },
-    ];
+  if (normalizedSearch) {
+    andConditions.push({
+      OR: [
+        { registerId: { contains: normalizedSearch, mode: "insensitive" } },
+        { fullName: { contains: normalizedSearch, mode: "insensitive" } },
+        { emailAddress: { contains: normalizedSearch, mode: "insensitive" } },
+        { nicNumber: { contains: normalizedSearch, mode: "insensitive" } },
+        { whatsappNumber: { contains: normalizedSearch, mode: "insensitive" } },
+      ],
+    });
   }
 
   if (normalizedProgramFilter.length === 1) {
-    where.programId = normalizedProgramFilter[0];
+    andConditions.push({
+      programId: {
+        equals: normalizedProgramFilter[0],
+        mode: "insensitive",
+      },
+    });
   } else if (normalizedProgramFilter.length > 1) {
-    where.programId = { in: normalizedProgramFilter };
+    andConditions.push({
+      programId: { in: normalizedProgramFilter },
+    });
   }
 
-  if (tagFilter) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    where.tags = { path: [], array_contains: tagFilter } as any;
+  if (normalizedProgramGroupFilter) {
+    andConditions.push({
+      programId: {
+        startsWith: normalizedProgramGroupFilter,
+        mode: "insensitive",
+      },
+    });
+  }
+
+  if (normalizedIntakeYearFilter) {
+    andConditions.push({
+      programYear: {
+        equals: normalizedIntakeYearFilter,
+        mode: "insensitive",
+      },
+    });
+  }
+
+  if (normalizedTagFilter) {
+    andConditions.push({
+      tags: {
+        path: [],
+        array_contains: normalizedTagFilter,
+      } as Prisma.JsonNullableFilter,
+    });
+  }
+
+  if (andConditions.length > 0) {
+    where.AND = andConditions;
   }
 
   return where;
@@ -294,6 +376,8 @@ export async function getRegistrations(params: {
   scope?: string;
   search?: string;
   programFilter?: string | string[];
+  programGroupFilter?: string;
+  intakeYearFilter?: string;
   tagFilter?: string;
   page?: number;
   pageSize?: number;
@@ -302,6 +386,8 @@ export async function getRegistrations(params: {
     scope = "active",
     search,
     programFilter,
+    programGroupFilter,
+    intakeYearFilter,
     tagFilter,
     page = 1,
     pageSize = 20,
@@ -312,6 +398,8 @@ export async function getRegistrations(params: {
     scope,
     search,
     programFilter,
+    programGroupFilter,
+    intakeYearFilter,
     tagFilter,
   });
 
@@ -398,12 +486,17 @@ export async function getRegistrationsForExport(
 
 const _cachedPrograms = unstable_cache(
   async () => {
-    const programs: Array<{ code: string; name: string }> =
+    const programs: Array<{ code: string; name: string; yearLabel: string }> =
       await prisma.program.findMany({
-        select: { code: true, name: true },
+        select: { code: true, name: true, yearLabel: true },
         orderBy: { displayOrder: "asc" },
       });
-    return programs.map((p) => ({ programId: p.code, programName: p.name }));
+    return programs.map((program) => ({
+      programId: program.code,
+      programName: program.name,
+      yearLabel: program.yearLabel,
+      programGroup: extractProgramGroupFromCode(program.code),
+    }));
   },
   ["active-programs"],
   { revalidate: 3600 },

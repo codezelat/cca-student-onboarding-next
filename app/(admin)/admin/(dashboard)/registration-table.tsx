@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -34,6 +34,13 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import {
     Dialog,
     DialogContent,
@@ -89,13 +96,22 @@ type DashboardStats = {
     topProgram: { id: string; count: number } | null;
 };
 
+type ProgramOption = {
+    programId: string;
+    programName: string;
+    yearLabel: string;
+    programGroup: string | null;
+};
+
 interface RegistrationTableProps {
     initialRegistrations: RegistrationRow[];
     initialStats: DashboardStats;
-    programs: { programId: string; programName: string }[];
+    programs: ProgramOption[];
     currentScope: string;
     currentSearch: string;
     currentProgram: string[];
+    currentProgramGroup: string;
+    currentIntakeYear: string;
     currentTag: string;
     currentPage: number;
     pageSize: number;
@@ -107,6 +123,11 @@ const EXPORT_FIELD_GROUPS = getRegistrationExportFieldsByGroup();
 const ALL_EXPORT_FIELD_KEYS = REGISTRATION_EXPORT_FIELDS.map(
     (field) => field.key,
 );
+const ALL_FILTER_VALUE = "__all__";
+const alphanumericCollator = new Intl.Collator(undefined, {
+    numeric: true,
+    sensitivity: "base",
+});
 
 function escapeCsvCell(value: string): string {
     const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -123,6 +144,8 @@ export default function RegistrationTable({
     currentScope,
     currentSearch,
     currentProgram,
+    currentProgramGroup,
+    currentIntakeYear,
     currentTag,
     currentPage,
     pageSize,
@@ -133,6 +156,10 @@ export default function RegistrationTable({
     const { toast } = useToast();
     const [searchInput, setSearchInput] = useState(currentSearch);
     const [programInput, setProgramInput] = useState<string[]>(currentProgram);
+    const [programGroupInput, setProgramGroupInput] = useState(
+        currentProgramGroup,
+    );
+    const [intakeYearInput, setIntakeYearInput] = useState(currentIntakeYear);
     const [isExporting, setIsExporting] = useState(false);
     const [trashConfirm, setTrashConfirm] = useState<{ id: number; restore: boolean } | null>(null);
     const [purgeConfirm, setPurgeConfirm] = useState<{ id: number } | null>(null);
@@ -145,8 +172,32 @@ export default function RegistrationTable({
     const [selectedExportFields, setSelectedExportFields] = useState<
         RegistrationExportFieldKey[]
     >([...DEFAULT_REGISTRATION_EXPORT_FIELD_KEYS]);
+
+    useEffect(() => {
+        setSearchInput(currentSearch);
+        setProgramInput(currentProgram);
+        setProgramGroupInput(currentProgramGroup);
+        setIntakeYearInput(currentIntakeYear);
+    }, [currentSearch, currentProgram, currentProgramGroup, currentIntakeYear]);
+
     const deferredProgramQuery = useDeferredValue(programQuery);
     const normalizedProgramQuery = deferredProgramQuery.trim().toLowerCase();
+    const availableProgramGroups = Array.from(
+        new Set(
+            programs
+                .map((program) => program.programGroup)
+                .filter((programGroup): programGroup is string =>
+                    Boolean(programGroup),
+                ),
+        ),
+    ).sort((left, right) => alphanumericCollator.compare(left, right));
+    const availableIntakeYears = Array.from(
+        new Set(
+            programs
+                .map((program) => program.yearLabel.trim())
+                .filter((yearLabel) => yearLabel.length > 0),
+        ),
+    ).sort((left, right) => alphanumericCollator.compare(right, left));
     const visibleProgramOptions = programs.filter((program) => {
         if (!normalizedProgramQuery) return true;
 
@@ -160,6 +211,8 @@ export default function RegistrationTable({
         scope?: string;
         search?: string;
         program?: string[];
+        programGroup?: string;
+        intakeYear?: string;
         tag?: string;
         page?: number;
     }) {
@@ -170,6 +223,14 @@ export default function RegistrationTable({
             params.search !== undefined ? params.search : currentSearch;
         const program =
             params.program !== undefined ? params.program : currentProgram;
+        const programGroup =
+            params.programGroup !== undefined
+                ? params.programGroup
+                : currentProgramGroup;
+        const intakeYear =
+            params.intakeYear !== undefined
+                ? params.intakeYear
+                : currentIntakeYear;
         const tag = params.tag !== undefined ? params.tag : currentTag;
         const page = params.page !== undefined ? params.page : currentPage;
 
@@ -179,6 +240,12 @@ export default function RegistrationTable({
                 sp.append("program_filter", programId);
             }
         });
+        if (programGroup) {
+            sp.set("program_group_filter", programGroup);
+        }
+        if (intakeYear) {
+            sp.set("intake_year_filter", intakeYear);
+        }
         if (tag) sp.set("tag_filter", tag);
         if (page > 1) sp.set("page", String(page));
 
@@ -188,13 +255,21 @@ export default function RegistrationTable({
     function handleFilterSubmit(e: React.FormEvent) {
         e.preventDefault();
         router.push(
-            buildUrl({ search: searchInput, program: programInput, page: 1 }),
+            buildUrl({
+                search: searchInput,
+                program: programInput,
+                programGroup: programGroupInput,
+                intakeYear: intakeYearInput,
+                page: 1,
+            }),
         );
     }
 
     function clearFilters() {
         setSearchInput("");
         setProgramInput([]);
+        setProgramGroupInput("");
+        setIntakeYearInput("");
         setProgramQuery("");
         setIsProgramFilterOpen(false);
         router.push("/admin?scope=active");
@@ -225,20 +300,14 @@ export default function RegistrationTable({
             programs.find((program) => program.programId === programId),
         )
         .filter(
-            (
-                program,
-            ): program is { programId: string; programName: string } =>
-                Boolean(program),
+            (program): program is ProgramOption => Boolean(program),
         );
     const appliedProgramLabels = currentProgram
         .map((programId) =>
             programs.find((program) => program.programId === programId),
         )
         .filter(
-            (
-                program,
-            ): program is { programId: string; programName: string } =>
-                Boolean(program),
+            (program): program is ProgramOption => Boolean(program),
         );
 
     const programTriggerLabel =
@@ -265,6 +334,8 @@ export default function RegistrationTable({
                     .map((program) => program.programId)
                     .join(", ")
               : `${appliedProgramLabels.length} programs`;
+    const selectedProgramGroupExportLabel = currentProgramGroup;
+    const selectedIntakeYearExportLabel = currentIntakeYear;
 
     function applyProgramSelectionAndClose() {
         setProgramQuery("");
@@ -328,6 +399,8 @@ export default function RegistrationTable({
                 scope: currentScope,
                 search: currentSearch,
                 programFilter: currentProgram,
+                programGroupFilter: currentProgramGroup,
+                intakeYearFilter: currentIntakeYear,
                 tagFilter: currentTag,
             }, orderedFields.map((field) => field.key));
             if (allRegistrations.length === 0) {
@@ -429,6 +502,8 @@ export default function RegistrationTable({
     const hasFilters =
         currentSearch ||
         currentProgram.length > 0 ||
+        currentProgramGroup ||
+        currentIntakeYear ||
         currentTag ||
         currentScope !== "active";
     const { start: paginationStart, end: paginationEnd } = getPaginationRange({
@@ -673,35 +748,129 @@ export default function RegistrationTable({
                             </Popover>
                         </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 pt-2">
-                        <button
-                            type="submit"
-                            className="px-6 py-2.5 bg-linear-to-r from-primary to-indigo-600 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all flex items-center gap-2"
-                        >
-                            <Filter className="w-4 h-4" />
-                            Apply Filters
-                        </button>
+                    <div className="flex flex-col gap-4 pt-2 xl:flex-row xl:items-end xl:justify-between">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <button
+                                type="submit"
+                                className="px-6 py-2.5 bg-linear-to-r from-primary to-indigo-600 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all flex items-center gap-2"
+                            >
+                                <Filter className="w-4 h-4" />
+                                Apply Filters
+                            </button>
 
-                        <button
-                            type="button"
-                            onClick={() => setIsExportDialogOpen(true)}
-                            disabled={isExporting}
-                            className="px-6 py-2.5 bg-emerald-600 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all flex items-center gap-2"
-                        >
-                            <Download className="w-4 h-4" />
-                            Export CSV
-                        </button>
-
-                        {hasFilters && (
                             <button
                                 type="button"
-                                onClick={clearFilters}
-                                className="px-6 py-2.5 bg-red-500 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all flex items-center gap-2"
+                                onClick={() => setIsExportDialogOpen(true)}
+                                disabled={isExporting}
+                                className="px-6 py-2.5 bg-emerald-600 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all flex items-center gap-2"
                             >
-                                <X className="w-4 h-4" />
-                                Clear
+                                <Download className="w-4 h-4" />
+                                Export CSV
                             </button>
-                        )}
+
+                            {hasFilters && (
+                                <button
+                                    type="button"
+                                    onClick={clearFilters}
+                                    className="px-6 py-2.5 bg-red-500 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all flex items-center gap-2"
+                                >
+                                    <X className="w-4 h-4" />
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:min-w-[25rem]">
+                            <div className="space-y-2">
+                                <Label
+                                    htmlFor="program-group-filter"
+                                    className="block text-xs font-bold uppercase tracking-wider text-gray-500"
+                                >
+                                    Program Track
+                                </Label>
+                                <Select
+                                    value={
+                                        programGroupInput || ALL_FILTER_VALUE
+                                    }
+                                    onValueChange={(value) =>
+                                        setProgramGroupInput(
+                                            value === ALL_FILTER_VALUE
+                                                ? ""
+                                                : value,
+                                        )
+                                    }
+                                >
+                                    <SelectTrigger
+                                        id="program-group-filter"
+                                        className="h-11 w-full rounded-xl border-gray-200 bg-white/70 px-4 text-left font-medium text-gray-700"
+                                    >
+                                        <SelectValue placeholder="All tracks" />
+                                    </SelectTrigger>
+                                    <SelectContent
+                                        align="end"
+                                        className="rounded-xl border-white/70 bg-white/95"
+                                    >
+                                        <SelectItem value={ALL_FILTER_VALUE}>
+                                            All tracks
+                                        </SelectItem>
+                                        {availableProgramGroups.map(
+                                            (programGroup) => (
+                                                <SelectItem
+                                                    key={programGroup}
+                                                    value={programGroup}
+                                                >
+                                                    {programGroup}
+                                                </SelectItem>
+                                            ),
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label
+                                    htmlFor="intake-year-filter"
+                                    className="block text-xs font-bold uppercase tracking-wider text-gray-500"
+                                >
+                                    Intake Year
+                                </Label>
+                                <Select
+                                    value={intakeYearInput || ALL_FILTER_VALUE}
+                                    onValueChange={(value) =>
+                                        setIntakeYearInput(
+                                            value === ALL_FILTER_VALUE
+                                                ? ""
+                                                : value,
+                                        )
+                                    }
+                                >
+                                    <SelectTrigger
+                                        id="intake-year-filter"
+                                        className="h-11 w-full rounded-xl border-gray-200 bg-white/70 px-4 text-left font-medium text-gray-700"
+                                    >
+                                        <SelectValue placeholder="All intake years" />
+                                    </SelectTrigger>
+                                    <SelectContent
+                                        align="end"
+                                        className="rounded-xl border-white/70 bg-white/95"
+                                    >
+                                        <SelectItem value={ALL_FILTER_VALUE}>
+                                            All intake years
+                                        </SelectItem>
+                                        {availableIntakeYears.map(
+                                            (intakeYear) => (
+                                                <SelectItem
+                                                    key={intakeYear}
+                                                    value={intakeYear}
+                                                >
+                                                    {intakeYear}
+                                                </SelectItem>
+                                            ),
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -1120,7 +1289,7 @@ export default function RegistrationTable({
                                 {selectedExportFields.length} column(s) selected
                             </p>
                             <p className="text-xs text-emerald-700">
-                                Scope: {currentScope} {selectedProgramExportLabel ? `• Programs: ${selectedProgramExportLabel}` : ""} {currentTag ? `• Tag: ${currentTag}` : ""} {currentSearch ? `• Search: ${currentSearch}` : ""}
+                                Scope: {currentScope} {selectedProgramExportLabel ? `• Programs: ${selectedProgramExportLabel}` : ""} {selectedProgramGroupExportLabel ? `• Track: ${selectedProgramGroupExportLabel}` : ""} {selectedIntakeYearExportLabel ? `• Intake Year: ${selectedIntakeYearExportLabel}` : ""} {currentTag ? `• Tag: ${currentTag}` : ""} {currentSearch ? `• Search: ${currentSearch}` : ""}
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
