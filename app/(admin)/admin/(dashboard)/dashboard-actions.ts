@@ -28,6 +28,7 @@ import {
   type RegistrationExportDataKey,
   type RegistrationExportFieldKey,
 } from "@/lib/registration-export";
+import { REGISTRATION_PROGRAM_OPTIONS_CACHE_TAG } from "@/lib/server/program-cache";
 
 function s<T>(data: T): T {
   return JSON.parse(
@@ -484,7 +485,7 @@ export async function getRegistrationsForExport(
   return s(registrations);
 }
 
-const _cachedPrograms = unstable_cache(
+const _cachedRegistrationProgramOptions = unstable_cache(
   async () => {
     const programs: Array<{ code: string; name: string; yearLabel: string }> =
       await prisma.program.findMany({
@@ -498,12 +499,15 @@ const _cachedPrograms = unstable_cache(
       programGroup: extractProgramGroupFromCode(program.code),
     }));
   },
-  ["active-programs"],
-  { revalidate: 3600 },
+  ["registration-program-options"],
+  {
+    revalidate: 3600,
+    tags: [REGISTRATION_PROGRAM_OPTIONS_CACHE_TAG],
+  },
 );
 
-export async function getActivePrograms() {
-  return _cachedPrograms();
+export async function getProgramsForRegistrationOptions() {
+  return _cachedRegistrationProgramOptions();
 }
 
 export async function toggleRegistrationTrash(id: number, restore: boolean) {

@@ -11,7 +11,6 @@ import {
     Clock,
     CalendarCheck,
     DollarSign,
-    MoreVertical,
     AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,7 +24,6 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,10 +42,11 @@ import {
     toDateInputValue,
 } from "@/lib/formatters";
 import { getPaginationRange } from "@/lib/pagination";
+import type { ProgramIntakeItem } from "../../programs-types";
 
 interface IntakesClientProps {
     programId: string;
-    initialIntakes: any[];
+    initialIntakes: ProgramIntakeItem[];
     currentPage: number;
     pageSize: number;
     totalPages: number;
@@ -65,7 +64,7 @@ export default function IntakesClient({
     const router = useAdminBusyRouter();
     const [intakes, setIntakes] = useState(initialIntakes);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [editingIntake, setEditingIntake] = useState<any>(null);
+    const [editingIntake, setEditingIntake] = useState<ProgramIntakeItem | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<{ id: string } | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -107,7 +106,7 @@ export default function IntakesClient({
             setIsDialogOpen(false);
             setEditingIntake(null);
             router.refresh();
-        } catch (error) {
+        } catch {
             toast({
                 title: "Error",
                 description: "Failed to save intake window.",
@@ -128,7 +127,7 @@ export default function IntakesClient({
             );
             toast({ title: "Status Updated" });
             router.refresh();
-        } catch (error) {
+        } catch {
             toast({ title: "Error", variant: "destructive" });
         }
     }
@@ -146,14 +145,14 @@ export default function IntakesClient({
             setDeleteConfirm(null);
             toast({ title: "Deleted" });
             router.refresh();
-        } catch (error) {
+        } catch {
             toast({ title: "Error", variant: "destructive" });
         } finally {
             setIsDeleting(false);
         }
     }
 
-    const openForEdit = (intake: any) => {
+    const openForEdit = (intake: ProgramIntakeItem) => {
         setEditingIntake(intake);
         setIsDialogOpen(true);
     };

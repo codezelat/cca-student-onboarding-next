@@ -45,17 +45,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type {
+  ProgramCardItem,
+  ProgramRegistrationsSort,
+  ProgramStatusSort,
+} from "./programs-types";
 
 interface ProgramsListClientProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialPrograms: any[];
+  initialPrograms: ProgramCardItem[];
   currentSearch: string;
-  currentStatusSort: string;
-  currentRegistrationsSort: string;
+  currentStatusSort: ProgramStatusSort;
+  currentRegistrationsSort: ProgramRegistrationsSort;
   currentPage: number;
   pageSize: number;
   totalPages: number;
   totalRows: number;
+}
+
+function parseStatusSort(value: string): ProgramStatusSort {
+  if (value === "active_first" || value === "inactive_first") {
+    return value;
+  }
+
+  return "none";
+}
+
+function parseRegistrationsSort(value: string): ProgramRegistrationsSort {
+  if (value === "most" || value === "fewest") {
+    return value;
+  }
+
+  return "none";
 }
 
 export default function ProgramsListClient({
@@ -71,10 +91,10 @@ export default function ProgramsListClient({
   const router = useAdminBusyRouter();
   const [programs, setPrograms] = useState(initialPrograms);
   const [searchQuery, setSearchQuery] = useState(currentSearch);
-  const [statusSortValue, setStatusSortValue] = useState(currentStatusSort);
-  const [registrationsSortValue, setRegistrationsSortValue] = useState(
-    currentRegistrationsSort,
-  );
+  const [statusSortValue, setStatusSortValue] =
+    useState<ProgramStatusSort>(currentStatusSort);
+  const [registrationsSortValue, setRegistrationsSortValue] =
+    useState<ProgramRegistrationsSort>(currentRegistrationsSort);
   const { toast } = useToast();
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -155,8 +175,8 @@ export default function ProgramsListClient({
 
   function buildUrl(params: {
     search?: string;
-    statusSort?: string;
-    registrationsSort?: string;
+    statusSort?: ProgramStatusSort;
+    registrationsSort?: ProgramRegistrationsSort;
     page?: number;
   }) {
     const sp = new URLSearchParams();
@@ -240,12 +260,13 @@ export default function ProgramsListClient({
           <Select
             value={registrationsSortValue}
             onValueChange={(value) => {
-              setRegistrationsSortValue(value);
+              const nextValue = parseRegistrationsSort(value);
+              setRegistrationsSortValue(nextValue);
               router.push(
                 buildUrl({
                   search: searchQuery,
                   statusSort: statusSortValue,
-                  registrationsSort: value,
+                  registrationsSort: nextValue,
                   page: 1,
                 }),
               );
@@ -264,11 +285,12 @@ export default function ProgramsListClient({
           <Select
             value={statusSortValue}
             onValueChange={(value) => {
-              setStatusSortValue(value);
+              const nextValue = parseStatusSort(value);
+              setStatusSortValue(nextValue);
               router.push(
                 buildUrl({
                   search: searchQuery,
-                  statusSort: value,
+                  statusSort: nextValue,
                   registrationsSort: registrationsSortValue,
                   page: 1,
                 }),

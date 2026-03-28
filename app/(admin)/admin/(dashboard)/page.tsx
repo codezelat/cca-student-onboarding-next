@@ -2,7 +2,7 @@ import Link from "next/link";
 import {
     getDashboardStats,
     getRegistrations,
-    getActivePrograms,
+    getProgramsForRegistrationOptions,
 } from "./dashboard-actions";
 import RegistrationTable from "./registration-table";
 
@@ -70,7 +70,7 @@ export default async function AdminDashboardPage({
             tagFilter,
             page,
         }),
-        getActivePrograms(),
+        getProgramsForRegistrationOptions(),
     ]);
 
     return (

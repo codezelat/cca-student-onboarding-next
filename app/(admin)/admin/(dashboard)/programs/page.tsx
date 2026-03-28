@@ -3,8 +3,38 @@ import ProgramsListClient from "./programs-list-client";
 import { Plus, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import type {
+    ProgramRegistrationsSort,
+    ProgramStatusSort,
+} from "./programs-types";
 
 const PROGRAMS_GRID_PAGE_SIZE = 18;
+
+function getSingleSearchParamValue(
+    value: string | string[] | undefined,
+): string {
+    if (Array.isArray(value)) {
+        return value.find((entry) => entry.trim().length > 0)?.trim() ?? "";
+    }
+
+    return typeof value === "string" ? value.trim() : "";
+}
+
+function parseStatusSort(value: string): ProgramStatusSort {
+    if (value === "active_first" || value === "inactive_first") {
+        return value;
+    }
+
+    return "none";
+}
+
+function parseRegistrationsSort(value: string): ProgramRegistrationsSort {
+    if (value === "most" || value === "fewest") {
+        return value;
+    }
+
+    return "none";
+}
 
 export default async function ProgramsPage({
     searchParams,
@@ -12,9 +42,13 @@ export default async function ProgramsPage({
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
     const params = await searchParams;
-    const search = (params.search as string) || "";
-    const statusSort = (params.status_sort as string) || "none";
-    const registrationsSort = (params.registrations_sort as string) || "none";
+    const search = getSingleSearchParamValue(params.search);
+    const statusSort = parseStatusSort(
+        getSingleSearchParamValue(params.status_sort),
+    );
+    const registrationsSort = parseRegistrationsSort(
+        getSingleSearchParamValue(params.registrations_sort),
+    );
     const page = Math.max(
         1,
         Number.isFinite(Number(params.page)) ? Number(params.page) : 1,

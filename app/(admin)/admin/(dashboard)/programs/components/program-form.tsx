@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import {
+  useForm,
+  type Resolver,
+  type SubmitHandler,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Save, ArrowLeft, Loader2, BookOpen } from "lucide-react";
@@ -18,6 +22,7 @@ import {
 } from "@/components/ui/card";
 import { upsertProgram } from "../programs-actions";
 import { useToast } from "@/hooks/use-toast";
+import type { EditableProgram } from "../programs-types";
 
 const programSchema = z.object({
   code: z.string().min(2, "Program ID / Code is required (e.g. cca-A001)"),
@@ -32,25 +37,17 @@ const programSchema = z.object({
 });
 
 interface ProgramFormProps {
-  program?: {
-    id: string;
-    code: string;
-    name: string;
-    yearLabel: string;
-    durationLabel: string;
-    basePrice: number | string;
-    currency: string | null;
-    isActive: boolean;
-  } | null;
+  program?: EditableProgram | null;
 }
 
 export default function ProgramForm({ program }: ProgramFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
+  type ProgramFormValues = z.infer<typeof programSchema>;
 
-  const form = useForm<z.infer<typeof programSchema>>({
-    resolver: zodResolver(programSchema) as any,
+  const form = useForm<ProgramFormValues>({
+    resolver: zodResolver(programSchema) as Resolver<ProgramFormValues>,
     defaultValues: program
       ? {
           code: program.code,
@@ -72,7 +69,7 @@ export default function ProgramForm({ program }: ProgramFormProps) {
         },
   });
 
-  async function onSubmit(values: z.infer<typeof programSchema>) {
+  const onSubmit: SubmitHandler<ProgramFormValues> = async (values) => {
     setIsSaving(true);
     try {
       await upsertProgram({
@@ -97,7 +94,7 @@ export default function ProgramForm({ program }: ProgramFormProps) {
     } finally {
       setIsSaving(false);
     }
-  }
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -112,7 +109,7 @@ export default function ProgramForm({ program }: ProgramFormProps) {
           Back to Programs
         </Button>
         <Button
-          onClick={form.handleSubmit(onSubmit as any)}
+          onClick={form.handleSubmit(onSubmit)}
           disabled={isSaving}
           className="bg-primary hover:bg-primary/90 shadow-lg px-8 rounded-xl"
         >
@@ -144,10 +141,7 @@ export default function ProgramForm({ program }: ProgramFormProps) {
           </div>
         </CardHeader>
         <CardContent className="p-8">
-          <form
-            onSubmit={form.handleSubmit(onSubmit as any)}
-            className="space-y-6"
-          >
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="code">Program Code (Unique ID)</Label>
@@ -224,7 +218,7 @@ export default function ProgramForm({ program }: ProgramFormProps) {
           Cancel
         </Button>
         <Button
-          onClick={form.handleSubmit(onSubmit as any)}
+          onClick={form.handleSubmit(onSubmit)}
           disabled={isSaving}
           className="bg-primary hover:bg-primary/90 shadow-lg px-8 rounded-xl"
         >

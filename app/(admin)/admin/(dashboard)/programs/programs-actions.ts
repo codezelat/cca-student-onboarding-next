@@ -1,23 +1,111 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import {
     getAdminActorFromRequestHeaders,
     logActivitySafe,
 } from "@/lib/server/activity-log";
+import { REGISTRATION_PROGRAM_OPTIONS_CACHE_TAG } from "@/lib/server/program-cache";
+import type {
+    EditableProgram,
+    ProgramCardItem,
+    ProgramIntakeItem,
+    ProgramRegistrationsSort,
+    ProgramStatusSort,
+} from "./programs-types";
 
 /**
  * BigInt to JSON helper
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function serialize(data: any) {
+function serialize<T>(data: T): T {
     return JSON.parse(
         JSON.stringify(data, (key, value) =>
             typeof value === "bigint" ? value.toString() : value,
         ),
     );
+}
+
+function revalidateProgramAdminViews({
+    includeFinance = false,
+}: {
+    includeFinance?: boolean;
+} = {}) {
+    revalidateTag(REGISTRATION_PROGRAM_OPTIONS_CACHE_TAG, "max");
+    revalidatePath("/admin");
+    revalidatePath("/admin/programs");
+
+    if (includeFinance) {
+        revalidatePath("/admin/finance");
+        revalidatePath("/admin/received-payments");
+    }
+}
+
+function toIsoString(value: Date | string): string {
+    const date = value instanceof Date ? value : new Date(value);
+    return date.toISOString();
+}
+
+function parseStatusSort(value: string | undefined): ProgramStatusSort {
+    if (value === "active_first" || value === "inactive_first") {
+        return value;
+    }
+
+    return "none";
+}
+
+function parseRegistrationsSort(
+    value: string | undefined,
+): ProgramRegistrationsSort {
+    if (value === "most" || value === "fewest") {
+        return value;
+    }
+
+    return "none";
+}
+
+function toEditableProgram(program: {
+    id: bigint | number | string;
+    code: string;
+    name: string;
+    yearLabel: string;
+    durationLabel: string;
+    basePrice: Prisma.Decimal | number | string | null;
+    currency: string | null;
+    isActive: boolean;
+}): EditableProgram {
+    return {
+        id: String(program.id),
+        programId: program.code,
+        code: program.code,
+        name: program.name,
+        yearLabel: program.yearLabel,
+        durationLabel: program.durationLabel,
+        basePrice:
+            program.basePrice === null ? "0" : String(program.basePrice),
+        currency: program.currency,
+        isActive: program.isActive,
+    };
+}
+
+function toProgramIntakeItem(intake: {
+    id: bigint | number | string;
+    windowName: string;
+    opensAt: Date | string;
+    closesAt: Date | string;
+    priceOverride: Prisma.Decimal | number | string | null;
+    isActive: boolean;
+}): ProgramIntakeItem {
+    return {
+        id: String(intake.id),
+        windowName: intake.windowName,
+        opensAt: toIsoString(intake.opensAt),
+        closesAt: toIsoString(intake.closesAt),
+        priceOverride:
+            intake.priceOverride === null ? null : String(intake.priceOverride),
+        isActive: intake.isActive,
+    };
 }
 
 async function getProgramAuditSnapshot(id: string) {
@@ -56,25 +144,27 @@ async function getIntakeAuditSnapshot(id: string) {
 
 export async function getAllPrograms(params?: {
     search?: string;
-    statusSort?: string;
-    registrationsSort?: string;
+    statusSort?: ProgramStatusSort;
+    registrationsSort?: ProgramRegistrationsSort;
     page?: number;
     pageSize?: number;
 }) {
     const search = params?.search?.trim() || "";
-    const statusSort = params?.statusSort?.trim() || "none";
-    const registrationsSort = params?.registrationsSort?.trim() || "none";
+    const statusSort = parseStatusSort(params?.statusSort?.trim());
+    const registrationsSort = parseRegistrationsSort(
+        params?.registrationsSort?.trim(),
+    );
     const requestedPage = Math.max(1, params?.page ?? 1);
     const safePageSize = Math.min(Math.max(1, params?.pageSize ?? 20), 100);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {};
-    if (search) {
-        where.OR = [
-            { name: { contains: search, mode: "insensitive" } },
-            { code: { contains: search, mode: "insensitive" } },
-        ];
-    }
+    const where: Prisma.ProgramWhereInput = search
+        ? {
+              OR: [
+                  { name: { contains: search, mode: "insensitive" } },
+                  { code: { contains: search, mode: "insensitive" } },
+              ],
+          }
+        : {};
 
     const orderBy: Prisma.ProgramOrderByWithRelationInput[] = [];
 
@@ -116,9 +206,20 @@ export async function getAllPrograms(params?: {
         take: safePageSize,
     });
 
-    const normalizedPrograms = programs.map((program) => ({
-        ...program,
+    const normalizedPrograms: ProgramCardItem[] = programs.map((program) => ({
+        id: String(program.id),
         programId: program.code,
+        name: program.name,
+        isActive: program.isActive,
+        _count: {
+            registrations: program._count.registrations,
+            intakeWindows: program._count.intakeWindows,
+        },
+        intakeWindows: program.intakeWindows.map((intakeWindow) => ({
+            windowName: intakeWindow.windowName,
+            opensAt: toIsoString(intakeWindow.opensAt),
+            closesAt: toIsoString(intakeWindow.closesAt),
+        })),
     }));
 
     return serialize({
@@ -143,10 +244,7 @@ export async function getProgramById(id: string) {
     });
 
     if (!program) return null;
-    return serialize({
-        ...program,
-        programId: program.code,
-    });
+    return toEditableProgram(program);
 }
 
 export async function toggleProgramStatus(id: string, currentStatus: boolean) {
@@ -172,7 +270,7 @@ export async function toggleProgramStatus(id: string, currentStatus: boolean) {
             beforeData: before,
             afterData: updated,
         });
-        revalidatePath("/admin/programs");
+        revalidateProgramAdminViews();
     } catch (error) {
         await logActivitySafe({
             actor,
@@ -282,10 +380,7 @@ export async function upsertProgram(data: Record<string, unknown>) {
             },
         });
 
-        revalidatePath("/admin/programs");
-        revalidatePath("/admin");
-        revalidatePath("/admin/finance");
-        revalidatePath("/admin/received-payments");
+        revalidateProgramAdminViews({ includeFinance: true });
         return serialize(result);
     } catch (error) {
         await logActivitySafe({
@@ -376,7 +471,7 @@ export async function deleteProgram(id: string) {
             routeName: "/admin/programs",
             beforeData: deleted,
         });
-        revalidatePath("/admin/programs");
+        revalidateProgramAdminViews();
     } catch (error) {
         await logActivitySafe({
             actor,
@@ -419,13 +514,13 @@ export async function getProgramIntakes(
         take: safePageSize,
     });
 
-    return serialize({
-        data: intakes,
+    return {
+        data: intakes.map(toProgramIntakeItem),
         total,
         page,
         pageSize: safePageSize,
         totalPages,
-    });
+    };
 }
 
 export async function upsertIntakeWindow(data: Record<string, unknown>) {
@@ -483,7 +578,7 @@ export async function upsertIntakeWindow(data: Record<string, unknown>) {
 
         revalidatePath(`/admin/programs/${programId}/intakes`);
         revalidatePath("/admin/programs"); // Refresh dashboard stats too
-        return serialize(result);
+        return toProgramIntakeItem(result);
     } catch (error) {
         await logActivitySafe({
             actor,

@@ -159,7 +159,7 @@ function getUploadTaskKey(
   return category;
 }
 
-interface EditRegistrationClientProps {
+export interface EditRegistrationClientProps {
   registration: {
     id: number;
     registerId: string;
