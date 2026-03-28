@@ -56,10 +56,14 @@ async function getIntakeAuditSnapshot(id: string) {
 
 export async function getAllPrograms(params?: {
     search?: string;
+    statusSort?: string;
+    registrationsSort?: string;
     page?: number;
     pageSize?: number;
 }) {
     const search = params?.search?.trim() || "";
+    const statusSort = params?.statusSort?.trim() || "none";
+    const registrationsSort = params?.registrationsSort?.trim() || "none";
     const requestedPage = Math.max(1, params?.page ?? 1);
     const safePageSize = Math.min(Math.max(1, params?.pageSize ?? 20), 100);
 
@@ -71,6 +75,22 @@ export async function getAllPrograms(params?: {
             { code: { contains: search, mode: "insensitive" } },
         ];
     }
+
+    const orderBy: Prisma.ProgramOrderByWithRelationInput[] = [];
+
+    if (statusSort === "active_first") {
+        orderBy.push({ isActive: "desc" });
+    } else if (statusSort === "inactive_first") {
+        orderBy.push({ isActive: "asc" });
+    }
+
+    if (registrationsSort === "most") {
+        orderBy.push({ registrations: { _count: "desc" } });
+    } else if (registrationsSort === "fewest") {
+        orderBy.push({ registrations: { _count: "asc" } });
+    }
+
+    orderBy.push({ name: "asc" });
 
     const total = await prisma.program.count({ where });
     const totalPages = Math.max(1, Math.ceil(total / safePageSize));
@@ -91,7 +111,7 @@ export async function getAllPrograms(params?: {
                 select: { windowName: true, opensAt: true, closesAt: true },
             },
         },
-        orderBy: { name: "asc" },
+        orderBy,
         skip,
         take: safePageSize,
     });
@@ -107,6 +127,8 @@ export async function getAllPrograms(params?: {
         page,
         pageSize: safePageSize,
         totalPages,
+        statusSort,
+        registrationsSort,
     });
 }
 

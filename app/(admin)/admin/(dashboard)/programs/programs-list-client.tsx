@@ -38,11 +38,20 @@ import { Input } from "@/components/ui/input";
 import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 import { formatAppDate } from "@/lib/formatters";
 import { getPaginationRange } from "@/lib/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ProgramsListClientProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialPrograms: any[];
   currentSearch: string;
+  currentStatusSort: string;
+  currentRegistrationsSort: string;
   currentPage: number;
   pageSize: number;
   totalPages: number;
@@ -52,6 +61,8 @@ interface ProgramsListClientProps {
 export default function ProgramsListClient({
   initialPrograms,
   currentSearch,
+  currentStatusSort,
+  currentRegistrationsSort,
   currentPage,
   pageSize,
   totalPages,
@@ -60,6 +71,10 @@ export default function ProgramsListClient({
   const router = useAdminBusyRouter();
   const [programs, setPrograms] = useState(initialPrograms);
   const [searchQuery, setSearchQuery] = useState(currentSearch);
+  const [statusSortValue, setStatusSortValue] = useState(currentStatusSort);
+  const [registrationsSortValue, setRegistrationsSortValue] = useState(
+    currentRegistrationsSort,
+  );
   const { toast } = useToast();
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -77,6 +92,14 @@ export default function ProgramsListClient({
     setSearchQuery(currentSearch);
   }, [currentSearch]);
 
+  useEffect(() => {
+    setStatusSortValue(currentStatusSort);
+  }, [currentStatusSort]);
+
+  useEffect(() => {
+    setRegistrationsSortValue(currentRegistrationsSort);
+  }, [currentRegistrationsSort]);
+
   async function handleToggleStatus(id: string, currentStatus: boolean) {
     try {
       // Optimistic update
@@ -89,7 +112,7 @@ export default function ProgramsListClient({
         description: `Program is now ${!currentStatus ? "Active" : "Inactive"}.`,
       });
       router.refresh();
-    } catch (error) {
+    } catch {
       // Revert on error
       setPrograms(initialPrograms);
       toast({
@@ -116,10 +139,13 @@ export default function ProgramsListClient({
         description: "Program removed successfully.",
       });
       router.refresh();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Cannot Delete",
-        description: error.message,
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete program.",
         variant: "destructive",
       });
     } finally {
@@ -127,12 +153,26 @@ export default function ProgramsListClient({
     }
   }
 
-  function buildUrl(params: { search?: string; page?: number }) {
+  function buildUrl(params: {
+    search?: string;
+    statusSort?: string;
+    registrationsSort?: string;
+    page?: number;
+  }) {
     const sp = new URLSearchParams();
     const nextSearch = params.search ?? currentSearch;
+    const nextStatusSort = params.statusSort ?? currentStatusSort;
+    const nextRegistrationsSort =
+      params.registrationsSort ?? currentRegistrationsSort;
     const nextPage = params.page ?? currentPage;
 
     if (nextSearch) sp.set("search", nextSearch);
+    if (nextStatusSort && nextStatusSort !== "none") {
+      sp.set("status_sort", nextStatusSort);
+    }
+    if (nextRegistrationsSort && nextRegistrationsSort !== "none") {
+      sp.set("registrations_sort", nextRegistrationsSort);
+    }
     if (nextPage > 1) sp.set("page", String(nextPage));
 
     const query = sp.toString();
@@ -141,13 +181,27 @@ export default function ProgramsListClient({
 
   const handleFilterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    router.push(buildUrl({ search: searchQuery, page: 1 }));
+    router.push(
+      buildUrl({
+        search: searchQuery,
+        statusSort: statusSortValue,
+        registrationsSort: registrationsSortValue,
+        page: 1,
+      }),
+    );
   };
 
-  const hasFilters = Boolean(currentSearch || searchQuery);
+  const hasFilters = Boolean(
+    currentSearch ||
+      searchQuery ||
+      currentStatusSort !== "none" ||
+      currentRegistrationsSort !== "none",
+  );
 
   const handleClearFilter = () => {
     setSearchQuery("");
+    setStatusSortValue("none");
+    setRegistrationsSortValue("none");
     router.push("/admin/programs");
   };
 
@@ -155,30 +209,82 @@ export default function ProgramsListClient({
     <div className="space-y-6">
       <form
         onSubmit={handleFilterSubmit}
-        className="flex flex-wrap items-center gap-3"
+        className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
       >
-        <div className="relative max-w-md w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
-            placeholder="Search programs by name or code..."
-            className="pl-10 bg-white/50 backdrop-blur-sm border-white/60 rounded-xl"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        <Button type="submit" variant="outline" className="rounded-xl">
-          Search
-        </Button>
-        {hasFilters && (
-          <Button
-            type="button"
-            variant="outline"
-            className="rounded-xl"
-            onClick={handleClearFilter}
-          >
-            Clear
+        <div className="flex flex-1 flex-wrap items-center gap-3">
+          <div className="relative max-w-md w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="Search programs by name or code..."
+              className="pl-10 bg-white/50 backdrop-blur-sm border-white/60 rounded-xl"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <Button type="submit" variant="outline" className="rounded-xl">
+            Search
           </Button>
-        )}
+          {hasFilters && (
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={handleClearFilter}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+
+        <div className="grid w-full gap-3 lg:w-auto lg:grid-cols-2">
+          <Select
+            value={registrationsSortValue}
+            onValueChange={(value) => {
+              setRegistrationsSortValue(value);
+              router.push(
+                buildUrl({
+                  search: searchQuery,
+                  statusSort: statusSortValue,
+                  registrationsSort: value,
+                  page: 1,
+                }),
+              );
+            }}
+          >
+            <SelectTrigger className="w-full min-w-56 rounded-xl border-white/60 bg-white/50 backdrop-blur-sm">
+              <SelectValue placeholder="Sort by registrations" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl border-white/70 bg-white/95">
+              <SelectItem value="none">Registrations: Default</SelectItem>
+              <SelectItem value="most">Most Registrations</SelectItem>
+              <SelectItem value="fewest">Fewest Registrations</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={statusSortValue}
+            onValueChange={(value) => {
+              setStatusSortValue(value);
+              router.push(
+                buildUrl({
+                  search: searchQuery,
+                  statusSort: value,
+                  registrationsSort: registrationsSortValue,
+                  page: 1,
+                }),
+              );
+            }}
+          >
+            <SelectTrigger className="w-full min-w-48 rounded-xl border-white/60 bg-white/50 backdrop-blur-sm">
+              <SelectValue placeholder="Sort by status" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl border-white/70 bg-white/95">
+              <SelectItem value="none">Status: Default</SelectItem>
+              <SelectItem value="active_first">Active First</SelectItem>
+              <SelectItem value="inactive_first">Inactive First</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </form>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -191,8 +297,9 @@ export default function ProgramsListClient({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.2 }}
+              className="h-full"
             >
-              <Card className="group border-none shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-primary-100/30 transition-all duration-300 relative overflow-hidden bg-white/70 backdrop-blur-md">
+              <Card className="group relative flex h-full flex-col overflow-hidden border-none bg-white/70 backdrop-blur-md shadow-xl shadow-gray-200/50 transition-all duration-300 hover:shadow-2xl hover:shadow-primary-100/30">
                 <div
                   className={`pointer-events-none absolute top-0 right-0 w-32 h-32 blur-3xl opacity-20 transition-colors duration-500 ${program.isActive ? "bg-emerald-400" : "bg-rose-400"}`}
                 ></div>
@@ -278,7 +385,7 @@ export default function ProgramsListClient({
                   </div>
                 </CardHeader>
 
-                <CardContent className="space-y-4 py-4">
+                <CardContent className="flex flex-1 flex-col space-y-4 py-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-3 bg-white/50 rounded-xl border border-white/60">
                       <p className="text-[10px] font-bold uppercase text-gray-500 mb-1 flex items-center gap-1">
@@ -300,7 +407,8 @@ export default function ProgramsListClient({
                     </div>
                   </div>
 
-                  {program.intakeWindows && program.intakeWindows.length > 0 ? (
+                  <div className="min-h-24">
+                    {program.intakeWindows && program.intakeWindows.length > 0 ? (
                     <div className="space-y-2">
                       <p className="text-[10px] font-bold uppercase text-gray-400">
                         Active Intake
@@ -317,15 +425,16 @@ export default function ProgramsListClient({
                       </div>
                     </div>
                   ) : (
-                    <div className="py-2">
+                    <div className="flex h-full items-center py-2">
                       <p className="text-xs text-gray-400 italic">
                         No active intake windows
                       </p>
                     </div>
                   )}
+                  </div>
                 </CardContent>
 
-                <CardFooter className="pt-2">
+                <CardFooter className="pt-2 mt-auto">
                   <Button
                     asChild
                     variant="outline"

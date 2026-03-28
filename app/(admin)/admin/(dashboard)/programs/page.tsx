@@ -4,6 +4,8 @@ import { Plus, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
+const PROGRAMS_GRID_PAGE_SIZE = 18;
+
 export default async function ProgramsPage({
     searchParams,
 }: {
@@ -11,11 +13,19 @@ export default async function ProgramsPage({
 }) {
     const params = await searchParams;
     const search = (params.search as string) || "";
+    const statusSort = (params.status_sort as string) || "none";
+    const registrationsSort = (params.registrations_sort as string) || "none";
     const page = Math.max(
         1,
         Number.isFinite(Number(params.page)) ? Number(params.page) : 1,
     );
-    const programsResult = await getAllPrograms({ search, page, pageSize: 20 });
+    const programsResult = await getAllPrograms({
+        search,
+        statusSort,
+        registrationsSort,
+        page,
+        pageSize: PROGRAMS_GRID_PAGE_SIZE,
+    });
 
     return (
         <div className="space-y-8">
@@ -46,6 +56,8 @@ export default async function ProgramsPage({
             <ProgramsListClient
                 initialPrograms={programsResult.data}
                 currentSearch={search}
+                currentStatusSort={programsResult.statusSort}
+                currentRegistrationsSort={programsResult.registrationsSort}
                 currentPage={programsResult.page}
                 pageSize={programsResult.pageSize}
                 totalPages={programsResult.totalPages}
