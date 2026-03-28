@@ -3,7 +3,10 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { logoutAction } from "@/app/(admin)/admin/actions";
+import { useAdminActivity } from "@/components/admin/admin-activity-provider";
+import { cn } from "@/lib/utils";
 
 interface AdminNavigationProps {
     userName: string;
@@ -18,6 +21,7 @@ export default function AdminNavigation({
     const dropdownRef = useRef<HTMLDivElement>(null);
     const pathname = usePathname();
     const initial = userName.charAt(0).toUpperCase();
+    const { isBusy, pendingCount } = useAdminActivity();
 
     // Close dropdown on click outside
     useEffect(() => {
@@ -154,6 +158,26 @@ export default function AdminNavigation({
 
                     {/* Profile Dropdown */}
                     <div className="flex items-center space-x-4">
+                        <div
+                            role="status"
+                            aria-live="polite"
+                            aria-atomic="true"
+                            aria-hidden={!isBusy}
+                            className={cn(
+                                "flex items-center gap-2 rounded-xl border border-white/70 bg-white/55 px-3 py-2 text-xs font-semibold text-gray-600 shadow-md backdrop-blur-md transition-all duration-200",
+                                isBusy
+                                    ? "translate-y-0 opacity-100"
+                                    : "pointer-events-none translate-y-1 opacity-0",
+                            )}
+                        >
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary-600" />
+                            <span className="hidden sm:inline">Updating</span>
+                            {pendingCount > 1 && (
+                                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary-700">
+                                    {pendingCount}
+                                </span>
+                            )}
+                        </div>
                         <div className="relative" ref={dropdownRef}>
                             <button
                                 onClick={() => setDropdownOpen(!dropdownOpen)}

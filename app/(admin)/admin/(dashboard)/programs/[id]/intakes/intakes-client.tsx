@@ -36,7 +36,7 @@ import {
     deleteIntakeWindow,
 } from "../../programs-actions";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from "next/navigation";
+import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
     formatAppDate,
@@ -62,7 +62,7 @@ export default function IntakesClient({
     totalPages,
     totalRows,
 }: IntakesClientProps) {
-    const router = useRouter();
+    const router = useAdminBusyRouter();
     const [intakes, setIntakes] = useState(initialIntakes);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingIntake, setEditingIntake] = useState<any>(null);

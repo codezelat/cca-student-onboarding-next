@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -71,6 +70,7 @@ import {
   getNicDocumentSideLabel,
   normalizeDocumentCollection,
 } from "@/lib/registration-documents";
+import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 
 interface RegistrationDetailsClientProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,7 +86,7 @@ export default function RegistrationDetailsClient({
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isSavingPayment, setIsSavingPayment] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
+  const router = useAdminBusyRouter();
 
   // Close document viewer on ESC key
   useEffect(() => {

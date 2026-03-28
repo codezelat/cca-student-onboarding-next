@@ -2,7 +2,6 @@
 
 import { useDeferredValue, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
     Search,
     Filter,
@@ -27,6 +26,7 @@ import {
     purgeRegistration,
     getRegistrationsForExport,
 } from "./dashboard-actions";
+import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getPaginationRange } from "@/lib/pagination";
@@ -152,7 +152,7 @@ export default function RegistrationTable({
     totalPages,
     totalRows,
 }: RegistrationTableProps) {
-    const router = useRouter();
+    const router = useAdminBusyRouter();
     const { toast } = useToast();
     const [searchInput, setSearchInput] = useState(currentSearch);
     const [programInput, setProgramInput] = useState<string[]>(currentProgram);
@@ -517,39 +517,48 @@ export default function RegistrationTable({
         <div className="space-y-6">
             {/* Scope Switch */}
             <div className="flex flex-wrap items-center gap-3">
-                <Link
-                    prefetch={false}
-                    href={buildUrl({ scope: "active", page: 1 })}
-                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                <button
+                    type="button"
+                    aria-pressed={currentScope === "active"}
+                    onClick={() =>
+                        router.push(buildUrl({ scope: "active", page: 1 }))
+                    }
+                    className={`appearance-none cursor-pointer px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                         currentScope === "active"
                             ? "bg-primary text-white shadow-lg scale-105"
                             : "bg-white/60 text-gray-700 border border-white/60 hover:bg-white/80"
                     }`}
                 >
                     Active ({initialStats.activeRegistrations})
-                </Link>
-                <Link
-                    prefetch={false}
-                    href={buildUrl({ scope: "trashed", page: 1 })}
-                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                </button>
+                <button
+                    type="button"
+                    aria-pressed={currentScope === "trashed"}
+                    onClick={() =>
+                        router.push(buildUrl({ scope: "trashed", page: 1 }))
+                    }
+                    className={`appearance-none cursor-pointer px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                         currentScope === "trashed"
                             ? "bg-red-600 text-white shadow-lg scale-105"
                             : "bg-white/60 text-gray-700 border border-white/60 hover:bg-white/80"
                     }`}
                 >
                     Trash ({initialStats.trashedRegistrations})
-                </Link>
-                <Link
-                    prefetch={false}
-                    href={buildUrl({ scope: "all", page: 1 })}
-                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                </button>
+                <button
+                    type="button"
+                    aria-pressed={currentScope === "all"}
+                    onClick={() =>
+                        router.push(buildUrl({ scope: "all", page: 1 }))
+                    }
+                    className={`appearance-none cursor-pointer px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                         currentScope === "all"
                             ? "bg-indigo-600 text-white shadow-lg scale-105"
                             : "bg-white/60 text-gray-700 border border-white/60 hover:bg-white/80"
                     }`}
                 >
                     All ({initialStats.totalRegistrations})
-                </Link>
+                </button>
             </div>
 
             {/* Filters & Actions */}
@@ -893,14 +902,21 @@ export default function RegistrationTable({
                     </div>
                 </div>
 
-                <Link
-                    prefetch={false}
-                    href={buildUrl({
-                        tag:
-                            currentTag === "General Rate" ? "" : "General Rate",
-                        page: 1,
-                    })}
-                    className={`p-6 backdrop-blur-xl border rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group ${
+                <button
+                    type="button"
+                    aria-pressed={currentTag === "General Rate"}
+                    onClick={() =>
+                        router.push(
+                            buildUrl({
+                                tag:
+                                    currentTag === "General Rate"
+                                        ? ""
+                                        : "General Rate",
+                                page: 1,
+                            }),
+                        )
+                    }
+                    className={`group w-full appearance-none cursor-pointer rounded-2xl border p-6 text-left shadow-lg backdrop-blur-xl transition-all duration-300 hover:scale-[1.03] hover:shadow-xl ${
                         currentTag === "General Rate"
                             ? "bg-emerald-100/90 border-emerald-400 ring-2 ring-emerald-500"
                             : "bg-white/60 border-white/60"
@@ -925,18 +941,23 @@ export default function RegistrationTable({
                             <CheckCircle2 className="w-6 h-6" />
                         </div>
                     </div>
-                </Link>
+                </button>
 
-                <Link
-                    prefetch={false}
-                    href={buildUrl({
-                        tag:
-                            currentTag === "Special 50% Offer"
-                                ? ""
-                                : "Special 50% Offer",
-                        page: 1,
-                    })}
-                    className={`p-6 backdrop-blur-xl border rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group ${
+                <button
+                    type="button"
+                    aria-pressed={currentTag === "Special 50% Offer"}
+                    onClick={() =>
+                        router.push(
+                            buildUrl({
+                                tag:
+                                    currentTag === "Special 50% Offer"
+                                        ? ""
+                                        : "Special 50% Offer",
+                                page: 1,
+                            }),
+                        )
+                    }
+                    className={`group w-full appearance-none cursor-pointer rounded-2xl border p-6 text-left shadow-lg backdrop-blur-xl transition-all duration-300 hover:scale-[1.03] hover:shadow-xl ${
                         currentTag === "Special 50% Offer"
                             ? "bg-purple-100/90 border-purple-400 ring-2 ring-purple-500"
                             : "bg-white/60 border-white/60"
@@ -961,7 +982,7 @@ export default function RegistrationTable({
                             <Gift className="w-6 h-6" />
                         </div>
                     </div>
-                </Link>
+                </button>
 
                 <div className="p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group">
                     <div className="flex items-center justify-between">

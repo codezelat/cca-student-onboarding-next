@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Download, Filter, Search, X } from "lucide-react";
+import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 import { formatAppDateTime } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,7 +89,7 @@ export default function ActivityLogTable({
   currentDateTo: string;
   filterOptions: FilterOptions;
 }) {
-  const router = useRouter();
+  const router = useAdminBusyRouter();
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
   const { start: paginationStart, end: paginationEnd } = getPaginationRange({

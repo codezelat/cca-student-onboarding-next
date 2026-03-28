@@ -35,7 +35,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
-import { useRouter } from "next/navigation";
+import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 import { formatAppDate } from "@/lib/formatters";
 import { getPaginationRange } from "@/lib/pagination";
 
@@ -57,7 +57,7 @@ export default function ProgramsListClient({
   totalPages,
   totalRows,
 }: ProgramsListClientProps) {
-  const router = useRouter();
+  const router = useAdminBusyRouter();
   const [programs, setPrograms] = useState(initialPrograms);
   const [searchQuery, setSearchQuery] = useState(currentSearch);
   const { toast } = useToast();

@@ -37,7 +37,7 @@ import { getPaymentLedgerForExport, voidPayment } from "./finance-actions";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { formatAppDate, formatAppNumber } from "@/lib/formatters";
-import { useRouter } from "next/navigation";
+import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 import { getPaginationRange } from "@/lib/pagination";
 import { PromptDialog } from "@/components/ui/prompt-dialog";
 
@@ -59,7 +59,7 @@ export default function FinanceLedgerClient({
     totalPages,
     totalRows,
 }: FinanceLedgerClientProps) {
-    const router = useRouter();
+    const router = useAdminBusyRouter();
     const [ledger, setLedger] = useState(initialLedger);
     const [searchQuery, setSearchQuery] = useState(currentSearch);
     const [isExporting, setIsExporting] = useState(false);

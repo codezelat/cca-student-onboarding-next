@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createAdminUser, deleteAdminUser } from "./actions";
-import { useRouter } from "next/navigation";
+import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 import { formatAppDate, formatAppDateTime } from "@/lib/formatters";
 import { getPaginationRange } from "@/lib/pagination";
 
@@ -28,7 +28,7 @@ export default function AdminAccountsList({
     totalPages: number;
     totalRows: number;
 }) {
-    const router = useRouter();
+    const router = useAdminBusyRouter();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);

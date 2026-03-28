@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Search, CheckCircle, XCircle, ExternalLink, RefreshCw } from "lucide-react";
 import { approvePaymentSlip, declinePaymentSlip } from "./received-payments-actions";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
+import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 import { formatAppDate } from "@/lib/formatters";
 import { getPaginationRange } from "@/lib/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -27,7 +27,7 @@ export default function ReceivedPaymentsTable({
     totalPages: number;
     totalRows: number;
 }) {
-    const router = useRouter();
+    const router = useAdminBusyRouter();
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState(currentSearch);
     const [statusFilter, setStatusFilter] = useState(currentStatus);
