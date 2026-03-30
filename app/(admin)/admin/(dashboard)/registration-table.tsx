@@ -790,7 +790,7 @@ export default function RegistrationTable({
                         </div>
                     </div>
                     <div className="flex flex-col gap-4 pt-2 xl:flex-row xl:items-end xl:justify-between">
-                        <div className="flex flex-wrap items-center gap-3">
+                        <div className="order-2 flex flex-wrap items-center gap-3 xl:order-1">
                             <button
                                 type="submit"
                                 className="px-6 py-2.5 bg-linear-to-r from-primary to-indigo-600 text-white font-bold rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all flex items-center gap-2"
@@ -821,7 +821,7 @@ export default function RegistrationTable({
                             )}
                         </div>
 
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:min-w-[25rem]">
+                        <div className="order-1 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:order-2 xl:min-w-[25rem]">
                             <div className="space-y-2">
                                 <Label
                                     htmlFor="program-group-filter"
