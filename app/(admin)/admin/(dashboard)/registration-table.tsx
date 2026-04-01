@@ -29,7 +29,10 @@ import {
 import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getPaginationRange } from "@/lib/pagination";
+import {
+    getPaginationDisplay,
+    getPaginationRange,
+} from "@/lib/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { formatAppDateShort, formatAppTime } from "@/lib/formatters";
@@ -535,6 +538,11 @@ export default function RegistrationTable({
         currentPage,
         pageSize,
         totalRows,
+    });
+    const paginationItems = getPaginationDisplay({
+        currentPage,
+        totalPages,
+        siblingCount: 1,
     });
 
     return (
@@ -1281,12 +1289,22 @@ export default function RegistrationTable({
                     </table>
                 </div>
                 {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white/40">
+                    <div className="flex flex-col gap-4 px-6 py-4 border-t border-gray-100 bg-white/40 lg:flex-row lg:items-center lg:justify-between">
                         <span className="text-sm text-gray-600">
                             Showing {paginationStart}-{paginationEnd} of{" "}
                             {totalRows} registrations
                         </span>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentPage <= 1}
+                                onClick={() =>
+                                    router.push(buildUrl({ page: 1 }))
+                                }
+                            >
+                                First
+                            </Button>
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -1299,6 +1317,46 @@ export default function RegistrationTable({
                             >
                                 Previous
                             </Button>
+                            {paginationItems.map((item) =>
+                                item.type === "ellipsis" ? (
+                                    <span
+                                        key={item.key}
+                                        className="px-2 py-1 text-sm font-semibold text-gray-400"
+                                    >
+                                        ...
+                                    </span>
+                                ) : (
+                                    <Button
+                                        key={item.page}
+                                        variant={
+                                            item.page === currentPage
+                                                ? "default"
+                                                : "outline"
+                                        }
+                                        size="sm"
+                                        aria-current={
+                                            item.page === currentPage
+                                                ? "page"
+                                                : undefined
+                                        }
+                                        disabled={item.page === currentPage}
+                                        className={
+                                            item.page === currentPage
+                                                ? "bg-primary text-white hover:bg-primary"
+                                                : undefined
+                                        }
+                                        onClick={() =>
+                                            router.push(
+                                                buildUrl({
+                                                    page: item.page,
+                                                }),
+                                            )
+                                        }
+                                    >
+                                        {item.page}
+                                    </Button>
+                                ),
+                            )}
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -1310,6 +1368,18 @@ export default function RegistrationTable({
                                 }
                             >
                                 Next
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentPage >= totalPages}
+                                onClick={() =>
+                                    router.push(
+                                        buildUrl({ page: totalPages }),
+                                    )
+                                }
+                            >
+                                Last
                             </Button>
                         </div>
                     </div>
