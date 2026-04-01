@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { getPaginationRange } from "@/lib/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { formatAppDateShort, formatAppTime } from "@/lib/formatters";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
@@ -1044,6 +1045,9 @@ export default function RegistrationTable({
                         <thead className="bg-white/40">
                             <tr>
                                 <th className="px-6 py-4 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                    Registered
+                                </th>
+                                <th className="px-6 py-4 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">
                                     ID
                                 </th>
                                 <th className="px-6 py-4 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">
@@ -1073,7 +1077,7 @@ export default function RegistrationTable({
                             {initialRegistrations.length === 0 ? (
                                 <tr>
                                     <td
-                                        colSpan={8}
+                                        colSpan={9}
                                         className="px-6 py-20 text-center"
                                     >
                                         <div className="flex flex-col items-center gap-4 opacity-50">
@@ -1104,6 +1108,20 @@ export default function RegistrationTable({
                                             key={registrationIdLabel}
                                             className="hover:bg-white/50 transition-colors group"
                                         >
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                <div className="space-y-0.5">
+                                                    <div className="font-black text-gray-900">
+                                                        {formatAppDateShort(
+                                                            reg.createdAt,
+                                                        )}
+                                                    </div>
+                                                    <div className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                                                        {formatAppTime(
+                                                            reg.createdAt,
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-gray-900">
                                                 {reg.registerId}
                                             </td>

@@ -45,6 +45,13 @@ const dateTimeFormatter = new Intl.DateTimeFormat(APP_LOCALE, {
     timeZone: APP_TIME_ZONE,
 });
 
+const timeFormatter = new Intl.DateTimeFormat(APP_LOCALE, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: APP_TIME_ZONE,
+});
+
 export function formatAppDate(value: DateInput): string {
     const date = parseDate(value);
     return date ? dateFormatter.format(date) : "—";
@@ -68,6 +75,11 @@ export function formatAppMonthYear(value: DateInput): string {
 export function formatAppDateTime(value: DateInput): string {
     const date = parseDate(value);
     return date ? dateTimeFormatter.format(date) : "—";
+}
+
+export function formatAppTime(value: DateInput): string {
+    const date = parseDate(value);
+    return date ? timeFormatter.format(date) : "—";
 }
 
 export function formatAppNumber(
