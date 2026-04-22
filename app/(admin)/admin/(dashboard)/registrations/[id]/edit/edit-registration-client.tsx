@@ -624,7 +624,18 @@ export default function EditRegistrationClient({
                   <Label htmlFor="whatsappNumber">WhatsApp Number</Label>
                   <Input
                     id="whatsappNumber"
+                    type="tel"
                     {...form.register("whatsappNumber")}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="homeContactNumber">
+                    Home Contact Number
+                  </Label>
+                  <Input
+                    id="homeContactNumber"
+                    type="tel"
+                    {...form.register("homeContactNumber")}
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
@@ -649,6 +660,7 @@ export default function EditRegistrationClient({
                   <Label htmlFor="guardianContactNumber">Guardian Contact</Label>
                   <Input
                     id="guardianContactNumber"
+                    type="tel"
                     {...form.register("guardianContactNumber")}
                   />
                 </div>
