@@ -332,6 +332,23 @@ export async function voidPayment(id: string, reason: string) {
         payment.ccaRegistrationId,
     );
 
+    if (payment.status === "void" || payment.voidedAt) {
+        await logActivitySafe({
+            actor,
+            category: "payment",
+            action: "payment_void_blocked",
+            status: "blocked",
+            subjectType: "RegistrationPayment",
+            subjectId: id,
+            subjectLabel: `Payment #${payment.paymentNo}`,
+            message: "Payment is already voided",
+            routeName: "/admin/finance",
+            beforeData: { payment, registration: beforeRegistration },
+            meta: { reason },
+        });
+        throw new Error("This transaction has already been voided.");
+    }
+
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let updatedPayment: any = null;

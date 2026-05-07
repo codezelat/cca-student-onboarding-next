@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -24,6 +24,8 @@ import {
   Plus,
   History,
   Wallet,
+  Loader2,
+  Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +57,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { addPayment } from "@/app/(admin)/admin/(dashboard)/finance/finance-actions";
+import {
+  addPayment,
+  voidPayment,
+} from "@/app/(admin)/admin/(dashboard)/finance/finance-actions";
 import { useToast } from "@/hooks/use-toast";
 import {
   formatAppDateLong,
@@ -71,6 +76,7 @@ import {
   normalizeDocumentCollection,
 } from "@/lib/registration-documents";
 import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
+import { PromptDialog } from "@/components/ui/prompt-dialog";
 
 interface RegistrationDetailsClientProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,6 +91,14 @@ export default function RegistrationDetailsClient({
   const [zoom, setZoom] = useState(1);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isSavingPayment, setIsSavingPayment] = useState(false);
+  const [voidPrompt, setVoidPrompt] = useState<{
+    id: string;
+    paymentDate: string;
+    amount: string | number;
+    receiptReference?: string;
+  } | null>(null);
+  const [isVoidingPayment, setIsVoidingPayment] = useState(false);
+  const paymentSubmitLockRef = useRef(false);
   const { toast } = useToast();
   const router = useAdminBusyRouter();
 
@@ -209,8 +223,18 @@ export default function RegistrationDetailsClient({
     setZoom(1);
   };
 
-  async function handlePaymentSubmit(formData: FormData) {
+  async function handlePaymentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (paymentSubmitLockRef.current) {
+      return;
+    }
+
+    paymentSubmitLockRef.current = true;
     setIsSavingPayment(true);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
     try {
       await addPayment({
         registrationId: registration.id,
@@ -225,6 +249,7 @@ export default function RegistrationDetailsClient({
         title: "Payment Recorded",
         description: "The transaction has been successfully added.",
       });
+      form.reset();
       setIsPaymentModalOpen(false);
       router.refresh();
     } catch {
@@ -234,7 +259,56 @@ export default function RegistrationDetailsClient({
         variant: "destructive",
       });
     } finally {
+      paymentSubmitLockRef.current = false;
       setIsSavingPayment(false);
+    }
+  }
+
+  function handleVoidPrompt(payment: {
+    id: string | number;
+    paymentDate: string;
+    paymentMethod: string;
+    receiptReference?: string;
+    amount: string | number;
+    status: string;
+    voidedAt?: string | null;
+  }) {
+    if (isVoidingPayment || payment.status !== "active" || payment.voidedAt) {
+      return;
+    }
+
+    setVoidPrompt({
+      id: String(payment.id),
+      paymentDate: payment.paymentDate,
+      amount: payment.amount,
+      receiptReference: payment.receiptReference,
+    });
+  }
+
+  async function confirmVoidPayment(reason: string) {
+    if (!voidPrompt) return;
+
+    setIsVoidingPayment(true);
+    try {
+      await voidPayment(voidPrompt.id, reason);
+      setVoidPrompt(null);
+      toast({
+        title: "Transaction Voided",
+        description:
+          "The payment has been voided and removed from the registration balance.",
+      });
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Unable to Void Transaction",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to void this transaction.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsVoidingPayment(false);
     }
   }
 
@@ -308,7 +382,10 @@ export default function RegistrationDetailsClient({
                 </CardTitle>
                 <Dialog
                   open={isPaymentModalOpen}
-                  onOpenChange={setIsPaymentModalOpen}
+                  onOpenChange={(open) => {
+                    if (isSavingPayment) return;
+                    setIsPaymentModalOpen(open);
+                  }}
                 >
                   <DialogTrigger asChild>
                     <Button className="bg-emerald-600 hover:bg-emerald-700 shadow-lg rounded-xl">
@@ -316,8 +393,20 @@ export default function RegistrationDetailsClient({
                       Record Payment
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px] rounded-3xl bg-white/90 backdrop-blur-xl border-white/60 shadow-2xl">
-                    <form action={handlePaymentSubmit}>
+                  <DialogContent
+                    className="sm:max-w-[425px] rounded-3xl bg-white/90 backdrop-blur-xl border-white/60 shadow-2xl"
+                    onEscapeKeyDown={(event) => {
+                      if (isSavingPayment) {
+                        event.preventDefault();
+                      }
+                    }}
+                    onInteractOutside={(event) => {
+                      if (isSavingPayment) {
+                        event.preventDefault();
+                      }
+                    }}
+                  >
+                    <form onSubmit={handlePaymentSubmit} aria-busy={isSavingPayment}>
                       <DialogHeader>
                         <DialogTitle className="text-2xl font-bold flex items-center gap-2">
                           <Wallet className="w-6 h-6 text-emerald-600" />
@@ -327,6 +416,12 @@ export default function RegistrationDetailsClient({
                           Process a new payment for {registration.fullName}.
                         </DialogDescription>
                       </DialogHeader>
+                      {isSavingPayment && (
+                        <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Recording payment. Please wait...
+                        </div>
+                      )}
                       <div className="grid gap-6 py-6">
                         <div className="grid gap-2">
                           <Label htmlFor="amount">Payment Amount (LKR)</Label>
@@ -341,13 +436,18 @@ export default function RegistrationDetailsClient({
                               placeholder="0.00"
                               step="0.01"
                               className="pl-12 rounded-xl"
+                              disabled={isSavingPayment}
                               required
                             />
                           </div>
                         </div>
                         <div className="grid gap-2">
                           <Label htmlFor="method">Payment Method</Label>
-                          <Select name="method" defaultValue="BANK_TRANSFER">
+                          <Select
+                            name="method"
+                            defaultValue="BANK_TRANSFER"
+                            disabled={isSavingPayment}
+                          >
                             <SelectTrigger className="rounded-xl">
                               <SelectValue placeholder="Select method" />
                             </SelectTrigger>
@@ -365,7 +465,11 @@ export default function RegistrationDetailsClient({
                         </div>
                         <div className="grid gap-2">
                           <Label htmlFor="status">Status</Label>
-                          <Select name="status" defaultValue="PAID">
+                          <Select
+                            name="status"
+                            defaultValue="PAID"
+                            disabled={isSavingPayment}
+                          >
                             <SelectTrigger className="rounded-xl">
                               <SelectValue placeholder="Select status" />
                             </SelectTrigger>
@@ -384,6 +488,7 @@ export default function RegistrationDetailsClient({
                             name="ref"
                             placeholder="Ref/Receipt #"
                             className="rounded-xl"
+                            disabled={isSavingPayment}
                           />
                         </div>
                         <div className="grid gap-2">
@@ -393,6 +498,7 @@ export default function RegistrationDetailsClient({
                             name="remark"
                             placeholder="Optional notes..."
                             className="rounded-xl"
+                            disabled={isSavingPayment}
                           />
                         </div>
                       </div>
@@ -411,6 +517,7 @@ export default function RegistrationDetailsClient({
                           type="button"
                           variant="ghost"
                           onClick={() => setIsPaymentModalOpen(false)}
+                          disabled={isSavingPayment}
                           className="rounded-xl"
                         >
                           Cancel
@@ -420,7 +527,14 @@ export default function RegistrationDetailsClient({
                           disabled={isSavingPayment}
                           className="bg-emerald-600 hover:bg-emerald-700 px-8 rounded-xl shadow-lg"
                         >
-                          {isSavingPayment ? "Recording..." : "Verify & Save"}
+                          {isSavingPayment ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Recording...
+                            </>
+                          ) : (
+                            "Verify & Save"
+                          )}
                         </Button>
                       </DialogFooter>
                     </form>
@@ -517,13 +631,16 @@ export default function RegistrationDetailsClient({
                           <TableHead className="text-[10px] font-black uppercase tracking-widest py-2 text-center">
                             Status
                           </TableHead>
+                          <TableHead className="text-[10px] font-black uppercase tracking-widest py-2 text-center">
+                            Action
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {payments.length === 0 ? (
                           <TableRow>
                             <TableCell
-                              colSpan={5}
+                              colSpan={6}
                               className="text-center py-8 text-muted-foreground italic text-xs"
                             >
                               No transactions recorded yet.
@@ -592,6 +709,25 @@ export default function RegistrationDetailsClient({
                                     >
                                       VOID
                                     </Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell className="py-3 text-center">
+                                  {p.status === "active" && !p.voidedAt ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={isVoidingPayment}
+                                      onClick={() => handleVoidPrompt(p)}
+                                      className="h-8 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                                    >
+                                      <Ban className="mr-1 h-3.5 w-3.5" />
+                                      Void
+                                    </Button>
+                                  ) : (
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                                      Locked
+                                    </span>
                                   )}
                                 </TableCell>
                               </TableRow>
@@ -906,6 +1042,27 @@ export default function RegistrationDetailsClient({
           </Card>
         </div>
       </div>
+
+      <PromptDialog
+        open={!!voidPrompt}
+        onOpenChange={(open) => {
+          if (!open && !isVoidingPayment) {
+            setVoidPrompt(null);
+          }
+        }}
+        title="Void Transaction"
+        description={
+          voidPrompt
+            ? `This will keep the transaction in audit history, mark it as void, and remove Rs. ${formatAppNumber(voidPrompt.amount)} from the registration balance. Reference: ${voidPrompt.receiptReference || "N/A"} • Date: ${formatAppDateShort(voidPrompt.paymentDate)}`
+            : undefined
+        }
+        label="Void Reason"
+        placeholder="Explain why this transaction is being voided"
+        confirmLabel="Void Transaction"
+        cancelLabel="Keep Payment"
+        isPending={isVoidingPayment}
+        onConfirm={confirmVoidPayment}
+      />
 
       {/* Document Viewer Modal */}
       <AnimatePresence>
