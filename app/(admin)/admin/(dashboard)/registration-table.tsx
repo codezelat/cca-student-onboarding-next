@@ -432,18 +432,6 @@ export default function RegistrationTable({
               : `${appliedProgramLabels.length} programs`;
     const selectedProgramGroupExportLabel = currentProgramGroup;
     const selectedIntakeYearExportLabel = currentIntakeYear;
-    const selectedTagLabel =
-        tagInput.length === 0
-            ? "All Tags"
-            : tagInput.length === 1
-              ? tagInput[0]
-              : `${tagInput.length} tags selected`;
-    const selectedTagSummaryLabel =
-        tagInput.length === 0
-            ? ""
-            : tagInput.length <= 2
-              ? tagInput.join(", ")
-              : `${tagInput.length} selected`;
     const appliedTagExportLabel =
         currentTags.length === 0
             ? ""
@@ -1023,68 +1011,92 @@ export default function RegistrationTable({
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <div className="flex h-full items-center p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group">
-                    <div className="flex items-center justify-between">
-                        <div>
+            <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3 xl:grid-cols-[0.9fr_1.25fr_0.9fr]">
+                <div className="group flex min-h-[168px] h-full flex-col justify-between rounded-2xl border border-white/60 bg-white/60 p-6 shadow-lg backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
                                 Active Students
                             </p>
-                            <p className="text-3xl font-black bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                                {initialStats.activeRegistrations}
-                            </p>
                         </div>
-                        <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
+                        <div className="shrink-0 rounded-2xl bg-blue-50 p-3 text-blue-600 transition-colors duration-300 group-hover:bg-blue-600 group-hover:text-white">
                             <Users className="w-6 h-6" />
                         </div>
                     </div>
+                    <div>
+                        <p className="text-4xl font-black bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                            {initialStats.activeRegistrations}
+                        </p>
+                        <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                            Active records
+                        </p>
+                    </div>
                 </div>
 
-                <div className="flex h-full flex-col justify-center p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl group">
+                <div className="group flex min-h-[168px] h-full flex-col rounded-2xl border border-emerald-100/80 bg-white/70 p-5 shadow-lg backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl">
                     <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
                                 Registration Tags
                             </p>
-                            <p className="text-2xl font-black bg-linear-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
                                 {currentTags.length > 0
-                                    ? totalRows
-                                    : mergedTagOptions.length}
-                            </p>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">
-                                {currentTags.length > 0
-                                    ? "Matching Records"
-                                    : "Available Tags"}
+                                    ? `${currentTags.length} selected`
+                                    : `${mergedTagOptions.length} available`}
                             </p>
                         </div>
-                        <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
+                        <div className="shrink-0 rounded-2xl bg-emerald-50 p-3 text-emerald-600 transition-colors duration-300 group-hover:bg-emerald-600 group-hover:text-white">
                             <Tag className="w-6 h-6" />
                         </div>
                     </div>
 
-                    <div className="mt-4 space-y-3">
+                    <div className="mt-5">
                         <Popover
                             open={isTagFilterOpen}
                             onOpenChange={handleTagPopoverChange}
                         >
                             <PopoverTrigger asChild>
-                                <Button
+                                <button
                                     type="button"
-                                    variant="outline"
-                                    className="h-auto w-full justify-between rounded-xl border-gray-200 bg-white/70 px-3 py-2 text-left font-medium text-gray-700 hover:bg-white"
+                                    className="flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border border-emerald-100 bg-white/80 px-3 py-2 text-left shadow-sm transition-colors hover:border-emerald-200 hover:bg-white"
                                 >
-                                    <span className="min-w-0">
-                                        <span className="block truncate">
-                                            {selectedTagLabel}
+                                    <span className="flex min-w-0 items-center gap-2">
+                                        <Tag className="h-4 w-4 shrink-0 text-emerald-500" />
+                                        <span className="min-w-0">
+                                            {tagInput.length === 0 ? (
+                                                <span className="block truncate text-sm font-semibold text-gray-700">
+                                                    All tags
+                                                </span>
+                                            ) : (
+                                                <span className="flex min-w-0 flex-wrap gap-1">
+                                                    {tagInput
+                                                        .slice(0, 2)
+                                                        .map((tag) => (
+                                                            <span
+                                                                key={tag}
+                                                                className="max-w-32 truncate rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700"
+                                                            >
+                                                                {tag}
+                                                            </span>
+                                                        ))}
+                                                    {tagInput.length > 2 && (
+                                                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-500">
+                                                            +{tagInput.length - 2}
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            )}
                                         </span>
-                                        {selectedTagSummaryLabel && (
-                                            <span className="block truncate text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-                                                {selectedTagSummaryLabel}
-                                            </span>
-                                        )}
                                     </span>
-                                    <ChevronsUpDown className="ml-3 h-4 w-4 shrink-0 text-gray-400" />
-                                </Button>
+                                    <span className="flex shrink-0 items-center gap-2">
+                                        <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-black text-white">
+                                            {currentTags.length > 0
+                                                ? totalRows
+                                                : mergedTagOptions.length}
+                                        </span>
+                                        <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+                                    </span>
+                                </button>
                             </PopoverTrigger>
                             <PopoverContent
                                 align="start"
@@ -1109,9 +1121,6 @@ export default function RegistrationTable({
                                                 <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-8 text-center">
                                                     <p className="text-sm font-semibold text-gray-700">
                                                         No matching tags
-                                                    </p>
-                                                    <p className="mt-1 text-xs text-gray-500">
-                                                        Try another tag name.
                                                     </p>
                                                 </div>
                                             ) : (
@@ -1141,9 +1150,6 @@ export default function RegistrationTable({
                                                                     <p className="truncate text-sm font-semibold text-gray-900">
                                                                         {option.tag}
                                                                     </p>
-                                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                                                                        {option.count} matching
-                                                                    </p>
                                                                 </div>
                                                                 {isSelected ? (
                                                                     <Check className="h-4 w-4 shrink-0 text-emerald-600" />
@@ -1160,31 +1166,24 @@ export default function RegistrationTable({
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
-                                        <p className="text-xs text-gray-500">
-                                            {tagInput.length === 0
-                                                ? "All tags included"
-                                                : `${tagInput.length} tag(s) selected`}
-                                        </p>
-                                        <div className="flex items-center gap-2">
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={clearTagSelection}
-                                                className="rounded-xl"
-                                            >
-                                                Clear
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                onClick={applyTagSelectionAndClose}
-                                                className="rounded-xl bg-emerald-600 hover:bg-emerald-700"
-                                            >
-                                                Apply
-                                            </Button>
-                                        </div>
+                                    <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={clearTagSelection}
+                                            className="rounded-xl"
+                                        >
+                                            Clear
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={applyTagSelectionAndClose}
+                                            className="rounded-xl bg-emerald-600 hover:bg-emerald-700"
+                                        >
+                                            Apply
+                                        </Button>
                                     </div>
                                 </div>
                             </PopoverContent>
@@ -1192,23 +1191,24 @@ export default function RegistrationTable({
                     </div>
                 </div>
 
-                <div className="flex h-full items-center p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group">
-                    <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
+                <div className="group flex min-h-[168px] h-full flex-col justify-between rounded-2xl border border-white/60 bg-white/60 p-6 shadow-lg backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
                                 Top Program
                             </p>
-                            <p className="text-lg font-black text-orange-600 truncate">
-                                {initialStats.topProgram?.id || "N/A"}
-                            </p>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">
-                                {initialStats.topProgram?.count || 0}{" "}
-                                Registrations
-                            </p>
                         </div>
-                        <div className="p-3 bg-orange-50 text-orange-600 rounded-xl group-hover:bg-orange-600 group-hover:text-white transition-colors duration-300 ml-4">
+                        <div className="shrink-0 rounded-2xl bg-orange-50 p-3 text-orange-600 transition-colors duration-300 group-hover:bg-orange-600 group-hover:text-white">
                             <TrendingUp className="w-6 h-6" />
                         </div>
+                    </div>
+                    <div className="min-w-0">
+                        <p className="truncate text-2xl font-black text-orange-600">
+                            {initialStats.topProgram?.id || "N/A"}
+                        </p>
+                        <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                            {initialStats.topProgram?.count || 0} registrations
+                        </p>
                     </div>
                 </div>
             </div>
