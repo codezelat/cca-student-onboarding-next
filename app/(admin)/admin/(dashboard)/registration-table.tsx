@@ -1023,8 +1023,8 @@ export default function RegistrationTable({
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <div className="p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group">
+            <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div className="flex h-full items-center p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group">
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
@@ -1040,7 +1040,7 @@ export default function RegistrationTable({
                     </div>
                 </div>
 
-                <div className="p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl group">
+                <div className="flex h-full flex-col justify-center p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl group">
                     <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
@@ -1091,12 +1091,6 @@ export default function RegistrationTable({
                                 className="w-[var(--radix-popover-trigger-width)] rounded-2xl border-white/70 bg-white/95 p-3 shadow-2xl backdrop-blur-xl"
                             >
                                 <div className="space-y-3">
-                                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 px-3 py-2">
-                                        <p className="text-xs font-medium text-emerald-800">
-                                            Select one or more tags. Records match any selected tag.
-                                        </p>
-                                    </div>
-
                                     <div className="relative">
                                         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                                         <Input
@@ -1195,15 +1189,10 @@ export default function RegistrationTable({
                                 </div>
                             </PopoverContent>
                         </Popover>
-
-                        <p className="text-xs leading-relaxed text-gray-500">
-                            Counts update with the current search, scope, program,
-                            track and intake filters.
-                        </p>
                     </div>
                 </div>
 
-                <div className="p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group">
+                <div className="flex h-full items-center p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group">
                     <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
@@ -1222,15 +1211,6 @@ export default function RegistrationTable({
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div className="flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-900 shadow-sm">
-                <Tag className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                <p>
-                    Tag filtering matches any selected tag. Counts reflect the
-                    current scope, search, program, track and intake filters;
-                    the table, pagination and export use the same tag selection.
-                </p>
             </div>
 
             {/* Registration Table */}
