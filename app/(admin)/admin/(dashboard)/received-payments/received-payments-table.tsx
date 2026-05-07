@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Search, CheckCircle, XCircle, ExternalLink, RefreshCw } from "lucide-react";
 import { approvePaymentSlip, declinePaymentSlip } from "./received-payments-actions";
+import type { PendingPaymentExtract } from "./received-payments-actions";
 import { Button } from "@/components/ui/button";
 import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 import { formatAppDate } from "@/lib/formatters";
@@ -19,7 +20,7 @@ export default function ReceivedPaymentsTable({
     totalPages,
     totalRows,
 }: {
-    initialPayments: any[];
+    initialPayments: PendingPaymentExtract[];
     currentSearch: string;
     currentStatus?: string;
     currentPage: number;

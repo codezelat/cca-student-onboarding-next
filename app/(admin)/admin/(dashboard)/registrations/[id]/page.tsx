@@ -1,5 +1,8 @@
 import { notFound } from "next/navigation";
-import { getRegistrationById } from "../../dashboard-actions";
+import {
+    getAvailableRegistrationTags,
+    getRegistrationById,
+} from "../../dashboard-actions";
 import RegistrationDetailsClient from "./registration-details-client";
 
 interface PageProps {
@@ -25,14 +28,22 @@ export default async function RegistrationDetailPage({
         notFound();
     }
 
-    const registration = await getRegistrationById(registrationId, {
-        paymentsPage,
-        paymentsPageSize: 20,
-    });
+    const [registration, availableTags] = await Promise.all([
+        getRegistrationById(registrationId, {
+            paymentsPage,
+            paymentsPageSize: 20,
+        }),
+        getAvailableRegistrationTags(),
+    ]);
 
     if (!registration) {
         notFound();
     }
 
-    return <RegistrationDetailsClient registration={registration as any} />;
+    return (
+        <RegistrationDetailsClient
+            registration={registration}
+            availableTags={availableTags}
+        />
+    );
 }

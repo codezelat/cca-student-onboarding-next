@@ -49,6 +49,7 @@ async function getRegistrationAuditSnapshot(id: number) {
       deletedAt: true,
       fullAmount: true,
       currentPaidAmount: true,
+      tags: true,
       updatedAt: true,
       academicQualificationDocuments: true,
       nicDocuments: true,
@@ -67,6 +68,14 @@ type RegistrationQueryFilters = {
   intakeYearFilter?: string;
   tagFilter?: string;
 };
+
+const DEFAULT_REGISTRATION_TAGS = [
+  "General Rate",
+  "Special 50% Offer",
+] as const;
+const MAX_REGISTRATION_TAGS = 12;
+const MAX_REGISTRATION_TAG_OPTIONS = 100;
+const MAX_REGISTRATION_TAG_LENGTH = 60;
 
 function normalizeSingleFilter(value: string | undefined): string | null {
   if (typeof value !== "string") return null;
@@ -207,6 +216,60 @@ function toNullableTrimmed(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : null;
+}
+
+function normalizeRegistrationTagLabel(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function normalizeRegistrationTags(values: string[]): string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    const normalized = normalizeRegistrationTagLabel(value);
+    if (!normalized) continue;
+
+    if (normalized.length > MAX_REGISTRATION_TAG_LENGTH) {
+      throw new Error(
+        `Tags must be ${MAX_REGISTRATION_TAG_LENGTH} characters or fewer.`,
+      );
+    }
+
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    tags.push(normalized);
+  }
+
+  if (tags.length > MAX_REGISTRATION_TAGS) {
+    throw new Error(`A registration can have up to ${MAX_REGISTRATION_TAGS} tags.`);
+  }
+
+  return tags;
+}
+
+function normalizeRegistrationTagOptions(values: string[]): string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    const normalized = normalizeRegistrationTagLabel(value);
+    if (!normalized || normalized.length > MAX_REGISTRATION_TAG_LENGTH) {
+      continue;
+    }
+
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    tags.push(normalized);
+
+    if (tags.length >= MAX_REGISTRATION_TAG_OPTIONS) break;
+  }
+
+  return tags;
 }
 
 function parseRequiredDate(value: string, fieldName: string): Date {
@@ -718,6 +781,169 @@ export async function getRegistrationById(
     programYear: normalizedRegistration.program?.yearLabel ?? null,
     programDuration: normalizedRegistration.program?.durationLabel ?? null,
   });
+}
+
+export async function getAvailableRegistrationTags() {
+  await assertAdminFromServerHeaders();
+
+  type TagRow = { tag: string | null };
+
+  const rows = await prisma.$queryRaw<TagRow[]>`
+    SELECT DISTINCT tag_value AS tag
+    FROM cca_registrations
+    CROSS JOIN LATERAL jsonb_array_elements_text(
+      CASE
+        WHEN tags IS NOT NULL AND jsonb_typeof(tags) = 'array' THEN tags
+        ELSE '[]'::jsonb
+      END
+    ) AS tag_values(tag_value)
+    WHERE btrim(tag_value) <> ''
+    ORDER BY tag_value ASC
+  `;
+
+  return normalizeRegistrationTagOptions([
+    ...DEFAULT_REGISTRATION_TAGS,
+    ...rows.flatMap((row) => (row.tag ? [row.tag] : [])),
+  ]);
+}
+
+export async function updateRegistrationTags(id: number, tagsInput: unknown) {
+  await assertAdminFromServerHeaders();
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return { success: false, error: "Invalid registration." };
+  }
+
+  const actor = await getAdminActorFromRequestHeaders();
+  const before = await getRegistrationAuditSnapshot(id);
+
+  if (!before) {
+    return { success: false, error: "Registration not found." };
+  }
+
+  if (before.deletedAt) {
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: "registration_tags_update_blocked",
+      status: "blocked",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before.registerId,
+      message: "Registration tag update blocked for trashed registration",
+      routeName: `/admin/registrations/${id}`,
+      beforeData: before,
+    });
+    return {
+      success: false,
+      error: "Restore this registration before changing tags.",
+    };
+  }
+
+  const parsed = z
+    .array(z.string())
+    .max(MAX_REGISTRATION_TAGS)
+    .safeParse(tagsInput);
+
+  if (!parsed.success) {
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: "registration_tags_validation_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before.registerId,
+      message: "Registration tag update rejected due to invalid input",
+      routeName: `/admin/registrations/${id}`,
+      beforeData: before,
+      meta: {
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      },
+    });
+    return { success: false, error: "Invalid tag update payload." };
+  }
+
+  let tags: string[];
+  try {
+    tags = normalizeRegistrationTags(parsed.data);
+  } catch (error) {
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: "registration_tags_validation_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before.registerId,
+      message: "Registration tag update rejected due to invalid tag values",
+      routeName: `/admin/registrations/${id}`,
+      beforeData: before,
+      meta: {
+        error: error instanceof Error ? error.message : "Invalid tag value",
+      },
+    });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Invalid tag value.",
+    };
+  }
+
+  try {
+    const updated = await prisma.cCARegistration.update({
+      where: { id: BigInt(id) },
+      data: {
+        tags: tags as Prisma.InputJsonValue,
+      },
+      select: {
+        id: true,
+        registerId: true,
+        tags: true,
+        updatedAt: true,
+      },
+    });
+
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: "registration_tags_updated",
+      status: "success",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: updated.registerId,
+      message: "Registration tags updated",
+      routeName: `/admin/registrations/${id}`,
+      beforeData: before,
+      afterData: updated,
+      meta: {
+        tags,
+      },
+    });
+
+    revalidatePath("/admin");
+    revalidatePath(`/admin/registrations/${id}`);
+    return { success: true, tags };
+  } catch (error) {
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: "registration_tags_update_failed",
+      status: "failure",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before.registerId,
+      message: "Failed to update registration tags",
+      routeName: `/admin/registrations/${id}`,
+      beforeData: before,
+      meta: {
+        tags,
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
+    return { success: false, error: "Failed to update registration tags." };
+  }
 }
 
 export async function updateRegistrationProfile(id: number, data: unknown) {

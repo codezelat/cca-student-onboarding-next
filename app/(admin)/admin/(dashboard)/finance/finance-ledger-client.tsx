@@ -42,13 +42,29 @@ import { getPaginationRange } from "@/lib/pagination";
 import { PromptDialog } from "@/components/ui/prompt-dialog";
 
 interface FinanceLedgerClientProps {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    initialLedger: any[];
+    initialLedger: FinanceLedgerRow[];
     currentSearch: string;
     currentPage: number;
     pageSize: number;
     totalPages: number;
     totalRows: number;
+}
+
+interface FinanceLedgerRow {
+    id: string | number;
+    ccaRegistrationId: string | number;
+    amount: string | number;
+    paymentDate: string | Date;
+    paymentMethod: string;
+    receiptReference?: string | null;
+    status: string;
+    note?: string | null;
+    voidedAt?: string | null;
+    registration: {
+        fullName?: string | null;
+        registerId?: string | null;
+        programId?: string | null;
+    };
 }
 
 export default function FinanceLedgerClient({
@@ -98,7 +114,7 @@ export default function FinanceLedgerClient({
             );
             setVoidPrompt(null);
             toast({ title: "Payment Voided" });
-        } catch (error) {
+        } catch {
             toast({ title: "Error", variant: "destructive" });
         } finally {
             setIsVoiding(false);
@@ -162,7 +178,7 @@ export default function FinanceLedgerClient({
                 "Remark",
             ];
 
-            const csvData = exportRows.map((p: any) => [
+            const csvData = exportRows.map((p: FinanceLedgerRow) => [
                 p.id.toString(),
                 `"${(p.registration?.fullName || "").replace(/"/g, '""')}"`,
                 p.registration?.registerId || "",
@@ -172,10 +188,10 @@ export default function FinanceLedgerClient({
                 p.receiptReference || "N/A",
                 (
                     p.status === "active"
-                        ? parseFloat(p.amount)
+                        ? parseFloat(String(p.amount))
                         : p.voidedAt
                           ? 0
-                          : -parseFloat(p.amount)
+                          : -parseFloat(String(p.amount))
                 ).toString(),
                 p.status,
                 `"${(p.note || "").replace(/"/g, '""')}"`,
@@ -344,7 +360,7 @@ export default function FinanceLedgerClient({
                                     <TableCell className="px-4 py-4 text-right">
                                         {(() => {
                                             const amount = parseFloat(
-                                                payment.amount,
+                                                String(payment.amount),
                                             );
                                             const signedAmount =
                                                 payment.status === "active"

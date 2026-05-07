@@ -26,6 +26,8 @@ import {
   Wallet,
   Loader2,
   Ban,
+  Tag,
+  Tags,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +63,7 @@ import {
   addPayment,
   voidPayment,
 } from "@/app/(admin)/admin/(dashboard)/finance/finance-actions";
+import { updateRegistrationTags } from "@/app/(admin)/admin/(dashboard)/dashboard-actions";
 import { useToast } from "@/hooks/use-toast";
 import {
   formatAppDateLong,
@@ -77,20 +80,73 @@ import {
 } from "@/lib/registration-documents";
 import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 import { PromptDialog } from "@/components/ui/prompt-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+
+const MAX_REGISTRATION_TAGS = 12;
+const MAX_REGISTRATION_TAG_OPTIONS = 100;
+const MAX_REGISTRATION_TAG_LENGTH = 60;
+
+function normalizeTagLabel(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function normalizeTagList(
+  values: unknown[],
+  maxItems = MAX_REGISTRATION_TAGS,
+): string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    const tag = normalizeTagLabel(value);
+    if (!tag || tag.length > MAX_REGISTRATION_TAG_LENGTH) continue;
+
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    tags.push(tag);
+
+    if (tags.length >= maxItems) break;
+  }
+
+  return tags;
+}
 
 interface RegistrationDetailsClientProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   registration: any;
+  availableTags: string[];
 }
 
 export default function RegistrationDetailsClient({
   registration,
+  availableTags,
 }: RegistrationDetailsClientProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [zoom, setZoom] = useState(1);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isSavingPayment, setIsSavingPayment] = useState(false);
+  const [assignedTags, setAssignedTags] = useState<string[]>(() =>
+    normalizeTagList(Array.isArray(registration.tags) ? registration.tags : []),
+  );
+  const [tagOptions, setTagOptions] = useState<string[]>(() =>
+    normalizeTagList(
+      [
+        ...availableTags,
+        ...(Array.isArray(registration.tags) ? registration.tags : []),
+      ],
+      MAX_REGISTRATION_TAG_OPTIONS,
+    ),
+  );
+  const [isSavingTags, setIsSavingTags] = useState(false);
+  const [tagToRemove, setTagToRemove] = useState<string | null>(null);
+  const [isCreateTagOpen, setIsCreateTagOpen] = useState(false);
+  const [newTagValue, setNewTagValue] = useState("");
+  const [newTagConfirmValue, setNewTagConfirmValue] = useState("");
+  const [newTagError, setNewTagError] = useState("");
   const [voidPrompt, setVoidPrompt] = useState<{
     id: string;
     paymentDate: string;
@@ -101,6 +157,19 @@ export default function RegistrationDetailsClient({
   const paymentSubmitLockRef = useRef(false);
   const { toast } = useToast();
   const router = useAdminBusyRouter();
+
+  useEffect(() => {
+    const nextAssignedTags = normalizeTagList(
+      Array.isArray(registration.tags) ? registration.tags : [],
+    );
+    setAssignedTags(nextAssignedTags);
+    setTagOptions((current) =>
+      normalizeTagList(
+        [...current, ...availableTags, ...nextAssignedTags],
+        MAX_REGISTRATION_TAG_OPTIONS,
+      ),
+    );
+  }, [availableTags, registration.tags]);
 
   // Close document viewer on ESC key
   useEffect(() => {
@@ -151,6 +220,20 @@ export default function RegistrationDetailsClient({
 
   const balance = fullAmount - paidAmount;
   const isFullyPaid = balance <= 0 && fullAmount > 0;
+  const assignedTagKeys = new Set(
+    assignedTags.map((tag) => tag.toLowerCase()),
+  );
+  const unassignedTagOptions = tagOptions.filter(
+    (tag) => !assignedTagKeys.has(tag.toLowerCase()),
+  );
+  const normalizedNewTag = normalizeTagLabel(newTagValue);
+  const normalizedNewTagConfirmation = normalizeTagLabel(newTagConfirmValue);
+  const canCreateCustomTag =
+    Boolean(normalizedNewTag) &&
+    normalizedNewTag === normalizedNewTagConfirmation &&
+    normalizedNewTag.length <= MAX_REGISTRATION_TAG_LENGTH &&
+    assignedTags.length < MAX_REGISTRATION_TAGS &&
+    !assignedTagKeys.has(normalizedNewTag.toLowerCase());
 
   const nicDocuments = normalizeDocumentCollection(registration.nicDocuments);
   const currentNicDocumentIds = getNicDocumentCurrentIds(nicDocuments);
@@ -309,6 +392,138 @@ export default function RegistrationDetailsClient({
       });
     } finally {
       setIsVoidingPayment(false);
+    }
+  }
+
+  async function persistTags(
+    nextTags: string[],
+    successTitle: string,
+  ): Promise<boolean> {
+    const previousTags = assignedTags;
+    const normalizedTags = normalizeTagList(nextTags);
+
+    setIsSavingTags(true);
+    setAssignedTags(normalizedTags);
+    setTagOptions((current) =>
+      normalizeTagList(
+        [...current, ...normalizedTags],
+        MAX_REGISTRATION_TAG_OPTIONS,
+      ),
+    );
+
+    try {
+      const result = await updateRegistrationTags(
+        Number(registration.id),
+        normalizedTags,
+      );
+
+      if (!result.success || !Array.isArray(result.tags)) {
+        throw new Error(result.error || "Failed to update tags.");
+      }
+
+      const savedTags = result.tags;
+
+      setAssignedTags(savedTags);
+      setTagOptions((current) =>
+        normalizeTagList(
+          [...current, ...savedTags],
+          MAX_REGISTRATION_TAG_OPTIONS,
+        ),
+      );
+      toast({ title: successTitle });
+      router.refresh();
+      return true;
+    } catch (error) {
+      setAssignedTags(previousTags);
+      toast({
+        title: "Unable to Update Tags",
+        description:
+          error instanceof Error ? error.message : "Failed to update tags.",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setIsSavingTags(false);
+    }
+  }
+
+  function handleAssignTag(tag: string) {
+    if (isSavingTags || assignedTagKeys.has(tag.toLowerCase())) return;
+    if (assignedTags.length >= MAX_REGISTRATION_TAGS) {
+      toast({
+        title: "Tag Limit Reached",
+        description: `A registration can have up to ${MAX_REGISTRATION_TAGS} tags.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    void persistTags([...assignedTags, tag], "Tag assigned");
+  }
+
+  function handleCreateTagOpenChange(open: boolean) {
+    if (isSavingTags) return;
+    setIsCreateTagOpen(open);
+    if (!open) {
+      setNewTagValue("");
+      setNewTagConfirmValue("");
+      setNewTagError("");
+    }
+  }
+
+  async function handleCreateTag() {
+    if (!normalizedNewTag) {
+      setNewTagError("Enter a tag name.");
+      return;
+    }
+
+    if (normalizedNewTag.length > MAX_REGISTRATION_TAG_LENGTH) {
+      setNewTagError(
+        `Tags must be ${MAX_REGISTRATION_TAG_LENGTH} characters or fewer.`,
+      );
+      return;
+    }
+
+    if (normalizedNewTag !== normalizedNewTagConfirmation) {
+      setNewTagError("Both entries must match.");
+      return;
+    }
+
+    const existingTag = tagOptions.find(
+      (tag) => tag.toLowerCase() === normalizedNewTag.toLowerCase(),
+    );
+    const tagToAssign = existingTag || normalizedNewTag;
+
+    if (assignedTagKeys.has(tagToAssign.toLowerCase())) {
+      setNewTagError("This tag is already assigned to this registration.");
+      return;
+    }
+
+    if (assignedTags.length >= MAX_REGISTRATION_TAGS) {
+      setNewTagError(
+        `A registration can have up to ${MAX_REGISTRATION_TAGS} tags.`,
+      );
+      return;
+    }
+
+    const didSave = await persistTags(
+      [...assignedTags, tagToAssign],
+      existingTag ? "Tag assigned" : "Tag created and assigned",
+    );
+
+    if (didSave) {
+      handleCreateTagOpenChange(false);
+    }
+  }
+
+  async function confirmRemoveTag() {
+    if (!tagToRemove) return;
+    const nextTags = assignedTags.filter(
+      (tag) => tag.toLowerCase() !== tagToRemove.toLowerCase(),
+    );
+    const didSave = await persistTags(nextTags, "Tag removed");
+
+    if (didSave) {
+      setTagToRemove(null);
     }
   }
 
@@ -542,24 +757,6 @@ export default function RegistrationDetailsClient({
                 </Dialog>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {Array.isArray(registration.tags) &&
-                  registration.tags.length > 0 ? (
-                    registration.tags.map((tag: string) => (
-                      <Badge
-                        key={tag}
-                        className="bg-indigo-600/10 text-indigo-700 border-indigo-200"
-                      >
-                        {tag}
-                      </Badge>
-                    ))
-                  ) : (
-                    <span className="text-xs text-muted-foreground italic">
-                      No tags assigned
-                    </span>
-                  )}
-                </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Card className="gap-1 bg-white/50 border-emerald-100 p-4 shadow-sm">
                     <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">
@@ -771,6 +968,97 @@ export default function RegistrationDetailsClient({
               </CardContent>
             </Card>
           </motion.div>
+
+          <Card className="gap-0 border-primary/10 bg-white/75 shadow-lg shadow-primary/5">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                  <Tags className="h-5 w-5 text-primary" />
+                  Registration Tags
+                </CardTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isSavingTags}
+                  onClick={() => handleCreateTagOpenChange(true)}
+                  className="w-full rounded-xl border-primary/20 text-primary hover:bg-primary/5 sm:w-auto"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Tag
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-xl border border-gray-100 bg-white/60 p-4">
+                <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                  Assigned
+                </p>
+                {assignedTags.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {assignedTags.map((tag) => (
+                      <Badge
+                        key={tag}
+                        className="gap-1 rounded-full border-primary/15 bg-primary/10 px-3 py-1 text-primary hover:bg-primary/10"
+                      >
+                        <Tag className="h-3 w-3" />
+                        {tag}
+                        <button
+                          type="button"
+                          disabled={isSavingTags}
+                          onClick={() => setTagToRemove(tag)}
+                          className="ml-1 rounded-full p-0.5 text-primary/70 transition-colors hover:bg-primary/10 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
+                          aria-label={`Remove ${tag} tag from this registration`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No tags assigned.
+                  </p>
+                )}
+                {assignedTags.length >= MAX_REGISTRATION_TAGS && (
+                  <p className="mt-3 text-xs font-medium text-amber-700">
+                    Tag limit reached for this registration.
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+                <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                  Available Tags
+                </p>
+                {unassignedTagOptions.length > 0 ? (
+                  <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto pr-1">
+                    {unassignedTagOptions.map((tag) => (
+                      <Button
+                        key={tag}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={
+                          isSavingTags ||
+                          assignedTags.length >= MAX_REGISTRATION_TAGS
+                        }
+                        onClick={() => handleAssignTag(tag)}
+                        className="h-8 rounded-full border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                      >
+                        <Plus className="mr-1.5 h-3 w-3" />
+                        {tag}
+                      </Button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Every available tag is already assigned.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Basic Info */}
           <SectionCard
@@ -1063,6 +1351,121 @@ export default function RegistrationDetailsClient({
         isPending={isVoidingPayment}
         onConfirm={confirmVoidPayment}
       />
+
+      <ConfirmDialog
+        open={!!tagToRemove}
+        onOpenChange={(open) => {
+          if (!open && !isSavingTags) {
+            setTagToRemove(null);
+          }
+        }}
+        title="Remove Tag"
+        description={
+          tagToRemove
+            ? `Remove "${tagToRemove}" from this registration only. The tag remains available for other registrations.`
+            : undefined
+        }
+        confirmLabel="Remove Tag"
+        cancelLabel="Keep Tag"
+        variant="destructive"
+        isPending={isSavingTags}
+        onConfirm={confirmRemoveTag}
+      />
+
+      <Dialog open={isCreateTagOpen} onOpenChange={handleCreateTagOpenChange}>
+        <DialogContent
+          className="sm:max-w-md rounded-3xl bg-white/95 backdrop-blur-xl border-white/60 shadow-2xl"
+          onEscapeKeyDown={(event) => {
+            if (isSavingTags) event.preventDefault();
+          }}
+          onInteractOutside={(event) => {
+            if (isSavingTags) event.preventDefault();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+              <Tags className="h-5 w-5 text-primary" />
+              Create Tag
+            </DialogTitle>
+            <DialogDescription>
+              Type the same tag twice to create and assign it to this
+              registration.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="new-registration-tag">Tag Name</Label>
+              <Input
+                id="new-registration-tag"
+                value={newTagValue}
+                maxLength={MAX_REGISTRATION_TAG_LENGTH}
+                disabled={isSavingTags}
+                onChange={(event) => {
+                  setNewTagValue(event.target.value);
+                  setNewTagError("");
+                }}
+                placeholder="Example: General Rate"
+                className="rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-registration-tag">
+                Type Tag Again
+              </Label>
+              <Input
+                id="confirm-registration-tag"
+                value={newTagConfirmValue}
+                maxLength={MAX_REGISTRATION_TAG_LENGTH}
+                disabled={isSavingTags}
+                onChange={(event) => {
+                  setNewTagConfirmValue(event.target.value);
+                  setNewTagError("");
+                }}
+                placeholder="Repeat the exact tag"
+                className="rounded-xl"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && canCreateCustomTag) {
+                    void handleCreateTag();
+                  }
+                }}
+              />
+            </div>
+            {newTagError && (
+              <p className="text-xs font-medium text-rose-500">
+                {newTagError}
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSavingTags}
+              onClick={() => handleCreateTagOpenChange(false)}
+              className="rounded-xl"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!canCreateCustomTag || isSavingTags}
+              onClick={() => void handleCreateTag()}
+              className="rounded-xl"
+            >
+              {isSavingTags ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Create & Assign"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Document Viewer Modal */}
       <AnimatePresence>

@@ -24,7 +24,7 @@ interface PaymentSlip {
   declinedAt?: string;
 }
 
-interface PendingPaymentExtract {
+export interface PendingPaymentExtract {
   registrationId: string;
   registerId: string;
   fullName: string;
