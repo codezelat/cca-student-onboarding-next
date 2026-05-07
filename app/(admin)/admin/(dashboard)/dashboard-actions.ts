@@ -66,7 +66,12 @@ type RegistrationQueryFilters = {
   programFilter?: string | string[];
   programGroupFilter?: string;
   intakeYearFilter?: string;
-  tagFilter?: string;
+  tagFilter?: string | string[];
+};
+
+export type RegistrationTagFilterOption = {
+  tag: string;
+  count: number;
 };
 
 const DEFAULT_REGISTRATION_TAGS = [
@@ -103,6 +108,18 @@ function normalizeProgramFilter(
   return trimmed ? [trimmed] : [];
 }
 
+function normalizeTagFilter(
+  value: RegistrationQueryFilters["tagFilter"],
+): string[] {
+  if (Array.isArray(value)) {
+    return normalizeRegistrationTagOptions(value);
+  }
+
+  if (typeof value !== "string") return [];
+
+  return normalizeRegistrationTagOptions([value]);
+}
+
 function extractProgramGroupFromCode(programCode: string): string | null {
   const normalizedProgramCode = programCode.trim().toUpperCase();
   if (!normalizedProgramCode) return null;
@@ -130,7 +147,7 @@ function buildRegistrationWhere(
     programGroupFilter,
   )?.toUpperCase();
   const normalizedIntakeYearFilter = normalizeSingleFilter(intakeYearFilter);
-  const normalizedTagFilter = normalizeSingleFilter(tagFilter);
+  const normalizedTagFilter = normalizeTagFilter(tagFilter);
 
   if (scope === "active") {
     where.deletedAt = null;
@@ -181,12 +198,21 @@ function buildRegistrationWhere(
     });
   }
 
-  if (normalizedTagFilter) {
+  if (normalizedTagFilter.length === 1) {
     andConditions.push({
       tags: {
         path: [],
-        array_contains: normalizedTagFilter,
+        array_contains: normalizedTagFilter[0],
       } as Prisma.JsonNullableFilter,
+    });
+  } else if (normalizedTagFilter.length > 1) {
+    andConditions.push({
+      OR: normalizedTagFilter.map((tag) => ({
+        tags: {
+          path: [],
+          array_contains: tag,
+        } as Prisma.JsonNullableFilter,
+      })),
     });
   }
 
@@ -390,8 +416,6 @@ export async function getDashboardStats() {
     active: bigint;
     trashed: bigint;
     total: bigint;
-    general: bigint;
-    special: bigint;
   };
 
   const [statsRows, topProgramResult] = await Promise.all([
@@ -399,9 +423,7 @@ export async function getDashboardStats() {
       SELECT
         COUNT(*)                                                                              AS total,
         COUNT(*) FILTER (WHERE deleted_at IS NULL)                                           AS active,
-        COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)                                       AS trashed,
-        COUNT(*) FILTER (WHERE deleted_at IS NULL AND tags @> '["General Rate"]'::jsonb)     AS general,
-        COUNT(*) FILTER (WHERE deleted_at IS NULL AND tags @> '["Special 50% Offer"]'::jsonb) AS special
+        COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)                                       AS trashed
       FROM cca_registrations
     `,
     prisma.cCARegistration.groupBy({
@@ -417,16 +439,12 @@ export async function getDashboardStats() {
     active: BigInt(0),
     trashed: BigInt(0),
     total: BigInt(0),
-    general: BigInt(0),
-    special: BigInt(0),
   };
 
   return {
     activeRegistrations: Number(row.active),
     trashedRegistrations: Number(row.trashed),
     totalRegistrations: Number(row.total),
-    generalRateCount: Number(row.general),
-    specialOfferCount: Number(row.special),
     topProgram: topProgramResult[0]
       ? {
           id: topProgramResult[0].programId,
@@ -442,7 +460,7 @@ export async function getRegistrations(params: {
   programFilter?: string | string[];
   programGroupFilter?: string;
   intakeYearFilter?: string;
-  tagFilter?: string;
+  tagFilter?: string | string[];
   page?: number;
   pageSize?: number;
 }) {
@@ -805,6 +823,61 @@ export async function getAvailableRegistrationTags() {
     ...DEFAULT_REGISTRATION_TAGS,
     ...rows.flatMap((row) => (row.tag ? [row.tag] : [])),
   ]);
+}
+
+export async function getRegistrationTagFilterOptions(
+  filters: Omit<RegistrationQueryFilters, "tagFilter"> = {},
+): Promise<RegistrationTagFilterOption[]> {
+  await assertAdminFromServerHeaders();
+
+  const [availableTags, registrations] = await Promise.all([
+    getAvailableRegistrationTags(),
+    prisma.cCARegistration.findMany({
+      where: buildRegistrationWhere({
+        ...filters,
+        tagFilter: undefined,
+      }),
+      select: {
+        tags: true,
+      },
+    }),
+  ]);
+
+  const countsByTag = new Map<string, RegistrationTagFilterOption>();
+
+  availableTags.forEach((tag) => {
+    countsByTag.set(tag.toLowerCase(), { tag, count: 0 });
+  });
+
+  registrations.forEach((registration) => {
+    if (!Array.isArray(registration.tags)) return;
+
+    const seenForRegistration = new Set<string>();
+
+    registration.tags.forEach((value) => {
+      if (typeof value !== "string") return;
+
+      const [tag] = normalizeRegistrationTagOptions([value]);
+      if (!tag) return;
+
+      const key = tag.toLowerCase();
+      if (seenForRegistration.has(key)) return;
+      seenForRegistration.add(key);
+
+      const current = countsByTag.get(key);
+      countsByTag.set(key, {
+        tag: current?.tag ?? tag,
+        count: (current?.count ?? 0) + 1,
+      });
+    });
+  });
+
+  return Array.from(countsByTag.values())
+    .sort(
+      (left, right) =>
+        right.count - left.count || left.tag.localeCompare(right.tag),
+    )
+    .slice(0, MAX_REGISTRATION_TAG_OPTIONS);
 }
 
 export async function updateRegistrationTags(id: number, tagsInput: unknown) {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
     getDashboardStats,
+    getRegistrationTagFilterOptions,
     getRegistrations,
     getProgramsForRegistrationOptions,
 } from "./dashboard-actions";
@@ -51,7 +52,7 @@ export default async function AdminDashboardPage({
     const intakeYearFilter = getSingleSearchParamValue(
         params.intake_year_filter,
     );
-    const tagFilter = getSingleSearchParamValue(params.tag_filter);
+    const tagFilter = getMultiSearchParamValues(params.tag_filter);
     const page = Math.max(
         1,
         Number.isFinite(Number(params.page))
@@ -59,7 +60,7 @@ export default async function AdminDashboardPage({
             : 1,
     );
 
-    const [stats, registrationsResult, programs] = await Promise.all([
+    const [stats, registrationsResult, programs, tagOptions] = await Promise.all([
         getDashboardStats(),
         getRegistrations({
             scope,
@@ -71,6 +72,13 @@ export default async function AdminDashboardPage({
             page,
         }),
         getProgramsForRegistrationOptions(),
+        getRegistrationTagFilterOptions({
+            scope,
+            search,
+            programFilter,
+            programGroupFilter,
+            intakeYearFilter,
+        }),
     ]);
 
     return (
@@ -158,7 +166,8 @@ export default async function AdminDashboardPage({
                 currentProgram={programFilter}
                 currentProgramGroup={programGroupFilter}
                 currentIntakeYear={intakeYearFilter}
-                currentTag={tagFilter}
+                currentTags={tagFilter}
+                tagOptions={tagOptions}
                 currentPage={registrationsResult.page}
                 pageSize={registrationsResult.pageSize}
                 totalPages={registrationsResult.totalPages}

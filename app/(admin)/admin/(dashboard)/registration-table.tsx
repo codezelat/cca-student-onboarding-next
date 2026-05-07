@@ -11,8 +11,7 @@ import {
     Check,
     Columns3,
     Users,
-    CheckCircle2,
-    Gift,
+    Tag,
     RotateCcw,
     ExternalLink,
     Edit,
@@ -26,6 +25,7 @@ import {
     purgeRegistration,
     getRegistrationsForExport,
 } from "./dashboard-actions";
+import type { RegistrationTagFilterOption } from "./dashboard-actions";
 import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,8 +95,6 @@ type DashboardStats = {
     activeRegistrations: number;
     trashedRegistrations: number;
     totalRegistrations: number;
-    generalRateCount: number;
-    specialOfferCount: number;
     topProgram: { id: string; count: number } | null;
 };
 
@@ -116,7 +114,8 @@ interface RegistrationTableProps {
     currentProgram: string[];
     currentProgramGroup: string;
     currentIntakeYear: string;
-    currentTag: string;
+    currentTags: string[];
+    tagOptions: RegistrationTagFilterOption[];
     currentPage: number;
     pageSize: number;
     totalPages: number;
@@ -150,7 +149,8 @@ export default function RegistrationTable({
     currentProgram,
     currentProgramGroup,
     currentIntakeYear,
-    currentTag,
+    currentTags,
+    tagOptions,
     currentPage,
     pageSize,
     totalPages,
@@ -164,6 +164,7 @@ export default function RegistrationTable({
         currentProgramGroup,
     );
     const [intakeYearInput, setIntakeYearInput] = useState(currentIntakeYear);
+    const [tagInput, setTagInput] = useState<string[]>(currentTags);
     const [isExporting, setIsExporting] = useState(false);
     const [trashConfirm, setTrashConfirm] = useState<{ id: number; restore: boolean } | null>(null);
     const [purgeConfirm, setPurgeConfirm] = useState<{ id: number } | null>(null);
@@ -172,7 +173,9 @@ export default function RegistrationTable({
     const [copiedWhatsappId, setCopiedWhatsappId] = useState<string | null>(null);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
     const [isProgramFilterOpen, setIsProgramFilterOpen] = useState(false);
+    const [isTagFilterOpen, setIsTagFilterOpen] = useState(false);
     const [programQuery, setProgramQuery] = useState("");
+    const [tagQuery, setTagQuery] = useState("");
     const [selectedExportFields, setSelectedExportFields] = useState<
         RegistrationExportFieldKey[]
     >([...DEFAULT_REGISTRATION_EXPORT_FIELD_KEYS]);
@@ -182,7 +185,14 @@ export default function RegistrationTable({
         setProgramInput(currentProgram);
         setProgramGroupInput(currentProgramGroup);
         setIntakeYearInput(currentIntakeYear);
-    }, [currentSearch, currentProgram, currentProgramGroup, currentIntakeYear]);
+        setTagInput(currentTags);
+    }, [
+        currentSearch,
+        currentProgram,
+        currentProgramGroup,
+        currentIntakeYear,
+        currentTags,
+    ]);
 
     const deferredProgramQuery = useDeferredValue(programQuery);
     const normalizedProgramQuery = deferredProgramQuery.trim().toLowerCase();
@@ -202,6 +212,30 @@ export default function RegistrationTable({
                 .filter((yearLabel) => yearLabel.length > 0),
         ),
     ).sort((left, right) => alphanumericCollator.compare(right, left));
+    const mergedTagOptions = Array.from(
+        new Map(
+            [
+                ...tagOptions,
+                ...currentTags.map((tag) => ({ tag, count: 0 })),
+            ]
+                .map((option) => ({
+                    tag: option.tag.trim(),
+                    count: option.count,
+                }))
+                .filter((option) => option.tag.length > 0)
+                .map((option) => [option.tag.toLowerCase(), option] as const),
+        ).values(),
+    ).sort(
+        (left, right) =>
+            right.count - left.count ||
+            alphanumericCollator.compare(left.tag, right.tag),
+    );
+    const selectedTagKeys = new Set(tagInput.map((tag) => tag.toLowerCase()));
+    const normalizedTagQuery = tagQuery.trim().toLowerCase();
+    const visibleTagOptions = mergedTagOptions.filter((option) => {
+        if (!normalizedTagQuery) return true;
+        return option.tag.toLowerCase().includes(normalizedTagQuery);
+    });
     const visibleProgramOptions = programs.filter((program) => {
         if (
             programGroupInput &&
@@ -224,7 +258,7 @@ export default function RegistrationTable({
         program?: string[];
         programGroup?: string;
         intakeYear?: string;
-        tag?: string;
+        tag?: string[];
         page?: number;
     }) {
         const sp = new URLSearchParams();
@@ -242,7 +276,7 @@ export default function RegistrationTable({
             params.intakeYear !== undefined
                 ? params.intakeYear
                 : currentIntakeYear;
-        const tag = params.tag !== undefined ? params.tag : currentTag;
+        const tags = params.tag !== undefined ? params.tag : currentTags;
         const page = params.page !== undefined ? params.page : currentPage;
 
         if (search) sp.set("search", search);
@@ -257,7 +291,11 @@ export default function RegistrationTable({
         if (intakeYear) {
             sp.set("intake_year_filter", intakeYear);
         }
-        if (tag) sp.set("tag_filter", tag);
+        tags.forEach((tag) => {
+            if (tag) {
+                sp.append("tag_filter", tag);
+            }
+        });
         if (page > 1) sp.set("page", String(page));
 
         return `/admin?${sp.toString()}`;
@@ -271,6 +309,7 @@ export default function RegistrationTable({
                 program: programInput,
                 programGroup: programGroupInput,
                 intakeYear: intakeYearInput,
+                tag: tagInput,
                 page: 1,
             }),
         );
@@ -281,8 +320,11 @@ export default function RegistrationTable({
         setProgramInput([]);
         setProgramGroupInput("");
         setIntakeYearInput("");
+        setTagInput([]);
         setProgramQuery("");
+        setTagQuery("");
         setIsProgramFilterOpen(false);
+        setIsTagFilterOpen(false);
         router.push("/admin?scope=active");
     }
 
@@ -290,6 +332,13 @@ export default function RegistrationTable({
         setIsProgramFilterOpen(open);
         if (!open) {
             setProgramQuery("");
+        }
+    }
+
+    function handleTagPopoverChange(open: boolean) {
+        setIsTagFilterOpen(open);
+        if (!open) {
+            setTagQuery("");
         }
     }
 
@@ -301,9 +350,28 @@ export default function RegistrationTable({
         );
     }
 
+    function handleTagToggle(tag: string) {
+        const normalizedTag = tag.trim();
+        if (!normalizedTag) return;
+
+        setTagInput((current) => {
+            const key = normalizedTag.toLowerCase();
+            const hasTag = current.some((value) => value.toLowerCase() === key);
+
+            return hasTag
+                ? current.filter((value) => value.toLowerCase() !== key)
+                : [...current, normalizedTag];
+        });
+    }
+
     function clearProgramSelection() {
         setProgramInput([]);
         setProgramQuery("");
+    }
+
+    function clearTagSelection() {
+        setTagInput([]);
+        setTagQuery("");
     }
 
     function handleProgramGroupChange(nextProgramGroup: string) {
@@ -364,10 +432,39 @@ export default function RegistrationTable({
               : `${appliedProgramLabels.length} programs`;
     const selectedProgramGroupExportLabel = currentProgramGroup;
     const selectedIntakeYearExportLabel = currentIntakeYear;
+    const selectedTagLabel =
+        tagInput.length === 0
+            ? "All Tags"
+            : tagInput.length === 1
+              ? tagInput[0]
+              : `${tagInput.length} tags selected`;
+    const selectedTagSummaryLabel =
+        tagInput.length === 0
+            ? ""
+            : tagInput.length <= 2
+              ? tagInput.join(", ")
+              : `${tagInput.length} selected`;
+    const appliedTagExportLabel =
+        currentTags.length === 0
+            ? ""
+            : currentTags.length <= 3
+              ? currentTags.join(", ")
+              : `${currentTags.length} tags`;
 
     function applyProgramSelectionAndClose() {
         setProgramQuery("");
         setIsProgramFilterOpen(false);
+    }
+
+    function applyTagSelectionAndClose() {
+        setTagQuery("");
+        setIsTagFilterOpen(false);
+        router.push(
+            buildUrl({
+                tag: tagInput,
+                page: 1,
+            }),
+        );
     }
 
     async function handleTrash(id: number, restore: boolean) {
@@ -429,7 +526,7 @@ export default function RegistrationTable({
                 programFilter: currentProgram,
                 programGroupFilter: currentProgramGroup,
                 intakeYearFilter: currentIntakeYear,
-                tagFilter: currentTag,
+                tagFilter: currentTags,
             }, orderedFields.map((field) => field.key));
             if (allRegistrations.length === 0) {
                 toast({
@@ -532,7 +629,7 @@ export default function RegistrationTable({
         currentProgram.length > 0 ||
         currentProgramGroup ||
         currentIntakeYear ||
-        currentTag ||
+        currentTags.length > 0 ||
         currentScope !== "active";
     const { start: paginationStart, end: paginationEnd } = getPaginationRange({
         currentPage,
@@ -926,7 +1023,7 @@ export default function RegistrationTable({
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <div className="p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group">
                     <div className="flex items-center justify-between">
                         <div>
@@ -943,87 +1040,168 @@ export default function RegistrationTable({
                     </div>
                 </div>
 
-                <button
-                    type="button"
-                    aria-pressed={currentTag === "General Rate"}
-                    onClick={() =>
-                        router.push(
-                            buildUrl({
-                                tag:
-                                    currentTag === "General Rate"
-                                        ? ""
-                                        : "General Rate",
-                                page: 1,
-                            }),
-                        )
-                    }
-                    className={`group w-full appearance-none cursor-pointer rounded-2xl border p-6 text-left shadow-lg backdrop-blur-xl transition-all duration-300 hover:scale-[1.03] hover:shadow-xl ${
-                        currentTag === "General Rate"
-                            ? "bg-emerald-100/90 border-emerald-400 ring-2 ring-emerald-500"
-                            : "bg-white/60 border-white/60"
-                    }`}
-                >
-                    <div className="flex items-center justify-between">
-                        <div>
+                <div className="p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl group">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
-                                General Rate
+                                Registration Tags
                             </p>
-                            <p className="text-3xl font-black bg-linear-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">
-                                {initialStats.generalRateCount}
+                            <p className="text-2xl font-black bg-linear-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                                {currentTags.length > 0
+                                    ? totalRows
+                                    : mergedTagOptions.length}
+                            </p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">
+                                {currentTags.length > 0
+                                    ? "Matching Records"
+                                    : "Available Tags"}
                             </p>
                         </div>
-                        <div
-                            className={`p-3 rounded-xl transition-colors duration-300 ${
-                                currentTag === "General Rate"
-                                    ? "bg-emerald-600 text-white"
-                                    : "bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white"
-                            }`}
-                        >
-                            <CheckCircle2 className="w-6 h-6" />
+                        <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
+                            <Tag className="w-6 h-6" />
                         </div>
                     </div>
-                </button>
 
-                <button
-                    type="button"
-                    aria-pressed={currentTag === "Special 50% Offer"}
-                    onClick={() =>
-                        router.push(
-                            buildUrl({
-                                tag:
-                                    currentTag === "Special 50% Offer"
-                                        ? ""
-                                        : "Special 50% Offer",
-                                page: 1,
-                            }),
-                        )
-                    }
-                    className={`group w-full appearance-none cursor-pointer rounded-2xl border p-6 text-left shadow-lg backdrop-blur-xl transition-all duration-300 hover:scale-[1.03] hover:shadow-xl ${
-                        currentTag === "Special 50% Offer"
-                            ? "bg-purple-100/90 border-purple-400 ring-2 ring-purple-500"
-                            : "bg-white/60 border-white/60"
-                    }`}
-                >
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
-                                Special Offer
-                            </p>
-                            <p className="text-3xl font-black bg-linear-to-r from-purple-600 to-fuchsia-600 bg-clip-text text-transparent">
-                                {initialStats.specialOfferCount}
-                            </p>
-                        </div>
-                        <div
-                            className={`p-3 rounded-xl transition-colors duration-300 ${
-                                currentTag === "Special 50% Offer"
-                                    ? "bg-purple-600 text-white"
-                                    : "bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white"
-                            }`}
+                    <div className="mt-4 space-y-3">
+                        <Popover
+                            open={isTagFilterOpen}
+                            onOpenChange={handleTagPopoverChange}
                         >
-                            <Gift className="w-6 h-6" />
-                        </div>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-auto w-full justify-between rounded-xl border-gray-200 bg-white/70 px-3 py-2 text-left font-medium text-gray-700 hover:bg-white"
+                                >
+                                    <span className="min-w-0">
+                                        <span className="block truncate">
+                                            {selectedTagLabel}
+                                        </span>
+                                        {selectedTagSummaryLabel && (
+                                            <span className="block truncate text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                                                {selectedTagSummaryLabel}
+                                            </span>
+                                        )}
+                                    </span>
+                                    <ChevronsUpDown className="ml-3 h-4 w-4 shrink-0 text-gray-400" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                                align="start"
+                                className="w-[var(--radix-popover-trigger-width)] rounded-2xl border-white/70 bg-white/95 p-3 shadow-2xl backdrop-blur-xl"
+                            >
+                                <div className="space-y-3">
+                                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 px-3 py-2">
+                                        <p className="text-xs font-medium text-emerald-800">
+                                            Select one or more tags. Records match any selected tag.
+                                        </p>
+                                    </div>
+
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                                        <Input
+                                            value={tagQuery}
+                                            onChange={(event) =>
+                                                setTagQuery(event.target.value)
+                                            }
+                                            placeholder="Search tags..."
+                                            className="rounded-xl border-gray-200 bg-white pl-10"
+                                        />
+                                    </div>
+
+                                    <div className="max-h-64 overflow-y-auto pr-1">
+                                        <div className="space-y-1">
+                                            {visibleTagOptions.length === 0 ? (
+                                                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-8 text-center">
+                                                    <p className="text-sm font-semibold text-gray-700">
+                                                        No matching tags
+                                                    </p>
+                                                    <p className="mt-1 text-xs text-gray-500">
+                                                        Try another tag name.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                visibleTagOptions.map(
+                                                    (option) => {
+                                                        const isSelected =
+                                                            selectedTagKeys.has(
+                                                                option.tag.toLowerCase(),
+                                                            );
+
+                                                        return (
+                                                            <button
+                                                                key={option.tag}
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    handleTagToggle(
+                                                                        option.tag,
+                                                                    )
+                                                                }
+                                                                className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                                                                    isSelected
+                                                                        ? "border-emerald-300 bg-emerald-50"
+                                                                        : "border-transparent bg-white/70 hover:border-gray-200 hover:bg-white"
+                                                                }`}
+                                                            >
+                                                                <div className="min-w-0">
+                                                                    <p className="truncate text-sm font-semibold text-gray-900">
+                                                                        {option.tag}
+                                                                    </p>
+                                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                                                                        {option.count} matching
+                                                                    </p>
+                                                                </div>
+                                                                {isSelected ? (
+                                                                    <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                                                                ) : (
+                                                                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-500">
+                                                                        {option.count}
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    },
+                                                )
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                                        <p className="text-xs text-gray-500">
+                                            {tagInput.length === 0
+                                                ? "All tags included"
+                                                : `${tagInput.length} tag(s) selected`}
+                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={clearTagSelection}
+                                                className="rounded-xl"
+                                            >
+                                                Clear
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={applyTagSelectionAndClose}
+                                                className="rounded-xl bg-emerald-600 hover:bg-emerald-700"
+                                            >
+                                                Apply
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+
+                        <p className="text-xs leading-relaxed text-gray-500">
+                            Counts update with the current search, scope, program,
+                            track and intake filters.
+                        </p>
                     </div>
-                </button>
+                </div>
 
                 <div className="p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.03] group">
                     <div className="flex items-center justify-between">
@@ -1044,6 +1222,15 @@ export default function RegistrationTable({
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div className="flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-900 shadow-sm">
+                <Tag className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                <p>
+                    Tag filtering matches any selected tag. Counts reflect the
+                    current scope, search, program, track and intake filters;
+                    the table, pagination and export use the same tag selection.
+                </p>
             </div>
 
             {/* Registration Table */}
@@ -1430,7 +1617,7 @@ export default function RegistrationTable({
                                 {selectedExportFields.length} column(s) selected
                             </p>
                             <p className="text-xs text-emerald-700">
-                                Scope: {currentScope} {selectedProgramExportLabel ? `• Programs: ${selectedProgramExportLabel}` : ""} {selectedProgramGroupExportLabel ? `• Track: ${selectedProgramGroupExportLabel}` : ""} {selectedIntakeYearExportLabel ? `• Intake Year: ${selectedIntakeYearExportLabel}` : ""} {currentTag ? `• Tag: ${currentTag}` : ""} {currentSearch ? `• Search: ${currentSearch}` : ""}
+                                Scope: {currentScope} {selectedProgramExportLabel ? `• Programs: ${selectedProgramExportLabel}` : ""} {selectedProgramGroupExportLabel ? `• Track: ${selectedProgramGroupExportLabel}` : ""} {selectedIntakeYearExportLabel ? `• Intake Year: ${selectedIntakeYearExportLabel}` : ""} {appliedTagExportLabel ? `• Tags: ${appliedTagExportLabel}` : ""} {currentSearch ? `• Search: ${currentSearch}` : ""}
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
