@@ -27,7 +27,6 @@ export default function AdminLoginPage() {
     const [turnstileToken, setTurnstileToken] = useState("");
     const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0);
     const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-    const turnstileEnabled = !isDev && Boolean(siteKey);
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();

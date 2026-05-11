@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
+import {
+    useState,
+    useRef,
+    useEffect,
+    useCallback,
+    useMemo,
+    ChangeEvent,
+} from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Turnstile } from "@marsidev/react-turnstile";
@@ -125,9 +132,13 @@ export default function RegisterPage() {
     };
 
     // Conditional districts logic
-    const availableDistricts = formData.province
-        ? SRI_LANKA_DISTRICTS[formData.province] || []
-        : [];
+    const availableDistricts = useMemo(
+        () =>
+            formData.province
+                ? SRI_LANKA_DISTRICTS[formData.province] || []
+                : [],
+        [formData.province],
+    );
 
     useEffect(() => {
         if (formData.country !== "Sri Lanka") {

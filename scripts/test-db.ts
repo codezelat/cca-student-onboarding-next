@@ -9,7 +9,7 @@ const supabase = createClient(
 
 async function test() {
     // Check if cca_registrations table exists
-    const { data: regData, error: regErr } = await supabase
+    const { error: regErr } = await supabase
         .from("cca_registrations")
         .select("id")
         .limit(1);
@@ -19,7 +19,7 @@ async function test() {
     );
 
     // Check if users table exists
-    const { data: userData, error: userErr } = await supabase
+    const { error: userErr } = await supabase
         .from("users")
         .select("id")
         .limit(1);
@@ -29,7 +29,7 @@ async function test() {
     );
 
     // Check if programs table exists
-    const { data: progData, error: progErr } = await supabase
+    const { error: progErr } = await supabase
         .from("programs")
         .select("id")
         .limit(1);
