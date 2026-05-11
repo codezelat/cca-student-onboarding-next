@@ -13,6 +13,20 @@ import {
 
 const isDev = process.env.NODE_ENV === "development";
 
+type StudentPaymentRegistration = {
+  id: string;
+  registerId: string;
+  firstName: string;
+  fullName: string;
+  programId: string;
+  programName: string;
+  programYear: string;
+  programDuration: string;
+  fullAmount: number;
+  paidAmount: number;
+  balanceDue: number;
+};
+
 export default function PaymentUpdatePage() {
   const [studentType, setStudentType] = useState<"local" | "international">(
     "local",
@@ -21,15 +35,11 @@ export default function PaymentUpdatePage() {
   const [isFetching, setIsFetching] = useState(false);
   const [fetchError, setFetchError] = useState("");
 
-  const [studentDetails, setStudentDetails] = useState<{
-    id: string;
-    firstName: string;
-    fullName: string;
-    programName: string;
-    fullAmount: number;
-    paidAmount: number;
-    balanceDue: number;
-  } | null>(null);
+  const [studentDetails, setStudentDetails] =
+    useState<StudentPaymentRegistration | null>(null);
+  const [registrationOptions, setRegistrationOptions] = useState<
+    StudentPaymentRegistration[]
+  >([]);
 
   // File Upload State
   const [paymentFile, setPaymentFile] = useState<File | null>(null);
@@ -61,6 +71,38 @@ export default function PaymentUpdatePage() {
     }).format(amount);
   };
 
+  const resetPaymentUploadState = () => {
+    setPaymentFile(null);
+    setUploadProgress(0);
+    setSubmitStatus("idle");
+    setSubmitError("");
+    setTurnstileToken("");
+    setTurnstileWidgetKey((prev) => prev + 1);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const resetLookupState = (options?: { clearIdentifier?: boolean }) => {
+    if (options?.clearIdentifier) {
+      setIdentifier("");
+    }
+    setStudentDetails(null);
+    setRegistrationOptions([]);
+    setFetchError("");
+    resetPaymentUploadState();
+  };
+
+  const handleSelectRegistration = (registration: StudentPaymentRegistration) => {
+    setStudentDetails(registration);
+    resetPaymentUploadState();
+  };
+
+  const handleChangeProgram = () => {
+    setStudentDetails(null);
+    resetPaymentUploadState();
+  };
+
   const handleFetchDetails = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim()) {
@@ -71,6 +113,8 @@ export default function PaymentUpdatePage() {
     setIsFetching(true);
     setFetchError("");
     setStudentDetails(null);
+    setRegistrationOptions([]);
+    resetPaymentUploadState();
 
     try {
       const response = await fetch(
@@ -79,7 +123,12 @@ export default function PaymentUpdatePage() {
       const result = await response.json();
 
       if (response.ok && result.success && result.data) {
-        setStudentDetails(result.data);
+        const registrations = Array.isArray(result.registrations)
+          ? (result.registrations as StudentPaymentRegistration[])
+          : [result.data as StudentPaymentRegistration];
+
+        setRegistrationOptions(registrations);
+        setStudentDetails(registrations.length === 1 ? registrations[0] : null);
       } else {
         setFetchError(
           result.error ||
@@ -318,10 +367,7 @@ export default function PaymentUpdatePage() {
                     type="button"
                     onClick={() => {
                       setStudentType("local");
-                      setIdentifier("");
-                      setStudentDetails(null);
-                      setSubmitStatus("idle");
-                      setSubmitError("");
+                      resetLookupState({ clearIdentifier: true });
                     }}
                     className={`flex-1 py-2.5 text-sm sm:text-base font-semibold rounded-lg transition-all duration-300 ${
                       studentType === "local"
@@ -335,10 +381,7 @@ export default function PaymentUpdatePage() {
                     type="button"
                     onClick={() => {
                       setStudentType("international");
-                      setIdentifier("");
-                      setStudentDetails(null);
-                      setSubmitStatus("idle");
-                      setSubmitError("");
+                      resetLookupState({ clearIdentifier: true });
                     }}
                     className={`flex-1 py-2.5 text-sm sm:text-base font-semibold rounded-lg transition-all duration-300 ${
                       studentType === "international"
@@ -372,7 +415,7 @@ export default function PaymentUpdatePage() {
                     }}
                     placeholder={identifierPlaceholder}
                     className="w-full px-4 py-3 rounded-xl bg-white/50 border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all outline-none uppercase"
-                    disabled={!!studentDetails}
+                    disabled={registrationOptions.length > 0}
                   />
                   {fetchError && (
                     <p className="mt-2 text-sm text-red-500 animate-pulse">
@@ -381,7 +424,7 @@ export default function PaymentUpdatePage() {
                   )}
                 </div>
 
-                {!studentDetails && (
+                {registrationOptions.length === 0 && (
                   <button
                     type="submit"
                     disabled={isFetching || !identifier.trim()}
@@ -412,7 +455,7 @@ export default function PaymentUpdatePage() {
                         Locating Records...
                       </>
                     ) : (
-                        <>
+                      <>
                         Find My Fee Details
                         <svg
                           className="w-5 h-5 group-hover:translate-x-1 transition-transform"
@@ -434,10 +477,68 @@ export default function PaymentUpdatePage() {
               </form>
             </div>
 
+            {registrationOptions.length > 1 && !studentDetails && (
+              <div className="bg-white/60 backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-6 sm:p-8 animate-fade-in-up">
+                <div className="flex items-center justify-between gap-4 mb-5">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
+                      Select Program
+                    </h2>
+                    <p className="text-sm text-gray-600">
+                      Choose the program for this payment slip.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => resetLookupState({ clearIdentifier: true })}
+                    className="shrink-0 text-sm font-medium text-primary-600 hover:text-primary-700 bg-primary-50 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    Change Student
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {registrationOptions.map((registration) => (
+                    <button
+                      key={registration.id}
+                      type="button"
+                      onClick={() => handleSelectRegistration(registration)}
+                      className="group w-full rounded-2xl border border-gray-100 bg-white/75 p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary-200 hover:bg-white hover:shadow-lg"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-bold text-gray-900 group-hover:text-primary-700">
+                            {registration.programName}
+                          </p>
+                          <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            {registration.programId} - {registration.programYear} -{" "}
+                            {registration.registerId}
+                          </p>
+                          {registration.programDuration && (
+                            <p className="mt-1 text-xs text-gray-500">
+                              Duration: {registration.programDuration}
+                            </p>
+                          )}
+                        </div>
+                        <div className="shrink-0 rounded-xl bg-primary-50 px-3 py-2 text-right">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-primary-500">
+                            Balance
+                          </p>
+                          <p className="font-black text-primary-700">
+                            {formatCurrency(registration.balanceDue)}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Section 2: Payment Overview & Upload (Progressive Disclosure) */}
             {studentDetails && (
               <div className="bg-white/60 backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-6 sm:p-8 animate-fade-in-up">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-linear-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shrink-0">
                       <svg
@@ -464,12 +565,24 @@ export default function PaymentUpdatePage() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => setStudentDetails(null)}
-                    className="text-sm font-medium text-primary-600 hover:text-primary-700 bg-primary-50 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    Change Student
-                  </button>
+                  <div className="flex flex-wrap gap-2 sm:justify-end">
+                    {registrationOptions.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={handleChangeProgram}
+                        className="text-sm font-medium text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        Change Program
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => resetLookupState({ clearIdentifier: true })}
+                      className="text-sm font-medium text-primary-600 hover:text-primary-700 bg-primary-50 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      Change Student
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mb-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -492,6 +605,15 @@ export default function PaymentUpdatePage() {
                     >
                       {studentDetails.programName}
                     </p>
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      {studentDetails.programId} - {studentDetails.programYear} -{" "}
+                      {studentDetails.registerId}
+                    </p>
+                    {studentDetails.programDuration && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Duration: {studentDetails.programDuration}
+                      </p>
+                    )}
                   </div>
                 </div>
 

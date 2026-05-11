@@ -63,26 +63,40 @@ export async function GET(request: Request) {
     }
 
     const { type, identifier } = parsed.data;
+    const normalizedIdentifier = identifier.trim();
 
     const where =
       type === "local"
-        ? { nicNumber: identifier }
-        : { passportNumber: identifier };
+        ? {
+            deletedAt: null,
+            nicNumber: { equals: normalizedIdentifier, mode: "insensitive" as const },
+          }
+        : {
+            deletedAt: null,
+            passportNumber: {
+              equals: normalizedIdentifier,
+              mode: "insensitive" as const,
+            },
+          };
 
-    const registration = await prisma.cCARegistration.findFirst({
+    const registrations = await prisma.cCARegistration.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: {
         id: true,
+        registerId: true,
         fullName: true,
         nameWithInitials: true,
+        programId: true,
         programName: true,
+        programYear: true,
+        programDuration: true,
         fullAmount: true,
         currentPaidAmount: true,
       },
     });
 
-    if (!registration) {
+    if (registrations.length === 0) {
       await logActivitySafe({
         category: "public_lookup",
         action: "lookup_not_found",
@@ -98,40 +112,51 @@ export async function GET(request: Request) {
       );
     }
 
-    const firstName = registration.fullName
-      ? registration.fullName.split(" ")[0]
-      : registration.nameWithInitials.split(" ").pop() || "Student";
+    const paymentRegistrations = registrations.map((registration) => {
+      const firstName = registration.fullName
+        ? registration.fullName.split(" ")[0]
+        : registration.nameWithInitials.split(" ").pop() || "Student";
+      const fullAmount = registration.fullAmount
+        ? Number(registration.fullAmount)
+        : 0;
+      const paidAmount = registration.currentPaidAmount
+        ? Number(registration.currentPaidAmount)
+        : 0;
 
-    const fullAmount = registration.fullAmount
-      ? Number(registration.fullAmount)
-      : 0;
-    const paidAmount = registration.currentPaidAmount
-      ? Number(registration.currentPaidAmount)
-      : 0;
+      return {
+        id: registration.id.toString(),
+        registerId: registration.registerId,
+        firstName,
+        fullName: registration.fullName,
+        programId: registration.programId,
+        programName: registration.programName,
+        programYear: registration.programYear,
+        programDuration: registration.programDuration,
+        fullAmount,
+        paidAmount,
+        balanceDue: fullAmount - paidAmount,
+      };
+    });
 
     await logActivitySafe({
       category: "public_lookup",
       action: "lookup_succeeded",
       status: "success",
-      subjectType: "CCARegistration",
-      subjectId: registration.id,
-      subjectLabel: registration.fullName,
+      subjectType: "RegistrationLookup",
+      subjectLabel: type,
       message: "Student payment lookup succeeded",
       ...requestContext,
-      meta: { type },
+      meta: {
+        type,
+        matchCount: paymentRegistrations.length,
+      },
     });
 
     return NextResponse.json({
       success: true,
-      data: {
-        id: registration.id.toString(),
-        firstName,
-        fullName: registration.fullName,
-        programName: registration.programName,
-        fullAmount,
-        paidAmount,
-        balanceDue: fullAmount - paidAmount,
-      },
+      data: paymentRegistrations[0],
+      registrations: paymentRegistrations,
+      requiresSelection: paymentRegistrations.length > 1,
     });
   } catch (error) {
     await logActivitySafe({

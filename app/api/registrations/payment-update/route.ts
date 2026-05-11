@@ -230,6 +230,7 @@ export async function POST(request: Request) {
         ELSE jsonb_build_array(payment_slip) || ${newSlipArray}::jsonb
       END
       WHERE id = ${registrationBigInt}
+        AND deleted_at IS NULL
       RETURNING id
     `);
 
@@ -240,17 +241,17 @@ export async function POST(request: Request) {
         status: "failure",
         subjectType: "CCARegistration",
         subjectId: registrationId,
-        message: "Registration not found",
+        message: "Registration not found or unavailable",
         ...requestContext,
       });
       await finalizeIdempotencyFailure({
         key: activeIdempotencyKey!,
         httpStatus: 404,
-        errorMessage: "Registration not found",
+        errorMessage: "Registration not found or unavailable",
         ttlSeconds: 10 * 60,
       });
       return NextResponse.json(
-        { success: false, error: "Registration not found" },
+        { success: false, error: "Registration not found or unavailable" },
         { status: 404 },
       );
     }
