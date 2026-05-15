@@ -81,6 +81,7 @@ const DEFAULT_REGISTRATION_TAGS = [
 const MAX_REGISTRATION_TAGS = 12;
 const MAX_REGISTRATION_TAG_OPTIONS = 100;
 const MAX_REGISTRATION_TAG_LENGTH = 60;
+let registrationTagCatalogReady: Promise<void> | null = null;
 
 function normalizeSingleFilter(value: string | undefined): string | null {
   if (typeof value !== "string") return null;
@@ -296,6 +297,70 @@ function normalizeRegistrationTagOptions(values: string[]): string[] {
   }
 
   return tags;
+}
+
+async function ensureRegistrationTagCatalogTable() {
+  registrationTagCatalogReady ??= (async () => {
+    await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS registration_tags (
+        id BIGSERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        normalized_name TEXT NOT NULL UNIQUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+
+    await prisma.$executeRaw`
+      CREATE INDEX IF NOT EXISTS registration_tags_name_idx
+      ON registration_tags (name)
+    `;
+  })().catch((error) => {
+    registrationTagCatalogReady = null;
+    throw error;
+  });
+
+  await registrationTagCatalogReady;
+}
+
+async function upsertRegistrationTagCatalog(tagsInput: string[]) {
+  const tags = normalizeRegistrationTagOptions(tagsInput);
+  if (!tags.length) return;
+
+  await ensureRegistrationTagCatalogTable();
+
+  const values = Prisma.join(
+    tags.map((tag) =>
+      Prisma.sql`(${tag}, ${tag.toLowerCase()})`,
+    ),
+  );
+
+  await prisma.$executeRaw(Prisma.sql`
+    INSERT INTO registration_tags (name, normalized_name)
+    VALUES ${values}
+    ON CONFLICT (normalized_name) DO UPDATE SET
+      name = EXCLUDED.name,
+      updated_at = NOW()
+  `);
+}
+
+async function getRegistrationTagCatalogRows(): Promise<string[]> {
+  type CatalogTagRow = { tag: string | null };
+
+  try {
+    await ensureRegistrationTagCatalogTable();
+    const rows = await prisma.$queryRaw<CatalogTagRow[]>`
+      SELECT name AS tag
+      FROM registration_tags
+      WHERE btrim(name) <> ''
+      ORDER BY name ASC
+    `;
+
+    return rows.flatMap((row) => (row.tag ? [row.tag] : []));
+  } catch (error) {
+    console.error("Failed to read registration tag catalog:", error);
+    return [];
+  }
 }
 
 function parseRequiredDate(value: string, fieldName: string): Date {
@@ -819,9 +884,24 @@ export async function getAvailableRegistrationTags() {
     ORDER BY tag_value ASC
   `;
 
+  const assignedTags = rows.flatMap((row) => (row.tag ? [row.tag] : []));
+  const seedTags = normalizeRegistrationTagOptions([
+    ...DEFAULT_REGISTRATION_TAGS,
+    ...assignedTags,
+  ]);
+
+  try {
+    await upsertRegistrationTagCatalog(seedTags);
+  } catch (error) {
+    console.error("Failed to backfill registration tag catalog:", error);
+  }
+
+  const catalogTags = await getRegistrationTagCatalogRows();
+
   return normalizeRegistrationTagOptions([
     ...DEFAULT_REGISTRATION_TAGS,
-    ...rows.flatMap((row) => (row.tag ? [row.tag] : [])),
+    ...catalogTags,
+    ...assignedTags,
   ]);
 }
 
@@ -994,6 +1074,12 @@ export async function updateRegistrationTags(id: number, tagsInput: unknown) {
         tags,
       },
     });
+
+    try {
+      await upsertRegistrationTagCatalog(tags);
+    } catch (error) {
+      console.error("Failed to update registration tag catalog:", error);
+    }
 
     revalidatePath("/admin");
     revalidatePath(`/admin/registrations/${id}`);
