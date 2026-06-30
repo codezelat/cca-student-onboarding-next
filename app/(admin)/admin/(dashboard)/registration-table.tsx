@@ -1290,26 +1290,24 @@ export default function RegistrationTable({
                     }`}
                 >
                     <div className="overflow-hidden">
-                <div className="grid grid-cols-1 gap-0 lg:grid-cols-[0.85fr_1.4fr]">
-                    <div className="relative overflow-hidden bg-linear-to-br from-violet-50 via-white to-indigo-50 p-6">
-                        <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/20 blur-2xl" />
-                        <div className="relative flex h-full flex-col justify-between gap-5">
-                            <div className="flex items-start gap-4">
-                                <div>
-                                    <p className="text-xs font-black uppercase tracking-widest text-primary">
-                                        Payment Filter
-                                    </p>
-                                    <h2 className="mt-1 text-2xl font-black text-gray-900">
-                                        Remaining Balance
-                                    </h2>
-                                </div>
+                <div className="grid grid-cols-1 gap-0 border-t border-white/50 lg:grid-cols-[0.82fr_1.4fr]">
+                    <div className="border-b border-white/50 bg-white/35 p-6 lg:border-b-0 lg:border-r">
+                        <div className="flex h-full flex-col justify-between gap-5">
+                            <div>
+                                <div className="mb-4 h-1 w-12 rounded-full bg-linear-to-r from-primary to-indigo-600" />
+                                <p className="text-xs font-black uppercase tracking-widest text-primary">
+                                    Payment Filter
+                                </p>
+                                <h2 className="mt-1 text-xl font-black text-gray-900">
+                                    Remaining Balance
+                                </h2>
                             </div>
 
-                            <div>
-                                <p className="text-3xl font-black tracking-tight text-primary">
+                            <div className="rounded-2xl border border-white/70 bg-white/55 p-4 shadow-sm">
+                                <p className="text-2xl font-black tracking-tight text-gray-900">
                                     {balanceRangeLabel}
                                 </p>
-                                <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-gray-400">
+                                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
                                     {isBalanceFilterActive
                                         ? `${totalRows} matching records`
                                         : "All balances included"}
