@@ -67,6 +67,8 @@ type RegistrationQueryFilters = {
   programGroupFilter?: string;
   intakeYearFilter?: string;
   tagFilter?: string | string[];
+  balanceMin?: string | number;
+  balanceMax?: string | number;
 };
 
 export type RegistrationTagFilterOption = {
@@ -81,6 +83,7 @@ const DEFAULT_REGISTRATION_TAGS = [
 const MAX_REGISTRATION_TAGS = 12;
 const MAX_REGISTRATION_TAG_OPTIONS = 100;
 const MAX_REGISTRATION_TAG_LENGTH = 60;
+const MAX_REMAINING_BALANCE_FILTER = 150000;
 let registrationTagCatalogReady: Promise<void> | null = null;
 
 function normalizeSingleFilter(value: string | undefined): string | null {
@@ -222,6 +225,70 @@ function buildRegistrationWhere(
   }
 
   return where;
+}
+
+function normalizeRemainingBalanceAmount(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+
+  const amount =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(amount)) return null;
+
+  return Math.min(
+    Math.max(0, Math.round(amount)),
+    MAX_REMAINING_BALANCE_FILTER,
+  );
+}
+
+function normalizeRemainingBalanceFilter(
+  filters: RegistrationQueryFilters,
+): { min: number; max: number } | null {
+  const rawMin = normalizeRemainingBalanceAmount(filters.balanceMin);
+  const rawMax = normalizeRemainingBalanceAmount(filters.balanceMax);
+
+  if (rawMin === null && rawMax === null) return null;
+
+  const min = rawMin ?? 0;
+  const max = rawMax ?? MAX_REMAINING_BALANCE_FILTER;
+
+  return min <= max ? { min, max } : { min: max, max: min };
+}
+
+async function getRemainingBalanceRegistrationIds(
+  balanceFilter: { min: number; max: number },
+): Promise<bigint[]> {
+  type BalanceRegistrationRow = { id: bigint };
+  const rows = await prisma.$queryRaw<BalanceRegistrationRow[]>(Prisma.sql`
+    SELECT id
+    FROM cca_registrations
+    WHERE GREATEST(
+      COALESCE(full_amount, 0) - COALESCE(current_paid_amount, 0),
+      0
+    ) BETWEEN ${balanceFilter.min} AND ${balanceFilter.max}
+  `);
+
+  return rows.map((row) => row.id);
+}
+
+async function buildRegistrationWhereWithBalance(
+  filters: RegistrationQueryFilters,
+): Promise<Prisma.CCARegistrationWhereInput> {
+  const where = buildRegistrationWhere(filters);
+  const balanceFilter = normalizeRemainingBalanceFilter(filters);
+
+  if (!balanceFilter) return where;
+
+  const matchingIds = await getRemainingBalanceRegistrationIds(balanceFilter);
+
+  return {
+    ...where,
+    id: { in: matchingIds },
+  };
 }
 
 function normalizeRegistrationDocuments<T extends Record<string, unknown>>(registration: T): T {
@@ -526,6 +593,8 @@ export async function getRegistrations(params: {
   programGroupFilter?: string;
   intakeYearFilter?: string;
   tagFilter?: string | string[];
+  balanceMin?: string | number;
+  balanceMax?: string | number;
   page?: number;
   pageSize?: number;
 }) {
@@ -536,18 +605,22 @@ export async function getRegistrations(params: {
     programGroupFilter,
     intakeYearFilter,
     tagFilter,
+    balanceMin,
+    balanceMax,
     page = 1,
     pageSize = 20,
   } = params;
   const requestedPage = Math.max(1, page);
   const safePageSize = Math.min(Math.max(1, pageSize), 100);
-  const where = buildRegistrationWhere({
+  const where = await buildRegistrationWhereWithBalance({
     scope,
     search,
     programFilter,
     programGroupFilter,
     intakeYearFilter,
     tagFilter,
+    balanceMin,
+    balanceMax,
   });
 
   const total = await prisma.cCARegistration.count({ where });
@@ -602,7 +675,7 @@ export async function getRegistrationsForExport(
   selectedFieldsInput?: unknown,
 ) {
   await assertAdminFromServerHeaders();
-  const where = buildRegistrationWhere(params);
+  const where = await buildRegistrationWhereWithBalance(params);
   const selectedFieldsParse = registrationExportFieldSchema.safeParse(
     selectedFieldsInput ?? DEFAULT_REGISTRATION_EXPORT_FIELD_KEYS,
   );
@@ -913,7 +986,7 @@ export async function getRegistrationTagFilterOptions(
   const [availableTags, registrations] = await Promise.all([
     getAvailableRegistrationTags(),
     prisma.cCARegistration.findMany({
-      where: buildRegistrationWhere({
+      where: await buildRegistrationWhereWithBalance({
         ...filters,
         tagFilter: undefined,
       }),

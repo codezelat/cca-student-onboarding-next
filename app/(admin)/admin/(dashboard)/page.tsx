@@ -37,6 +37,18 @@ function getMultiSearchParamValues(
     return [];
 }
 
+function getBalanceSearchParamValue(
+    value: string | string[] | undefined,
+): string {
+    const rawValue = getSingleSearchParamValue(value);
+    if (!rawValue) return "";
+
+    const amount = Number(rawValue);
+    if (!Number.isFinite(amount)) return "";
+
+    return String(Math.max(0, Math.round(amount)));
+}
+
 export default async function AdminDashboardPage({
     searchParams,
 }: {
@@ -53,6 +65,8 @@ export default async function AdminDashboardPage({
         params.intake_year_filter,
     );
     const tagFilter = getMultiSearchParamValues(params.tag_filter);
+    const balanceMin = getBalanceSearchParamValue(params.balance_min);
+    const balanceMax = getBalanceSearchParamValue(params.balance_max);
     const page = Math.max(
         1,
         Number.isFinite(Number(params.page))
@@ -69,6 +83,8 @@ export default async function AdminDashboardPage({
             programGroupFilter,
             intakeYearFilter,
             tagFilter,
+            balanceMin,
+            balanceMax,
             page,
         }),
         getProgramsForRegistrationOptions(),
@@ -78,6 +94,8 @@ export default async function AdminDashboardPage({
             programFilter,
             programGroupFilter,
             intakeYearFilter,
+            balanceMin,
+            balanceMax,
         }),
     ]);
 
@@ -167,6 +185,8 @@ export default async function AdminDashboardPage({
                 currentProgramGroup={programGroupFilter}
                 currentIntakeYear={intakeYearFilter}
                 currentTags={tagFilter}
+                currentBalanceMin={balanceMin}
+                currentBalanceMax={balanceMax}
                 tagOptions={tagOptions}
                 currentPage={registrationsResult.page}
                 pageSize={registrationsResult.pageSize}

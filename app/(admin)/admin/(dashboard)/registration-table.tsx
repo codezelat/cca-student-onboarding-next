@@ -19,6 +19,7 @@ import {
     Trash2,
     TrendingUp,
     ChevronsUpDown,
+    WalletCards,
 } from "lucide-react";
 import {
     toggleRegistrationTrash,
@@ -115,6 +116,8 @@ interface RegistrationTableProps {
     currentProgramGroup: string;
     currentIntakeYear: string;
     currentTags: string[];
+    currentBalanceMin: string;
+    currentBalanceMax: string;
     tagOptions: RegistrationTagFilterOption[];
     currentPage: number;
     pageSize: number;
@@ -127,6 +130,9 @@ const ALL_EXPORT_FIELD_KEYS = REGISTRATION_EXPORT_FIELDS.map(
     (field) => field.key,
 );
 const ALL_FILTER_VALUE = "__all__";
+const BALANCE_FILTER_MIN = 0;
+const BALANCE_FILTER_MAX = 150000;
+const BALANCE_FILTER_STEP = 5000;
 const alphanumericCollator = new Intl.Collator(undefined, {
     numeric: true,
     sensitivity: "base",
@@ -140,6 +146,23 @@ function escapeCsvCell(value: string): string {
     return normalized;
 }
 
+function clampBalanceAmount(value: unknown): number {
+    const amount = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(amount)) return BALANCE_FILTER_MIN;
+
+    return Math.min(
+        Math.max(BALANCE_FILTER_MIN, Math.round(amount)),
+        BALANCE_FILTER_MAX,
+    );
+}
+
+function getInitialBalanceRange(minValue: string, maxValue: string) {
+    const min = minValue ? clampBalanceAmount(minValue) : BALANCE_FILTER_MIN;
+    const max = maxValue ? clampBalanceAmount(maxValue) : BALANCE_FILTER_MAX;
+
+    return min <= max ? { min, max } : { min: max, max: min };
+}
+
 export default function RegistrationTable({
     initialRegistrations,
     initialStats,
@@ -150,6 +173,8 @@ export default function RegistrationTable({
     currentProgramGroup,
     currentIntakeYear,
     currentTags,
+    currentBalanceMin,
+    currentBalanceMax,
     tagOptions,
     currentPage,
     pageSize,
@@ -165,6 +190,9 @@ export default function RegistrationTable({
     );
     const [intakeYearInput, setIntakeYearInput] = useState(currentIntakeYear);
     const [tagInput, setTagInput] = useState<string[]>(currentTags);
+    const [balanceRangeInput, setBalanceRangeInput] = useState(() =>
+        getInitialBalanceRange(currentBalanceMin, currentBalanceMax),
+    );
     const [isExporting, setIsExporting] = useState(false);
     const [trashConfirm, setTrashConfirm] = useState<{ id: number; restore: boolean } | null>(null);
     const [purgeConfirm, setPurgeConfirm] = useState<{ id: number } | null>(null);
@@ -186,12 +214,17 @@ export default function RegistrationTable({
         setProgramGroupInput(currentProgramGroup);
         setIntakeYearInput(currentIntakeYear);
         setTagInput(currentTags);
+        setBalanceRangeInput(
+            getInitialBalanceRange(currentBalanceMin, currentBalanceMax),
+        );
     }, [
         currentSearch,
         currentProgram,
         currentProgramGroup,
         currentIntakeYear,
         currentTags,
+        currentBalanceMin,
+        currentBalanceMax,
     ]);
 
     const deferredProgramQuery = useDeferredValue(programQuery);
@@ -259,6 +292,8 @@ export default function RegistrationTable({
         programGroup?: string;
         intakeYear?: string;
         tag?: string[];
+        balanceMin?: number | null;
+        balanceMax?: number | null;
         page?: number;
     }) {
         const sp = new URLSearchParams();
@@ -277,6 +312,18 @@ export default function RegistrationTable({
                 ? params.intakeYear
                 : currentIntakeYear;
         const tags = params.tag !== undefined ? params.tag : currentTags;
+        const currentBalanceRange = getInitialBalanceRange(
+            currentBalanceMin,
+            currentBalanceMax,
+        );
+        const balanceMin =
+            params.balanceMin !== undefined
+                ? params.balanceMin
+                : currentBalanceRange.min;
+        const balanceMax =
+            params.balanceMax !== undefined
+                ? params.balanceMax
+                : currentBalanceRange.max;
         const page = params.page !== undefined ? params.page : currentPage;
 
         if (search) sp.set("search", search);
@@ -296,6 +343,14 @@ export default function RegistrationTable({
                 sp.append("tag_filter", tag);
             }
         });
+        if (
+            balanceMin !== null &&
+            balanceMax !== null &&
+            (balanceMin > BALANCE_FILTER_MIN || balanceMax < BALANCE_FILTER_MAX)
+        ) {
+            sp.set("balance_min", String(balanceMin));
+            sp.set("balance_max", String(balanceMax));
+        }
         if (page > 1) sp.set("page", String(page));
 
         return `/admin?${sp.toString()}`;
@@ -310,6 +365,8 @@ export default function RegistrationTable({
                 programGroup: programGroupInput,
                 intakeYear: intakeYearInput,
                 tag: tagInput,
+                balanceMin: balanceRangeInput.min,
+                balanceMax: balanceRangeInput.max,
                 page: 1,
             }),
         );
@@ -321,6 +378,10 @@ export default function RegistrationTable({
         setProgramGroupInput("");
         setIntakeYearInput("");
         setTagInput([]);
+        setBalanceRangeInput({
+            min: BALANCE_FILTER_MIN,
+            max: BALANCE_FILTER_MAX,
+        });
         setProgramQuery("");
         setTagQuery("");
         setIsProgramFilterOpen(false);
@@ -372,6 +433,56 @@ export default function RegistrationTable({
     function clearTagSelection() {
         setTagInput([]);
         setTagQuery("");
+    }
+
+    function setBalancePreset(min: number, max: number) {
+        setBalanceRangeInput({ min, max });
+    }
+
+    function handleBalanceMinChange(value: string) {
+        const nextMin = Math.min(
+            clampBalanceAmount(value),
+            balanceRangeInput.max,
+        );
+        setBalanceRangeInput((current) => ({
+            ...current,
+            min: nextMin,
+        }));
+    }
+
+    function handleBalanceMaxChange(value: string) {
+        const nextMax = Math.max(
+            clampBalanceAmount(value),
+            balanceRangeInput.min,
+        );
+        setBalanceRangeInput((current) => ({
+            ...current,
+            max: nextMax,
+        }));
+    }
+
+    function applyBalanceFilter() {
+        router.push(
+            buildUrl({
+                balanceMin: balanceRangeInput.min,
+                balanceMax: balanceRangeInput.max,
+                page: 1,
+            }),
+        );
+    }
+
+    function clearBalanceFilter() {
+        setBalanceRangeInput({
+            min: BALANCE_FILTER_MIN,
+            max: BALANCE_FILTER_MAX,
+        });
+        router.push(
+            buildUrl({
+                balanceMin: null,
+                balanceMax: null,
+                page: 1,
+            }),
+        );
     }
 
     function handleProgramGroupChange(nextProgramGroup: string) {
@@ -515,6 +626,8 @@ export default function RegistrationTable({
                 programGroupFilter: currentProgramGroup,
                 intakeYearFilter: currentIntakeYear,
                 tagFilter: currentTags,
+                balanceMin: currentBalanceMin,
+                balanceMax: currentBalanceMax,
             }, orderedFields.map((field) => field.key));
             if (allRegistrations.length === 0) {
                 toast({
@@ -618,7 +731,28 @@ export default function RegistrationTable({
         currentProgramGroup ||
         currentIntakeYear ||
         currentTags.length > 0 ||
+        currentBalanceMin ||
+        currentBalanceMax ||
         currentScope !== "active";
+    const isBalanceFilterActive = Boolean(currentBalanceMin || currentBalanceMax);
+    const balanceMinPercent =
+        ((balanceRangeInput.min - BALANCE_FILTER_MIN) /
+            (BALANCE_FILTER_MAX - BALANCE_FILTER_MIN)) *
+        100;
+    const balanceMaxPercent =
+        ((balanceRangeInput.max - BALANCE_FILTER_MIN) /
+            (BALANCE_FILTER_MAX - BALANCE_FILTER_MIN)) *
+        100;
+    const formatBalanceAmount = (amount: number) =>
+        new Intl.NumberFormat("en-LK", {
+            style: "currency",
+            currency: "LKR",
+            maximumFractionDigits: 0,
+        }).format(amount);
+    const balanceRangeLabel =
+        balanceRangeInput.min === 0 && balanceRangeInput.max === 0
+            ? "Fully paid only"
+            : `${formatBalanceAmount(balanceRangeInput.min)} - ${formatBalanceAmount(balanceRangeInput.max)}`;
     const { start: paginationStart, end: paginationEnd } = getPaginationRange({
         currentPage,
         pageSize,
@@ -1008,6 +1142,151 @@ export default function RegistrationTable({
                         </div>
                     </div>
                 </form>
+            </div>
+
+            {/* Payment Balance Filter */}
+            <div className="overflow-hidden rounded-2xl border border-emerald-100/80 bg-white/70 shadow-lg ring-1 ring-black/5 backdrop-blur-xl">
+                <div className="grid grid-cols-1 gap-0 lg:grid-cols-[0.85fr_1.4fr]">
+                    <div className="relative overflow-hidden bg-linear-to-br from-emerald-50 via-white to-cyan-50 p-6">
+                        <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-emerald-200/40 blur-2xl" />
+                        <div className="relative flex h-full flex-col justify-between gap-5">
+                            <div className="flex items-start gap-4">
+                                <div className="rounded-2xl bg-emerald-600 p-3 text-white shadow-lg shadow-emerald-600/20">
+                                    <WalletCards className="h-6 w-6" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-black uppercase tracking-widest text-emerald-700">
+                                        Payment Filter
+                                    </p>
+                                    <h2 className="mt-1 text-2xl font-black text-gray-900">
+                                        Remaining Balance
+                                    </h2>
+                                </div>
+                            </div>
+
+                            <div>
+                                <p className="text-3xl font-black tracking-tight text-emerald-700">
+                                    {balanceRangeLabel}
+                                </p>
+                                <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-gray-400">
+                                    {isBalanceFilterActive
+                                        ? `${totalRows} matching records`
+                                        : "All balances included"}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-6">
+                        <div className="flex flex-col gap-5">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setBalancePreset(
+                                            BALANCE_FILTER_MIN,
+                                            BALANCE_FILTER_MAX,
+                                        )
+                                    }
+                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                >
+                                    All balances
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setBalancePreset(0, 0)}
+                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                >
+                                    Fully paid
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setBalancePreset(
+                                            BALANCE_FILTER_STEP,
+                                            BALANCE_FILTER_MAX,
+                                        )
+                                    }
+                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                >
+                                    Has balance
+                                </button>
+                            </div>
+
+                            <div className="px-1 pb-2 pt-5">
+                                <div className="relative h-10">
+                                    <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gray-100" />
+                                    <div
+                                        className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-linear-to-r from-emerald-500 to-cyan-500 shadow-lg shadow-emerald-500/20"
+                                        style={{
+                                            left: `${balanceMinPercent}%`,
+                                            right: `${100 - balanceMaxPercent}%`,
+                                        }}
+                                    />
+                                    <input
+                                        type="range"
+                                        min={BALANCE_FILTER_MIN}
+                                        max={BALANCE_FILTER_MAX}
+                                        step={BALANCE_FILTER_STEP}
+                                        value={balanceRangeInput.min}
+                                        onChange={(event) =>
+                                            handleBalanceMinChange(
+                                                event.target.value,
+                                            )
+                                        }
+                                        aria-label="Minimum remaining balance"
+                                        className="pointer-events-none absolute inset-x-0 top-1/2 z-20 h-2 w-full -translate-y-1/2 appearance-none bg-transparent accent-emerald-600 [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-emerald-600 [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-emerald-600"
+                                    />
+                                    <input
+                                        type="range"
+                                        min={BALANCE_FILTER_MIN}
+                                        max={BALANCE_FILTER_MAX}
+                                        step={BALANCE_FILTER_STEP}
+                                        value={balanceRangeInput.max}
+                                        onChange={(event) =>
+                                            handleBalanceMaxChange(
+                                                event.target.value,
+                                            )
+                                        }
+                                        aria-label="Maximum remaining balance"
+                                        className="pointer-events-none absolute inset-x-0 top-1/2 z-30 h-2 w-full -translate-y-1/2 appearance-none bg-transparent accent-cyan-600 [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-cyan-600 [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-cyan-600"
+                                    />
+                                </div>
+                                <div className="mt-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                    <span>{formatBalanceAmount(0)}</span>
+                                    <span>{formatBalanceAmount(50000)}</span>
+                                    <span>{formatBalanceAmount(100000)}</span>
+                                    <span>{formatBalanceAmount(BALANCE_FILTER_MAX)}</span>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-xs font-medium text-gray-500">
+                                    Moves in {formatBalanceAmount(BALANCE_FILTER_STEP)} steps.
+                                </p>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {isBalanceFilterActive && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={clearBalanceFilter}
+                                            className="rounded-xl text-gray-500 hover:text-red-600"
+                                        >
+                                            Clear balance
+                                        </Button>
+                                    )}
+                                    <Button
+                                        type="button"
+                                        onClick={applyBalanceFilter}
+                                        className="rounded-xl bg-emerald-600 px-5 font-bold text-white hover:bg-emerald-700"
+                                    >
+                                        Apply Payment Filter
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Stats Cards */}
