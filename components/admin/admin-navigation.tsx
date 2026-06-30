@@ -136,7 +136,7 @@ export default function AdminNavigation({
                             href="/admin"
                             className="flex items-center space-x-3 group"
                         >
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/5 bg-white">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl border-[0.5px] border-black/5 bg-white">
                                 <Image
                                     src="/images/icon.png"
                                     alt="Codezela Career Accelerator"
