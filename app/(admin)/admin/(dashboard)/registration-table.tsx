@@ -20,6 +20,7 @@ import {
     TrendingUp,
     ChevronsUpDown,
     WalletCards,
+    ChevronDown,
 } from "lucide-react";
 import {
     toggleRegistrationTrash,
@@ -132,7 +133,14 @@ const ALL_EXPORT_FIELD_KEYS = REGISTRATION_EXPORT_FIELDS.map(
 const ALL_FILTER_VALUE = "__all__";
 const BALANCE_FILTER_MIN = 0;
 const BALANCE_FILTER_MAX = 150000;
-const BALANCE_FILTER_STEP = 5000;
+const BALANCE_FILTER_POINTS = [
+    0,
+    1,
+    ...Array.from({ length: 30 }, (_, index) => (index + 1) * 5000),
+];
+const BALANCE_FILTER_MAX_INDEX = BALANCE_FILTER_POINTS.length - 1;
+const SEARCH_FILTER_DISCLOSURE_KEY = "cca-admin-search-filters-open";
+const PAYMENT_FILTER_DISCLOSURE_KEY = "cca-admin-payment-filter-open";
 const alphanumericCollator = new Intl.Collator(undefined, {
     numeric: true,
     sensitivity: "base",
@@ -150,10 +158,16 @@ function clampBalanceAmount(value: unknown): number {
     const amount = typeof value === "number" ? value : Number(value);
     if (!Number.isFinite(amount)) return BALANCE_FILTER_MIN;
 
-    return Math.min(
+    const clampedAmount = Math.min(
         Math.max(BALANCE_FILTER_MIN, Math.round(amount)),
         BALANCE_FILTER_MAX,
     );
+
+    return BALANCE_FILTER_POINTS.reduce((closest, point) => {
+        const closestDistance = Math.abs(closest - clampedAmount);
+        const pointDistance = Math.abs(point - clampedAmount);
+        return pointDistance < closestDistance ? point : closest;
+    }, BALANCE_FILTER_POINTS[0]);
 }
 
 function getInitialBalanceRange(minValue: string, maxValue: string) {
@@ -161,6 +175,35 @@ function getInitialBalanceRange(minValue: string, maxValue: string) {
     const max = maxValue ? clampBalanceAmount(maxValue) : BALANCE_FILTER_MAX;
 
     return min <= max ? { min, max } : { min: max, max: min };
+}
+
+function getBalancePointIndex(amount: number): number {
+    const index = BALANCE_FILTER_POINTS.findIndex((point) => point === amount);
+    return index >= 0 ? index : 0;
+}
+
+function readStoredDisclosureState(key: string, fallback: boolean): boolean {
+    if (typeof window === "undefined") return fallback;
+
+    try {
+        const value = window.localStorage.getItem(key);
+        if (value === "open") return true;
+        if (value === "closed") return false;
+    } catch {
+        return fallback;
+    }
+
+    return fallback;
+}
+
+function writeStoredDisclosureState(key: string, isOpen: boolean) {
+    if (typeof window === "undefined") return;
+
+    try {
+        window.localStorage.setItem(key, isOpen ? "open" : "closed");
+    } catch {
+        // Local storage can be unavailable in private or restricted contexts.
+    }
 }
 
 export default function RegistrationTable({
@@ -193,6 +236,10 @@ export default function RegistrationTable({
     const [balanceRangeInput, setBalanceRangeInput] = useState(() =>
         getInitialBalanceRange(currentBalanceMin, currentBalanceMax),
     );
+    const [isSearchFiltersOpen, setIsSearchFiltersOpen] = useState(true);
+    const [isPaymentFilterOpen, setIsPaymentFilterOpen] = useState(false);
+    const [hasLoadedDisclosureState, setHasLoadedDisclosureState] =
+        useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [trashConfirm, setTrashConfirm] = useState<{ id: number; restore: boolean } | null>(null);
     const [purgeConfirm, setPurgeConfirm] = useState<{ id: number } | null>(null);
@@ -225,6 +272,33 @@ export default function RegistrationTable({
         currentTags,
         currentBalanceMin,
         currentBalanceMax,
+    ]);
+
+    useEffect(() => {
+        setIsSearchFiltersOpen(
+            readStoredDisclosureState(SEARCH_FILTER_DISCLOSURE_KEY, true),
+        );
+        setIsPaymentFilterOpen(
+            readStoredDisclosureState(PAYMENT_FILTER_DISCLOSURE_KEY, false),
+        );
+        setHasLoadedDisclosureState(true);
+    }, []);
+
+    useEffect(() => {
+        if (!hasLoadedDisclosureState) return;
+
+        writeStoredDisclosureState(
+            SEARCH_FILTER_DISCLOSURE_KEY,
+            isSearchFiltersOpen,
+        );
+        writeStoredDisclosureState(
+            PAYMENT_FILTER_DISCLOSURE_KEY,
+            isPaymentFilterOpen,
+        );
+    }, [
+        hasLoadedDisclosureState,
+        isSearchFiltersOpen,
+        isPaymentFilterOpen,
     ]);
 
     const deferredProgramQuery = useDeferredValue(programQuery);
@@ -440,10 +514,11 @@ export default function RegistrationTable({
     }
 
     function handleBalanceMinChange(value: string) {
-        const nextMin = Math.min(
-            clampBalanceAmount(value),
-            balanceRangeInput.max,
+        const requestedIndex = Math.min(
+            Math.max(0, Number(value)),
+            getBalancePointIndex(balanceRangeInput.max),
         );
+        const nextMin = BALANCE_FILTER_POINTS[requestedIndex] ?? BALANCE_FILTER_MIN;
         setBalanceRangeInput((current) => ({
             ...current,
             min: nextMin,
@@ -451,10 +526,11 @@ export default function RegistrationTable({
     }
 
     function handleBalanceMaxChange(value: string) {
-        const nextMax = Math.max(
-            clampBalanceAmount(value),
-            balanceRangeInput.min,
+        const requestedIndex = Math.max(
+            Math.min(Number(value), BALANCE_FILTER_MAX_INDEX),
+            getBalancePointIndex(balanceRangeInput.min),
         );
+        const nextMax = BALANCE_FILTER_POINTS[requestedIndex] ?? BALANCE_FILTER_MAX;
         setBalanceRangeInput((current) => ({
             ...current,
             max: nextMax,
@@ -735,14 +811,12 @@ export default function RegistrationTable({
         currentBalanceMax ||
         currentScope !== "active";
     const isBalanceFilterActive = Boolean(currentBalanceMin || currentBalanceMax);
+    const balanceMinIndex = getBalancePointIndex(balanceRangeInput.min);
+    const balanceMaxIndex = getBalancePointIndex(balanceRangeInput.max);
     const balanceMinPercent =
-        ((balanceRangeInput.min - BALANCE_FILTER_MIN) /
-            (BALANCE_FILTER_MAX - BALANCE_FILTER_MIN)) *
-        100;
+        (balanceMinIndex / BALANCE_FILTER_MAX_INDEX) * 100;
     const balanceMaxPercent =
-        ((balanceRangeInput.max - BALANCE_FILTER_MIN) /
-            (BALANCE_FILTER_MAX - BALANCE_FILTER_MIN)) *
-        100;
+        (balanceMaxIndex / BALANCE_FILTER_MAX_INDEX) * 100;
     const formatBalanceAmount = (amount: number) =>
         new Intl.NumberFormat("en-LK", {
             style: "currency",
@@ -814,8 +888,41 @@ export default function RegistrationTable({
             </div>
 
             {/* Filters & Actions */}
-            <div className="p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg ring-1 ring-black/5">
-                <form onSubmit={handleFilterSubmit} className="space-y-4">
+            <div className="overflow-hidden rounded-2xl border border-white/60 bg-white/60 shadow-lg ring-1 ring-black/5 backdrop-blur-xl">
+                <button
+                    type="button"
+                    onClick={() =>
+                        setIsSearchFiltersOpen((current) => !current)
+                    }
+                    className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-colors hover:bg-white/30"
+                    aria-expanded={isSearchFiltersOpen}
+                >
+                    <span>
+                        <span className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+                            <Filter className="h-4 w-4" />
+                            Search & Filters
+                        </span>
+                        <span className="mt-1 block text-sm font-medium text-gray-500">
+                            {hasFilters
+                                ? `${totalRows} matching registrations`
+                                : "Search, program, track, intake, tags and export"}
+                        </span>
+                    </span>
+                    <ChevronDown
+                        className={`h-5 w-5 shrink-0 text-gray-400 transition-transform duration-300 ${
+                            isSearchFiltersOpen ? "rotate-180" : ""
+                        }`}
+                    />
+                </button>
+                <div
+                    className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+                        isSearchFiltersOpen
+                            ? "grid-rows-[1fr]"
+                            : "grid-rows-[0fr]"
+                    }`}
+                >
+                    <div className="overflow-hidden">
+                <form onSubmit={handleFilterSubmit} className="space-y-4 px-6 pb-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
@@ -1142,20 +1249,52 @@ export default function RegistrationTable({
                         </div>
                     </div>
                 </form>
+                    </div>
+                </div>
             </div>
 
             {/* Payment Balance Filter */}
-            <div className="overflow-hidden rounded-2xl border border-emerald-100/80 bg-white/70 shadow-lg ring-1 ring-black/5 backdrop-blur-xl">
+            <div className="overflow-hidden rounded-2xl border border-primary/15 bg-white/70 shadow-lg ring-1 ring-black/5 backdrop-blur-xl">
+                <button
+                    type="button"
+                    onClick={() =>
+                        setIsPaymentFilterOpen((current) => !current)
+                    }
+                    className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-colors hover:bg-white/30"
+                    aria-expanded={isPaymentFilterOpen}
+                >
+                    <span className="min-w-0">
+                        <span className="block text-xs font-black uppercase tracking-widest text-primary">
+                            Payment Filter
+                        </span>
+                        <span className="mt-1 block truncate text-sm font-medium text-gray-500">
+                            Remaining Balance: {balanceRangeLabel}
+                        </span>
+                    </span>
+                    <ChevronDown
+                        className={`h-5 w-5 shrink-0 text-gray-400 transition-transform duration-300 ${
+                            isPaymentFilterOpen ? "rotate-180" : ""
+                        }`}
+                    />
+                </button>
+                <div
+                    className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+                        isPaymentFilterOpen
+                            ? "grid-rows-[1fr]"
+                            : "grid-rows-[0fr]"
+                    }`}
+                >
+                    <div className="overflow-hidden">
                 <div className="grid grid-cols-1 gap-0 lg:grid-cols-[0.85fr_1.4fr]">
-                    <div className="relative overflow-hidden bg-linear-to-br from-emerald-50 via-white to-cyan-50 p-6">
-                        <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-emerald-200/40 blur-2xl" />
+                    <div className="relative overflow-hidden bg-linear-to-br from-violet-50 via-white to-indigo-50 p-6">
+                        <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/20 blur-2xl" />
                         <div className="relative flex h-full flex-col justify-between gap-5">
                             <div className="flex items-start gap-4">
-                                <div className="rounded-2xl bg-emerald-600 p-3 text-white shadow-lg shadow-emerald-600/20">
+                                <div className="rounded-2xl bg-linear-to-br from-primary to-indigo-600 p-3 text-white shadow-lg shadow-primary/20">
                                     <WalletCards className="h-6 w-6" />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-black uppercase tracking-widest text-emerald-700">
+                                    <p className="text-xs font-black uppercase tracking-widest text-primary">
                                         Payment Filter
                                     </p>
                                     <h2 className="mt-1 text-2xl font-black text-gray-900">
@@ -1165,7 +1304,7 @@ export default function RegistrationTable({
                             </div>
 
                             <div>
-                                <p className="text-3xl font-black tracking-tight text-emerald-700">
+                                <p className="text-3xl font-black tracking-tight text-primary">
                                     {balanceRangeLabel}
                                 </p>
                                 <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-gray-400">
@@ -1188,14 +1327,14 @@ export default function RegistrationTable({
                                             BALANCE_FILTER_MAX,
                                         )
                                     }
-                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-600 transition-colors hover:border-primary/20 hover:bg-primary/5 hover:text-primary"
                                 >
                                     All balances
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setBalancePreset(0, 0)}
-                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-600 transition-colors hover:border-primary/20 hover:bg-primary/5 hover:text-primary"
                                 >
                                     Fully paid
                                 </button>
@@ -1203,11 +1342,11 @@ export default function RegistrationTable({
                                     type="button"
                                     onClick={() =>
                                         setBalancePreset(
-                                            BALANCE_FILTER_STEP,
+                                            1,
                                             BALANCE_FILTER_MAX,
                                         )
                                     }
-                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-600 transition-colors hover:border-primary/20 hover:bg-primary/5 hover:text-primary"
                                 >
                                     Has balance
                                 </button>
@@ -1217,7 +1356,7 @@ export default function RegistrationTable({
                                 <div className="relative h-10">
                                     <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gray-100" />
                                     <div
-                                        className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-linear-to-r from-emerald-500 to-cyan-500 shadow-lg shadow-emerald-500/20"
+                                        className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-linear-to-r from-primary to-indigo-600 shadow-lg shadow-primary/20"
                                         style={{
                                             left: `${balanceMinPercent}%`,
                                             right: `${100 - balanceMaxPercent}%`,
@@ -1225,45 +1364,42 @@ export default function RegistrationTable({
                                     />
                                     <input
                                         type="range"
-                                        min={BALANCE_FILTER_MIN}
-                                        max={BALANCE_FILTER_MAX}
-                                        step={BALANCE_FILTER_STEP}
-                                        value={balanceRangeInput.min}
+                                        min={0}
+                                        max={BALANCE_FILTER_MAX_INDEX}
+                                        step={1}
+                                        value={balanceMinIndex}
                                         onChange={(event) =>
                                             handleBalanceMinChange(
                                                 event.target.value,
                                             )
                                         }
                                         aria-label="Minimum remaining balance"
-                                        className="pointer-events-none absolute inset-x-0 top-1/2 z-20 h-2 w-full -translate-y-1/2 appearance-none bg-transparent accent-emerald-600 [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-emerald-600 [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-emerald-600"
+                                        className="pointer-events-none absolute inset-x-0 top-1/2 z-20 h-2 w-full -translate-y-1/2 appearance-none bg-transparent accent-primary [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-primary"
                                     />
                                     <input
                                         type="range"
-                                        min={BALANCE_FILTER_MIN}
-                                        max={BALANCE_FILTER_MAX}
-                                        step={BALANCE_FILTER_STEP}
-                                        value={balanceRangeInput.max}
+                                        min={0}
+                                        max={BALANCE_FILTER_MAX_INDEX}
+                                        step={1}
+                                        value={balanceMaxIndex}
                                         onChange={(event) =>
                                             handleBalanceMaxChange(
                                                 event.target.value,
                                             )
                                         }
                                         aria-label="Maximum remaining balance"
-                                        className="pointer-events-none absolute inset-x-0 top-1/2 z-30 h-2 w-full -translate-y-1/2 appearance-none bg-transparent accent-cyan-600 [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-cyan-600 [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-cyan-600"
+                                        className="pointer-events-none absolute inset-x-0 top-1/2 z-30 h-2 w-full -translate-y-1/2 appearance-none bg-transparent accent-indigo-600 [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-indigo-600 [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-indigo-600"
                                     />
                                 </div>
                                 <div className="mt-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-gray-400">
                                     <span>{formatBalanceAmount(0)}</span>
+                                    <span>{formatBalanceAmount(1)}</span>
                                     <span>{formatBalanceAmount(50000)}</span>
-                                    <span>{formatBalanceAmount(100000)}</span>
                                     <span>{formatBalanceAmount(BALANCE_FILTER_MAX)}</span>
                                 </div>
                             </div>
 
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <p className="text-xs font-medium text-gray-500">
-                                    Moves in {formatBalanceAmount(BALANCE_FILTER_STEP)} steps.
-                                </p>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
                                 <div className="flex flex-wrap items-center gap-2">
                                     {isBalanceFilterActive && (
                                         <Button
@@ -1278,13 +1414,15 @@ export default function RegistrationTable({
                                     <Button
                                         type="button"
                                         onClick={applyBalanceFilter}
-                                        className="rounded-xl bg-emerald-600 px-5 font-bold text-white hover:bg-emerald-700"
+                                        className="rounded-xl bg-linear-to-r from-primary to-indigo-600 px-5 font-bold text-white hover:from-primary/90 hover:to-indigo-700"
                                     >
                                         Apply Payment Filter
                                     </Button>
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
                     </div>
                 </div>
             </div>
