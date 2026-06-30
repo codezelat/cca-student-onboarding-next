@@ -1263,12 +1263,17 @@ export default function RegistrationTable({
                     className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-colors hover:bg-white/30"
                     aria-expanded={isPaymentFilterOpen}
                 >
-                    <span className="min-w-0">
-                        <span className="block text-xs font-black uppercase tracking-widest text-primary">
-                            Payment Filter
+                    <span className="flex min-w-0 items-center gap-3">
+                        <span className="rounded-2xl bg-linear-to-br from-primary to-indigo-600 p-2.5 text-white shadow-lg shadow-primary/20">
+                            <WalletCards className="h-5 w-5" />
                         </span>
-                        <span className="mt-1 block truncate text-sm font-medium text-gray-500">
-                            Remaining Balance: {balanceRangeLabel}
+                        <span className="min-w-0">
+                            <span className="block text-xs font-black uppercase tracking-widest text-primary">
+                                Payment Filter
+                            </span>
+                            <span className="mt-1 block truncate text-sm font-medium text-gray-500">
+                                Remaining Balance: {balanceRangeLabel}
+                            </span>
                         </span>
                     </span>
                     <ChevronDown
@@ -1290,9 +1295,6 @@ export default function RegistrationTable({
                         <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/20 blur-2xl" />
                         <div className="relative flex h-full flex-col justify-between gap-5">
                             <div className="flex items-start gap-4">
-                                <div className="rounded-2xl bg-linear-to-br from-primary to-indigo-600 p-3 text-white shadow-lg shadow-primary/20">
-                                    <WalletCards className="h-6 w-6" />
-                                </div>
                                 <div>
                                     <p className="text-xs font-black uppercase tracking-widest text-primary">
                                         Payment Filter
