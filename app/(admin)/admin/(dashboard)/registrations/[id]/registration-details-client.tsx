@@ -157,6 +157,7 @@ export default function RegistrationDetailsClient({
   const paymentSubmitLockRef = useRef(false);
   const { toast } = useToast();
   const router = useAdminBusyRouter();
+  const isTrashed = Boolean(registration.deletedAt);
 
   useEffect(() => {
     const nextAssignedTags = normalizeTagList(
@@ -255,13 +256,15 @@ export default function RegistrationDetailsClient({
         isCurrent: i === 0,
       }),
     ),
-    ...normalizeDocumentCollection(registration.paymentSlip).map((doc, i) => ({
-      ...doc,
-      title: `Payment Slip ${i + 1}`,
-      type: "auto",
-      category: "Payment",
-      isCurrent: i === 0,
-    })),
+    ...(isTrashed
+      ? []
+      : normalizeDocumentCollection(registration.paymentSlip).map((doc, i) => ({
+          ...doc,
+          title: `Payment Slip ${i + 1}`,
+          type: "auto",
+          category: "Payment",
+          isCurrent: i === 0,
+        }))),
     ...normalizeDocumentCollection(registration.academicQualificationDocuments).map(
       (doc, i) => ({
         ...doc,
@@ -553,7 +556,7 @@ export default function RegistrationDetailsClient({
             <h1 className="text-3xl font-bold tracking-tight bg-linear-to-r from-primary to-indigo-600 bg-clip-text text-transparent">
               {registration.fullName}
             </h1>
-            {registration.deletedAt && (
+            {isTrashed && (
               <Badge variant="destructive" className="animate-pulse">
                 Trashed
               </Badge>
@@ -567,23 +570,41 @@ export default function RegistrationDetailsClient({
             </span>
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
-            <Link
-              prefetch={false}
-              href={`/admin/registrations/${registration.id}/edit`}
-            >
-              <Edit className="w-4 h-4 mr-2" />
-              Edit details
-            </Link>
-          </Button>
-        </div>
+        {!isTrashed && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link
+                prefetch={false}
+                href={`/admin/registrations/${registration.id}/edit`}
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Edit details
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Financial Summary Card */}
+          {isTrashed ? (
+            <Card className="gap-0 border-rose-100 bg-white/75 shadow-lg shadow-rose-100/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-bold flex items-center gap-2 text-rose-700">
+                  <CreditCard className="w-5 h-5" />
+                  Payment Management Hidden
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm font-medium text-muted-foreground">
+                  This registration is in Trash. Restore it before viewing or
+                  changing payment records.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -968,6 +989,7 @@ export default function RegistrationDetailsClient({
               </CardContent>
             </Card>
           </motion.div>
+          )}
 
           <Card className="gap-0 border-primary/10 bg-white/75 shadow-lg shadow-primary/5">
             <CardHeader className="pb-3">

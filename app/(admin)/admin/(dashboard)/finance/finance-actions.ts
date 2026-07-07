@@ -30,11 +30,32 @@ async function getRegistrationBalanceSnapshot(registrationId: string | bigint) {
             id: true,
             registerId: true,
             fullName: true,
+            deletedAt: true,
             currentPaidAmount: true,
             fullAmount: true,
             updatedAt: true,
         },
     });
+}
+
+function parsePaymentId(id: string): bigint {
+    try {
+        const paymentId = BigInt(id);
+        if (paymentId <= BigInt(0)) {
+            throw new Error("Invalid payment reference.");
+        }
+        return paymentId;
+    } catch {
+        throw new Error("Invalid payment reference.");
+    }
+}
+
+function normalizeVoidReason(reason: string): string {
+    const normalizedReason = reason.trim();
+    if (!normalizedReason) {
+        throw new Error("A void reason is required.");
+    }
+    return normalizedReason.slice(0, 500);
 }
 
 function buildPaymentLedgerWhere(search: string) {
@@ -309,8 +330,23 @@ export async function addPayment(data: any) {
 
 export async function voidPayment(id: string, reason: string) {
     const actor = await getAdminActorFromRequestHeaders();
+    const paymentId = parsePaymentId(id);
+    const normalizedReason = normalizeVoidReason(reason);
     const payment = await prisma.registrationPayment.findUnique({
-        where: { id: BigInt(id) },
+        where: { id: paymentId },
+        include: {
+            registration: {
+                select: {
+                    id: true,
+                    registerId: true,
+                    fullName: true,
+                    deletedAt: true,
+                    currentPaidAmount: true,
+                    fullAmount: true,
+                    updatedAt: true,
+                },
+            },
+        },
     });
 
     if (!payment) {
@@ -325,12 +361,27 @@ export async function voidPayment(id: string, reason: string) {
             message: "Payment not found while attempting void",
             routeName: "/admin/finance",
         });
-        return;
+        throw new Error("Payment not found.");
     }
 
-    const beforeRegistration = await getRegistrationBalanceSnapshot(
-        payment.ccaRegistrationId,
-    );
+    const beforeRegistration = payment.registration;
+
+    if (beforeRegistration.deletedAt) {
+        await logActivitySafe({
+            actor,
+            category: "payment",
+            action: "payment_void_blocked",
+            status: "blocked",
+            subjectType: "RegistrationPayment",
+            subjectId: id,
+            subjectLabel: `Payment #${payment.paymentNo}`,
+            message: "Payment void blocked for trashed registration",
+            routeName: "/admin/finance",
+            beforeData: { payment, registration: beforeRegistration },
+            meta: { reason: normalizedReason },
+        });
+        throw new Error("Cannot void payment for a trashed registration. Restore it first.");
+    }
 
     if (payment.status === "void" || payment.voidedAt) {
         await logActivitySafe({
@@ -344,7 +395,7 @@ export async function voidPayment(id: string, reason: string) {
             message: "Payment is already voided",
             routeName: "/admin/finance",
             beforeData: { payment, registration: beforeRegistration },
-            meta: { reason },
+            meta: { reason: normalizedReason },
         });
         throw new Error("This transaction has already been voided.");
     }
@@ -354,14 +405,31 @@ export async function voidPayment(id: string, reason: string) {
         let updatedPayment: any = null;
 
         await prisma.$transaction(async (tx) => {
-            updatedPayment = await tx.registrationPayment.update({
-                where: { id: BigInt(id) },
+            const result = await tx.registrationPayment.updateMany({
+                where: {
+                    id: paymentId,
+                    status: "active",
+                    voidedAt: null,
+                    registration: {
+                        is: {
+                            deletedAt: null,
+                        },
+                    },
+                },
                 data: {
                     status: "void",
-                    note: `VOIDED: ${reason}`,
-                    voidReason: reason,
+                    note: `VOIDED: ${normalizedReason}`,
+                    voidReason: normalizedReason,
                     voidedAt: new Date(),
                 },
+            });
+
+            if (result.count !== 1) {
+                throw new Error("This transaction is no longer active.");
+            }
+
+            updatedPayment = await tx.registrationPayment.findUnique({
+                where: { id: paymentId },
             });
 
             await syncRegistrationPaidAmount(tx, payment.ccaRegistrationId);
@@ -387,7 +455,7 @@ export async function voidPayment(id: string, reason: string) {
             routeName: "/admin/finance",
             beforeData: { payment, registration: beforeRegistration },
             afterData: { payment: updatedPayment, registration: afterRegistration },
-            meta: { reason },
+            meta: { reason: normalizedReason },
         });
 
         revalidatePath("/admin/finance");
@@ -405,7 +473,7 @@ export async function voidPayment(id: string, reason: string) {
             routeName: "/admin/finance",
             beforeData: { payment, registration: beforeRegistration },
             meta: {
-                reason,
+                reason: normalizedReason,
                 error: error instanceof Error ? error.message : "Unknown error",
             },
         });

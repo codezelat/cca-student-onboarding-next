@@ -358,6 +358,9 @@ export default function RegistrationTable({
             program.programName.toLowerCase().includes(normalizedProgramQuery)
         );
     });
+    const isTrashScope = currentScope === "trashed";
+    const showPaymentFilter = !isTrashScope;
+    const showPaymentSlipColumn = !isTrashScope;
 
     function buildUrl(params: {
         scope?: string;
@@ -371,7 +374,8 @@ export default function RegistrationTable({
         page?: number;
     }) {
         const sp = new URLSearchParams();
-        sp.set("scope", params.scope || currentScope);
+        const nextScope = params.scope || currentScope;
+        sp.set("scope", nextScope);
 
         const search =
             params.search !== undefined ? params.search : currentSearch;
@@ -418,6 +422,7 @@ export default function RegistrationTable({
             }
         });
         if (
+            nextScope !== "trashed" &&
             balanceMin !== null &&
             balanceMax !== null &&
             (balanceMin > BALANCE_FILTER_MIN || balanceMax < BALANCE_FILTER_MAX)
@@ -1254,6 +1259,7 @@ export default function RegistrationTable({
             </div>
 
             {/* Payment Balance Filter */}
+            {showPaymentFilter && (
             <div className="overflow-hidden rounded-2xl border border-primary/15 bg-white/70 shadow-lg ring-1 ring-black/5 backdrop-blur-xl">
                 <button
                     type="button"
@@ -1422,6 +1428,7 @@ export default function RegistrationTable({
                     </div>
                 </div>
             </div>
+            )}
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3 xl:grid-cols-[0.9fr_1.25fr_0.9fr]">
@@ -1653,9 +1660,11 @@ export default function RegistrationTable({
                                 <th className="px-6 py-4 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">
                                     WhatsApp
                                 </th>
-                                <th className="px-6 py-4 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                    Slip
-                                </th>
+                                {showPaymentSlipColumn && (
+                                    <th className="px-6 py-4 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                        Slip
+                                    </th>
+                                )}
                                 <th className="px-6 py-4 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">
                                     Actions
                                 </th>
@@ -1665,7 +1674,7 @@ export default function RegistrationTable({
                             {initialRegistrations.length === 0 ? (
                                 <tr>
                                     <td
-                                        colSpan={9}
+                                        colSpan={showPaymentSlipColumn ? 9 : 8}
                                         className="px-6 py-20 text-center"
                                     >
                                         <div className="flex flex-col items-center gap-4 opacity-50">
@@ -1761,8 +1770,13 @@ export default function RegistrationTable({
                                                     )}
                                                 </div>
                                             </td>
+                                            {showPaymentSlipColumn && (
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                {paymentUrl ? (
+                                                {reg.deletedAt ? (
+                                                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                                        Archived
+                                                    </span>
+                                                ) : paymentUrl ? (
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
@@ -1784,6 +1798,7 @@ export default function RegistrationTable({
                                                     </span>
                                                 )}
                                             </td>
+                                            )}
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center justify-center gap-2">
                                                     {reg.deletedAt ? (

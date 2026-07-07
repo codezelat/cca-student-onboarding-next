@@ -114,8 +114,15 @@ export default function FinanceLedgerClient({
             );
             setVoidPrompt(null);
             toast({ title: "Payment Voided" });
-        } catch {
-            toast({ title: "Error", variant: "destructive" });
+        } catch (error) {
+            toast({
+                title: "Unable to Void Payment",
+                description:
+                    error instanceof Error
+                        ? error.message
+                        : "Failed to void this payment.",
+                variant: "destructive",
+            });
         } finally {
             setIsVoiding(false);
         }

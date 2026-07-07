@@ -266,7 +266,8 @@ async function getRemainingBalanceRegistrationIds(
   const rows = await prisma.$queryRaw<BalanceRegistrationRow[]>(Prisma.sql`
     SELECT id
     FROM cca_registrations
-    WHERE GREATEST(
+    WHERE deleted_at IS NULL
+      AND GREATEST(
       COALESCE(full_amount, 0) - COALESCE(current_paid_amount, 0),
       0
     ) BETWEEN ${balanceFilter.min} AND ${balanceFilter.max}
@@ -279,6 +280,8 @@ async function buildRegistrationWhereWithBalance(
   filters: RegistrationQueryFilters,
 ): Promise<Prisma.CCARegistrationWhereInput> {
   const where = buildRegistrationWhere(filters);
+  if (filters.scope === "trashed") return where;
+
   const balanceFilter = normalizeRemainingBalanceFilter(filters);
 
   if (!balanceFilter) return where;
@@ -863,7 +866,7 @@ export async function getRegistrationById(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let payments: any[] = [];
 
-  if (includePayments) {
+  if (includePayments && !registration.deletedAt) {
     const [
       resolvedPaymentsTotal,
       activePaymentsTotal,
@@ -1183,6 +1186,29 @@ export async function updateRegistrationProfile(id: number, data: unknown) {
   const actor = await getAdminActorFromRequestHeaders();
   const before = await getRegistrationAuditSnapshot(id);
 
+  if (!before) {
+    return { success: false, error: "Registration not found." };
+  }
+
+  if (before.deletedAt) {
+    await logActivitySafe({
+      actor,
+      category: "registration",
+      action: "registration_update_blocked",
+      status: "blocked",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before.registerId,
+      message: "Registration profile update blocked for trashed registration",
+      routeName: `/admin/registrations/${id}/edit`,
+      beforeData: before,
+    });
+    return {
+      success: false,
+      error: "Cannot edit a trashed registration. Restore it first.",
+    };
+  }
+
   const parsed = registrationProfileUpdateSchema.safeParse(data);
   if (!parsed.success) {
     await logActivitySafe({
@@ -1381,11 +1407,31 @@ export async function appendRegistrationDocuments(
       passportDocuments: true,
       passportPhoto: true,
       paymentSlip: true,
+      deletedAt: true,
     },
   });
 
   if (!before) {
     return { success: false, error: "Registration not found." };
+  }
+
+  if (before.deletedAt) {
+    await logActivitySafe({
+      actor,
+      category: "registration_document",
+      action: "registration_documents_append_blocked",
+      status: "blocked",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before.registerId,
+      message: "Document append blocked for trashed registration",
+      routeName: `/admin/registrations/${id}/edit`,
+      meta: { category },
+    });
+    return {
+      success: false,
+      error: "Cannot change documents on a trashed registration. Restore it first.",
+    };
   }
 
   const existingDocuments = normalizeDocumentCollection(before[category]);
@@ -1501,11 +1547,31 @@ export async function hardDeleteRegistrationDocument(
       passportDocuments: true,
       passportPhoto: true,
       paymentSlip: true,
+      deletedAt: true,
     },
   });
 
   if (!before) {
     return { success: false, error: "Registration not found." };
+  }
+
+  if (before.deletedAt) {
+    await logActivitySafe({
+      actor,
+      category: "registration_document",
+      action: "registration_document_delete_blocked",
+      status: "blocked",
+      subjectType: "CCARegistration",
+      subjectId: id,
+      subjectLabel: before.registerId,
+      message: "Document delete blocked for trashed registration",
+      routeName: `/admin/registrations/${id}/edit`,
+      meta: { category, documentId },
+    });
+    return {
+      success: false,
+      error: "Cannot change documents on a trashed registration. Restore it first.",
+    };
   }
 
   const existingDocuments = normalizeDocumentCollection(before[category]);

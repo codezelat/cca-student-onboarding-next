@@ -220,6 +220,22 @@ export async function approvePaymentSlip(
     throw new Error("Registration or slip not found");
   }
 
+  if (reg.deletedAt) {
+    await logActivitySafe({
+      actor,
+      category: "payment_slip",
+      action: "payment_slip_approve_blocked",
+      status: "blocked",
+      subjectType: "CCARegistration",
+      subjectId: registrationId,
+      subjectLabel: reg.registerId,
+      message: "Payment slip approve blocked for trashed registration",
+      routeName: "/admin/received-payments",
+      meta: { slipIndex },
+    });
+    throw new Error("Cannot approve a payment slip for a trashed registration. Restore it first.");
+  }
+
   let slips: PaymentSlip[] = [];
   try {
     slips = JSON.parse(JSON.stringify(reg.paymentSlip || []));
@@ -318,12 +334,16 @@ export async function approvePaymentSlip(
   let syncedPaidAmount = 0;
 
   await prisma.$transaction(async (tx) => {
-    await tx.cCARegistration.update({
-      where: { id: registrationBigInt },
+    const registrationUpdate = await tx.cCARegistration.updateMany({
+      where: { id: registrationBigInt, deletedAt: null },
       data: {
         paymentSlip: JSON.parse(JSON.stringify(slips)),
       },
     });
+
+    if (registrationUpdate.count !== 1) {
+      throw new Error("Cannot approve a payment slip for a trashed registration. Restore it first.");
+    }
 
     const nextPaymentNo = await getNextPaymentNo(tx, registrationBigInt);
     createdPayment = await tx.registrationPayment.create({
@@ -399,6 +419,22 @@ export async function declinePaymentSlip(
     throw new Error("Registration or slip not found");
   }
 
+  if (reg.deletedAt) {
+    await logActivitySafe({
+      actor,
+      category: "payment_slip",
+      action: "payment_slip_decline_blocked",
+      status: "blocked",
+      subjectType: "CCARegistration",
+      subjectId: registrationId,
+      subjectLabel: reg.registerId,
+      message: "Payment slip decline blocked for trashed registration",
+      routeName: "/admin/received-payments",
+      meta: { slipIndex },
+    });
+    throw new Error("Cannot decline a payment slip for a trashed registration. Restore it first.");
+  }
+
   let slips: PaymentSlip[] = [];
   try {
     slips = JSON.parse(JSON.stringify(reg.paymentSlip || []));
@@ -463,12 +499,16 @@ export async function declinePaymentSlip(
   slips[slipIndex].status = "declined";
   slips[slipIndex].declinedAt = new Date().toISOString();
 
-  await prisma.cCARegistration.update({
-    where: { id: BigInt(registrationId) },
+  const registrationUpdate = await prisma.cCARegistration.updateMany({
+    where: { id: BigInt(registrationId), deletedAt: null },
     data: {
       paymentSlip: JSON.parse(JSON.stringify(slips)),
     },
   });
+
+  if (registrationUpdate.count !== 1) {
+    throw new Error("Cannot decline a payment slip for a trashed registration. Restore it first.");
+  }
 
   await logActivitySafe({
     actor,

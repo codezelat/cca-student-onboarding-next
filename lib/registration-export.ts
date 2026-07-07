@@ -474,9 +474,11 @@ export function getRegistrationExportCellValue(
   row: RegistrationExportRow,
   fieldKey: RegistrationExportFieldKey,
 ): string {
+  const isTrashed = Boolean(row.deletedAt);
+
   switch (fieldKey) {
     case "status":
-      return row.deletedAt ? "Trashed" : "Active";
+      return isTrashed ? "Trashed" : "Active";
     case "createdAt":
     case "updatedAt":
     case "deletedAt":
@@ -489,8 +491,10 @@ export function getRegistrationExportCellValue(
       return toTrimmedString(row.nicNumber) || toTrimmedString(row.passportNumber);
     case "fullAmount":
     case "currentPaidAmount":
+      if (isTrashed) return "";
       return toCurrencyString(row[fieldKey]);
     case "balanceAmount":
+      if (isTrashed) return "";
       return toBalanceString(row.fullAmount, row.currentPaidAmount);
     case "tags":
       return Array.isArray(row.tags)
@@ -505,4 +509,3 @@ export function getRegistrationExportCellValue(
       return toTrimmedString(row[fieldKey as RegistrationExportDataKey]);
   }
 }
-

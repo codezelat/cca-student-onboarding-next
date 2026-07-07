@@ -85,7 +85,7 @@ export default async function EditRegistrationPage({ params }: PageProps) {
         getProgramsForRegistrationOptions(),
     ]);
 
-    if (!registration) {
+    if (!registration || registration.deletedAt) {
         notFound();
     }
 
