@@ -36,6 +36,8 @@ export interface PendingPaymentExtract {
   slipUrl: string;
   status: string;
   uploadedAt: string;
+  fullAmount: string;
+  currentPaidAmount: string;
 }
 
 interface PendingPaymentsResult {
@@ -108,6 +110,8 @@ export async function getPendingPayments({
     slip_url: string;
     status: string;
     uploaded_at: string;
+    full_amount: string;
+    current_paid_amount: string;
   };
 
   const countRows = await prisma.$queryRaw<CountRow[]>`
@@ -147,7 +151,9 @@ export async function getPendingPayments({
       COALESCE(
         NULLIF(slip->>'uploadedAt', ''),
         to_char(r.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-      ) AS uploaded_at
+      ) AS uploaded_at,
+      COALESCE(r.full_amount, 0)::text AS full_amount,
+      COALESCE(r.current_paid_amount, 0)::text AS current_paid_amount
     FROM cca_registrations r
     CROSS JOIN LATERAL jsonb_array_elements(
       CASE
@@ -178,6 +184,8 @@ export async function getPendingPayments({
     slipUrl: row.slip_url,
     status: row.status,
     uploadedAt: row.uploaded_at,
+    fullAmount: row.full_amount,
+    currentPaidAmount: row.current_paid_amount,
   }));
 
   return serialize({

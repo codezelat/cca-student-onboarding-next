@@ -6,10 +6,38 @@ import { approvePaymentSlip, declinePaymentSlip } from "./received-payments-acti
 import type { PendingPaymentExtract } from "./received-payments-actions";
 import { Button } from "@/components/ui/button";
 import { useAdminBusyRouter } from "@/components/admin/admin-activity-provider";
-import { formatAppDate } from "@/lib/formatters";
+import { formatAppDate, formatAppNumber } from "@/lib/formatters";
 import { getPaginationRange } from "@/lib/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
+
+function PreviewMetric({
+    label,
+    value,
+    tone = "neutral",
+}: {
+    label: string;
+    value: string;
+    tone?: "neutral" | "good" | "due";
+}) {
+    const valueClass =
+        tone === "good"
+            ? "text-emerald-700"
+            : tone === "due"
+              ? "text-orange-700"
+              : "text-gray-900";
+
+    return (
+        <div className="rounded-xl border border-white/80 bg-white/70 px-3 py-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                {label}
+            </p>
+            <p className={`mt-0.5 text-sm font-black ${valueClass}`}>
+                {value}
+            </p>
+        </div>
+    );
+}
 
 export default function ReceivedPaymentsTable({
     initialPayments,
@@ -40,6 +68,8 @@ export default function ReceivedPaymentsTable({
         slipIndex: number;
         slipUrl: string;
         fullName: string;
+        fullAmount: string;
+        currentPaidAmount: string;
     } | null>(null);
     const [approveAmount, setApproveAmount] = useState<string>("");
     const [approveAmountError, setApproveAmountError] = useState<string>("");
@@ -48,6 +78,43 @@ export default function ReceivedPaymentsTable({
         pageSize,
         totalRows,
     });
+    const approveFullAmount = parseAmount(approveModal?.fullAmount);
+    const approveCurrentPaidAmount = parseAmount(approveModal?.currentPaidAmount);
+    const approveEnteredAmount = parseAmount(approveAmount);
+    const approveHasValidAmount =
+        approveAmount.trim().length > 0 && approveEnteredAmount > 0;
+    const approveEstimatedPaid =
+        approveCurrentPaidAmount +
+        (approveHasValidAmount ? approveEnteredAmount : 0);
+    const approveCurrentBalance = Math.max(
+        approveFullAmount - approveCurrentPaidAmount,
+        0,
+    );
+    const approveEstimatedBalance = Math.max(
+        approveFullAmount - approveEstimatedPaid,
+        0,
+    );
+    const approveEstimatedCredit = Math.max(
+        approveEstimatedPaid - approveFullAmount,
+        0,
+    );
+    const approvePaidPercent =
+        approveFullAmount > 0
+            ? Math.min((approveEstimatedPaid / approveFullAmount) * 100, 100)
+            : 0;
+
+    function parseAmount(value: unknown): number {
+        if (typeof value !== "string" && typeof value !== "number") return 0;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function formatMoney(value: number): string {
+        return `LKR ${formatAppNumber(value, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        })}`;
+    }
 
     function buildUrl(params: {
         search?: string;
@@ -281,7 +348,9 @@ export default function ReceivedPaymentsTable({
                                                                 registrationId: payment.registrationId,
                                                                 slipIndex: payment.slipIndex,
                                                                 slipUrl: payment.slipUrl,
-                                                                fullName: payment.fullName
+                                                                fullName: payment.fullName,
+                                                                fullAmount: payment.fullAmount,
+                                                                currentPaidAmount: payment.currentPaidAmount,
                                                             })}
                                                             className="h-8 border-emerald-200 text-emerald-600 hover:bg-emerald-50 w-full xl:w-24"
                                                         >
@@ -353,11 +422,20 @@ export default function ReceivedPaymentsTable({
                     <div className="bg-white rounded-2xl shadow-xl border w-full max-w-md overflow-hidden animate-fade-in-up">
                         <div className="p-6">
                             <h3 className="text-2xl font-bold text-gray-800 mb-2">Approve Payment</h3>
-                            <p className="text-sm text-gray-500 mb-6">Manually enter the verified paid amount to finalize this slip for <strong>{approveModal.fullName}</strong>.</p>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Enter the verified amount for{" "}
+                                <strong>{approveModal.fullName}</strong>.
+                            </p>
 
                             <div className="flex justify-center mb-6">
-                                <a href={approveModal.slipUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-primary-600 hover:underline flex items-center gap-1">
-                                    <ExternalLink className="w-4 h-4" /> Open Payment Slip Reference
+                                <a
+                                    href={approveModal.slipUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm font-semibold text-primary-600 hover:underline flex items-center gap-1"
+                                >
+                                    <ExternalLink className="w-4 h-4" /> Open
+                                    Payment Slip Reference
                                 </a>
                             </div>
 
@@ -368,19 +446,102 @@ export default function ReceivedPaymentsTable({
                                             Verified Amount (LKR) *
                                         </label>
                                         <div className="relative">
-                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">Rs.</span>
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">
+                                                Rs.
+                                            </span>
                                             <input
                                                 type="number"
-                                                min="0"
+                                                min="0.01"
                                                 step="0.01"
                                                 value={approveAmount}
-                                            onChange={(e) => { setApproveAmount(e.target.value); setApproveAmountError(""); }}
+                                                onChange={(e) => {
+                                                    setApproveAmount(e.target.value);
+                                                    setApproveAmountError("");
+                                                }}
                                                 className="w-full pl-12 pr-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all outline-none"
                                                 placeholder="e.g., 25000"
                                                 required
                                             />
                                         </div>
-                                        {approveAmountError && <p className="text-xs text-rose-500 mt-1">{approveAmountError}</p>}
+                                        {approveAmountError && (
+                                            <p className="text-xs text-rose-500 mt-1">
+                                                {approveAmountError}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50/80 to-white p-4 shadow-sm">
+                                        <div className="mb-3 flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                                                    After Approval
+                                                </p>
+                                                <p className="mt-0.5 text-xs font-semibold text-gray-500">
+                                                    Estimated balance after saving
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                                                    Course Fee
+                                                </p>
+                                                <p className="text-sm font-black text-gray-900">
+                                                    {formatMoney(approveFullAmount)}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="mb-4 h-2 overflow-hidden rounded-full bg-white">
+                                            <div
+                                                className="h-full rounded-full bg-linear-to-r from-emerald-500 to-teal-500 transition-all duration-300"
+                                                style={{ width: `${approvePaidPercent}%` }}
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3 text-sm">
+                                            <PreviewMetric
+                                                label="Paid Now"
+                                                value={formatMoney(approveCurrentPaidAmount)}
+                                            />
+                                            <PreviewMetric
+                                                label="This Slip"
+                                                value={formatMoney(
+                                                    approveHasValidAmount
+                                                        ? approveEnteredAmount
+                                                        : 0,
+                                                )}
+                                            />
+                                            <PreviewMetric
+                                                label="Paid After"
+                                                value={formatMoney(approveEstimatedPaid)}
+                                            />
+                                            <PreviewMetric
+                                                label={
+                                                    approveEstimatedCredit > 0
+                                                        ? "Credit"
+                                                        : "Balance"
+                                                }
+                                                value={formatMoney(
+                                                    approveEstimatedCredit > 0
+                                                        ? approveEstimatedCredit
+                                                        : approveEstimatedBalance,
+                                                )}
+                                                tone={
+                                                    approveEstimatedCredit > 0 ||
+                                                    approveEstimatedBalance === 0
+                                                        ? "good"
+                                                        : "due"
+                                                }
+                                            />
+                                        </div>
+
+                                        {approveHasValidAmount &&
+                                            approveEnteredAmount > approveCurrentBalance &&
+                                            approveEstimatedCredit > 0 && (
+                                                <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                                                    This creates a credit of{" "}
+                                                    {formatMoney(approveEstimatedCredit)}.
+                                                </p>
+                                            )}
                                     </div>
 
                                     <div className="pt-4 flex gap-3">
@@ -393,8 +554,8 @@ export default function ReceivedPaymentsTable({
                                         </button>
                                         <button
                                             type="submit"
-                                            disabled={!!isApproving}
-                                            className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors"
+                                            disabled={!!isApproving || !approveHasValidAmount}
+                                            className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                             {isApproving ? "Processing..." : "Confirm & Apply"}
                                         </button>
