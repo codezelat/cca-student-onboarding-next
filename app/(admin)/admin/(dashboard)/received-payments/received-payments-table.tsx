@@ -11,34 +11,6 @@ import { getPaginationRange } from "@/lib/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 
-function PreviewMetric({
-    label,
-    value,
-    tone = "neutral",
-}: {
-    label: string;
-    value: string;
-    tone?: "neutral" | "good" | "due";
-}) {
-    const valueClass =
-        tone === "good"
-            ? "text-emerald-700"
-            : tone === "due"
-              ? "text-orange-700"
-              : "text-gray-900";
-
-    return (
-        <div className="rounded-xl border border-white/80 bg-white/70 px-3 py-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                {label}
-            </p>
-            <p className={`mt-0.5 text-sm font-black ${valueClass}`}>
-                {value}
-            </p>
-        </div>
-    );
-}
-
 export default function ReceivedPaymentsTable({
     initialPayments,
     currentSearch,
@@ -102,6 +74,20 @@ export default function ReceivedPaymentsTable({
         approveFullAmount > 0
             ? Math.min((approveEstimatedPaid / approveFullAmount) * 100, 100)
             : 0;
+    const approveResultLabel =
+        approveEstimatedCredit > 0
+            ? "Credit after approval"
+            : approveEstimatedBalance === 0
+              ? "No balance remaining"
+              : "Balance after approval";
+    const approveResultAmount =
+        approveEstimatedCredit > 0
+            ? approveEstimatedCredit
+            : approveEstimatedBalance;
+    const approveResultTextClass =
+        approveEstimatedCredit > 0 || approveEstimatedBalance === 0
+            ? "text-emerald-700"
+            : "text-orange-700";
 
     function parseAmount(value: unknown): number {
         if (typeof value !== "string" && typeof value !== "number") return 0;
@@ -470,14 +456,14 @@ export default function ReceivedPaymentsTable({
                                         )}
                                     </div>
 
-                                    <div className="rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50/80 to-white p-4 shadow-sm">
+                                    <div className="rounded-2xl border border-emerald-100 bg-white/75 p-4 shadow-sm ring-1 ring-emerald-50">
                                         <div className="mb-3 flex items-center justify-between gap-3">
                                             <div>
                                                 <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">
-                                                    After Approval
+                                                    Approval Preview
                                                 </p>
                                                 <p className="mt-0.5 text-xs font-semibold text-gray-500">
-                                                    Estimated balance after saving
+                                                    What the student record will show after saving
                                                 </p>
                                             </div>
                                             <div className="text-right">
@@ -497,41 +483,47 @@ export default function ReceivedPaymentsTable({
                                             />
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-3 text-sm">
-                                            <PreviewMetric
-                                                label="Paid Now"
-                                                value={formatMoney(approveCurrentPaidAmount)}
-                                            />
-                                            <PreviewMetric
-                                                label="This Slip"
-                                                value={formatMoney(
-                                                    approveHasValidAmount
-                                                        ? approveEnteredAmount
-                                                        : 0,
-                                                )}
-                                            />
-                                            <PreviewMetric
-                                                label="Paid After"
-                                                value={formatMoney(approveEstimatedPaid)}
-                                            />
-                                            <PreviewMetric
-                                                label={
-                                                    approveEstimatedCredit > 0
-                                                        ? "Credit"
-                                                        : "Balance"
-                                                }
-                                                value={formatMoney(
-                                                    approveEstimatedCredit > 0
-                                                        ? approveEstimatedCredit
-                                                        : approveEstimatedBalance,
-                                                )}
-                                                tone={
-                                                    approveEstimatedCredit > 0 ||
-                                                    approveEstimatedBalance === 0
-                                                        ? "good"
-                                                        : "due"
-                                                }
-                                            />
+                                        <div className="space-y-2 rounded-2xl border border-gray-100 bg-gray-50/70 p-3">
+                                            <div className="flex items-center justify-between gap-4 text-sm">
+                                                <span className="font-semibold text-gray-500">
+                                                    Already verified
+                                                </span>
+                                                <span className="font-black text-gray-900">
+                                                    {formatMoney(approveCurrentPaidAmount)}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-4 text-sm">
+                                                <span className="font-semibold text-gray-500">
+                                                    Add this payment
+                                                </span>
+                                                <span className="font-black text-emerald-700">
+                                                    +{" "}
+                                                    {formatMoney(
+                                                        approveHasValidAmount
+                                                            ? approveEnteredAmount
+                                                            : 0,
+                                                    )}
+                                                </span>
+                                            </div>
+                                            <div className="my-2 border-t border-dashed border-gray-200" />
+                                            <div className="flex items-center justify-between gap-4 text-sm">
+                                                <span className="font-semibold text-gray-700">
+                                                    New verified total
+                                                </span>
+                                                <span className="font-black text-gray-950">
+                                                    {formatMoney(approveEstimatedPaid)}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-4 rounded-xl bg-white px-3 py-2 text-sm shadow-sm">
+                                                <span className="font-bold text-gray-700">
+                                                    {approveResultLabel}
+                                                </span>
+                                                <span
+                                                    className={`font-black ${approveResultTextClass}`}
+                                                >
+                                                    {formatMoney(approveResultAmount)}
+                                                </span>
+                                            </div>
                                         </div>
 
                                         {approveHasValidAmount &&

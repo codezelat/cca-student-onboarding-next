@@ -219,8 +219,31 @@ export default function RegistrationDetailsClient({
       ? parseFloat(registration.currentPaidAmount)
       : calculatedPaidAmount;
 
-  const balance = fullAmount - paidAmount;
-  const isFullyPaid = balance <= 0 && fullAmount > 0;
+  const rawBalance = fullAmount - paidAmount;
+  const balanceDue = Math.max(rawBalance, 0);
+  const creditAmount = Math.max(-rawBalance, 0);
+  const isOverpaid = creditAmount > 0;
+  const isFullyPaid = balanceDue === 0 && !isOverpaid && fullAmount > 0;
+  const balanceStatusLabel = isOverpaid
+    ? "Credit"
+    : isFullyPaid
+      ? "Fully Paid"
+      : "Balance Due";
+  const balanceStatusAmount = isOverpaid ? creditAmount : balanceDue;
+  const balanceStatusCardClass = isOverpaid
+    ? "border-amber-100"
+    : balanceDue > 0
+      ? "border-orange-100"
+      : "border-emerald-100";
+  const balanceStatusTextClass = isOverpaid
+    ? "text-amber-600"
+    : balanceDue > 0
+      ? "text-orange-600"
+      : "text-emerald-600";
+  const balanceSummaryLabel = isOverpaid
+    ? "Current Credit:"
+    : "Pending Balance:";
+  const balanceSummaryValue = isOverpaid ? creditAmount : balanceDue;
   const assignedTagKeys = new Set(
     assignedTags.map((tag) => tag.toLowerCase()),
   );
@@ -741,10 +764,13 @@ export default function RegistrationDetailsClient({
                       <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 mb-6">
                         <div className="flex justify-between text-sm">
                           <span className="text-emerald-700 font-medium">
-                            Pending Balance:
+                            {balanceSummaryLabel}
                           </span>
                           <span className="font-bold text-emerald-900">
-                            Rs. {formatAppNumber(balance)}
+                            Rs.{" "}
+                            {formatAppNumber(balanceSummaryValue, {
+                              minimumFractionDigits: 2,
+                            })}
                           </span>
                         </div>
                       </div>
@@ -802,22 +828,23 @@ export default function RegistrationDetailsClient({
                     </p>
                   </Card>
                   <Card
-                    className={`gap-1 bg-white/50 p-4 shadow-sm border-${balance > 0 ? "orange" : "emerald"}-100`}
+                    className={`gap-1 bg-white/50 p-4 shadow-sm ${balanceStatusCardClass}`}
                   >
                     <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">
-                      Balance Due
+                      {balanceStatusLabel}
                     </p>
                     <div className="flex items-center justify-between mt-1">
-                      <p
-                        className={`text-xl font-black text-${balance > 0 ? "orange" : "emerald"}-600`}
-                      >
+                      <p className={`text-xl font-black ${balanceStatusTextClass}`}>
                         LKR{" "}
-                        {formatAppNumber(Math.abs(balance), {
+                        {formatAppNumber(balanceStatusAmount, {
                           minimumFractionDigits: 2,
                         })}
                       </p>
                       {isFullyPaid && (
                         <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      )}
+                      {isOverpaid && (
+                        <AlertCircle className="w-5 h-5 text-amber-600" />
                       )}
                     </div>
                   </Card>

@@ -122,6 +122,9 @@ export async function GET(request: Request) {
       const paidAmount = registration.currentPaidAmount
         ? Number(registration.currentPaidAmount)
         : 0;
+      const rawBalance = fullAmount - paidAmount;
+      const balanceDue = Math.max(rawBalance, 0);
+      const creditAmount = Math.max(-rawBalance, 0);
 
       return {
         id: registration.id.toString(),
@@ -134,7 +137,9 @@ export async function GET(request: Request) {
         programDuration: registration.programDuration,
         fullAmount,
         paidAmount,
-        balanceDue: fullAmount - paidAmount,
+        balanceDue,
+        creditAmount,
+        isOverpaid: creditAmount > 0,
       };
     });
 

@@ -25,6 +25,51 @@ type StudentPaymentRegistration = {
   fullAmount: number;
   paidAmount: number;
   balanceDue: number;
+  creditAmount?: number;
+  isOverpaid?: boolean;
+};
+
+const getPaymentPosition = (registration: StudentPaymentRegistration) => {
+  const derivedBalanceDue = registration.fullAmount - registration.paidAmount;
+  const balanceDue = Math.max(registration.balanceDue ?? derivedBalanceDue, 0);
+  const creditAmount = Math.max(
+    registration.creditAmount ?? Math.max(-derivedBalanceDue, 0),
+    0,
+  );
+
+  if (creditAmount > 0) {
+    return {
+      label: "Credit",
+      amount: creditAmount,
+      compactCardClass: "bg-amber-50 border-amber-100",
+      compactLabelClass: "text-amber-600",
+      compactAmountClass: "text-amber-700",
+      statCardClass: "bg-amber-50/80 border-amber-100",
+      statAccentClass: "bg-amber-100",
+    };
+  }
+
+  if (balanceDue === 0 && registration.fullAmount > 0) {
+    return {
+      label: "Fully Paid",
+      amount: 0,
+      compactCardClass: "bg-green-50 border-green-100",
+      compactLabelClass: "text-green-600",
+      compactAmountClass: "text-green-700",
+      statCardClass: "bg-green-50/80 border-green-100",
+      statAccentClass: "bg-green-100",
+    };
+  }
+
+  return {
+    label: "Balance Due",
+    amount: balanceDue,
+    compactCardClass: "bg-primary-50 border-primary-100",
+    compactLabelClass: "text-primary-500",
+    compactAmountClass: "text-primary-700",
+    statCardClass: "bg-primary-50/80 border-primary-200",
+    statAccentClass: "bg-primary-100",
+  };
 };
 
 export default function PaymentUpdatePage() {
@@ -263,6 +308,10 @@ export default function PaymentUpdatePage() {
     }
   };
 
+  const selectedPaymentPosition = studentDetails
+    ? getPaymentPosition(studentDetails)
+    : null;
+
   return (
     <div className="relative min-h-screen py-6 sm:py-12 px-3 sm:px-6 lg:px-8 overflow-hidden text-gray-800 antialiased">
       {/* Premium Glassmorphic Background matching /cca-register */}
@@ -498,45 +547,56 @@ export default function PaymentUpdatePage() {
                 </div>
 
                 <div className="space-y-3">
-                  {registrationOptions.map((registration) => (
-                    <button
-                      key={registration.id}
-                      type="button"
-                      onClick={() => handleSelectRegistration(registration)}
-                      className="group w-full rounded-2xl border border-gray-100 bg-white/75 p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary-200 hover:bg-white hover:shadow-lg"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0">
-                          <p className="truncate text-base font-bold text-gray-900 group-hover:text-primary-700">
-                            {registration.programName}
-                          </p>
-                          <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                            {registration.programId} - {registration.programYear} -{" "}
-                            {registration.registerId}
-                          </p>
-                          {registration.programDuration && (
-                            <p className="mt-1 text-xs text-gray-500">
-                              Duration: {registration.programDuration}
+                  {registrationOptions.map((registration) => {
+                    const paymentPosition = getPaymentPosition(registration);
+
+                    return (
+                      <button
+                        key={registration.id}
+                        type="button"
+                        onClick={() => handleSelectRegistration(registration)}
+                        className="group w-full rounded-2xl border border-gray-100 bg-white/75 p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary-200 hover:bg-white hover:shadow-lg"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="truncate text-base font-bold text-gray-900 group-hover:text-primary-700">
+                              {registration.programName}
                             </p>
-                          )}
+                            <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                              {registration.programId} -{" "}
+                              {registration.programYear} -{" "}
+                              {registration.registerId}
+                            </p>
+                            {registration.programDuration && (
+                              <p className="mt-1 text-xs text-gray-500">
+                                Duration: {registration.programDuration}
+                              </p>
+                            )}
+                          </div>
+                          <div
+                            className={`shrink-0 rounded-xl border px-3 py-2 text-right ${paymentPosition.compactCardClass}`}
+                          >
+                            <p
+                              className={`text-[10px] font-bold uppercase tracking-widest ${paymentPosition.compactLabelClass}`}
+                            >
+                              {paymentPosition.label}
+                            </p>
+                            <p
+                              className={`font-black ${paymentPosition.compactAmountClass}`}
+                            >
+                              {formatCurrency(paymentPosition.amount)}
+                            </p>
+                          </div>
                         </div>
-                        <div className="shrink-0 rounded-xl bg-primary-50 px-3 py-2 text-right">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-primary-500">
-                            Balance
-                          </p>
-                          <p className="font-black text-primary-700">
-                            {formatCurrency(registration.balanceDue)}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             {/* Section 2: Payment Overview & Upload (Progressive Disclosure) */}
-            {studentDetails && (
+            {studentDetails && selectedPaymentPosition && (
               <div className="bg-white/60 backdrop-blur-xl border border-white/80 shadow-xl rounded-2xl p-6 sm:p-8 animate-fade-in-up">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
                   <div className="flex items-center gap-4">
@@ -631,13 +691,21 @@ export default function PaymentUpdatePage() {
                       {formatCurrency(studentDetails.paidAmount)}
                     </p>
                   </div>
-                  <div className="bg-primary-50/80 rounded-xl p-4 border border-primary-200 shadow-sm relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-primary-100 rounded-full opacity-50"></div>
-                    <p className="text-sm text-primary-600 mb-1 relative z-10">
-                      Balance Due
+                  <div
+                    className={`rounded-xl p-4 border shadow-sm relative overflow-hidden ${selectedPaymentPosition.statCardClass}`}
+                  >
+                    <div
+                      className={`absolute -right-4 -top-4 w-16 h-16 rounded-full opacity-50 ${selectedPaymentPosition.statAccentClass}`}
+                    ></div>
+                    <p
+                      className={`text-sm mb-1 relative z-10 ${selectedPaymentPosition.compactLabelClass}`}
+                    >
+                      {selectedPaymentPosition.label}
                     </p>
-                    <p className="text-lg font-bold text-primary-700 relative z-10">
-                      {formatCurrency(studentDetails.balanceDue)}
+                    <p
+                      className={`text-lg font-bold relative z-10 ${selectedPaymentPosition.compactAmountClass}`}
+                    >
+                      {formatCurrency(selectedPaymentPosition.amount)}
                     </p>
                   </div>
                 </div>
