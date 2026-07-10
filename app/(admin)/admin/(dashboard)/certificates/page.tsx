@@ -1,4 +1,3 @@
-import { Award } from "lucide-react";
 import CertificatesClient from "./certificates-client";
 import {
   getCertificateProgramOptions,
@@ -30,16 +29,6 @@ export default async function CertificatesPage({
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="mb-2 flex items-center gap-2 bg-linear-to-r from-primary-600 to-secondary-600 bg-clip-text text-3xl font-bold text-transparent">
-            <Award className="size-8 text-primary-600" />
-            Certificates
-          </h1>
-          <p className="text-sm text-gray-600">Issue and manage student certificates.</p>
-        </div>
-      </div>
-
       <CertificatesClient
         key={`${search}-${program}-${result}-${certificates.page}`}
         initialCertificates={certificates.data}

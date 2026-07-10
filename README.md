@@ -71,7 +71,8 @@ The **Codezela Career Accelerator Student Onboarding Platform** is a comprehensi
 |---------|-------------|
 | 📊 **Analytics Overview** | Real-time statistics on registrations, programs, and payments |
 | 👥 **Registration Management** | View, search, filter, edit, and soft-delete student registrations |
-| 📚 **Program Management** | Create, edit, and manage accelerator programs and intake windows |
+| 📚 **Program Management** | Create, edit, and manage programs, intake windows, and program modules |
+| 🏅 **Certificates** | Issue, search, edit, and remove certificates with required overall and per-module results |
 | 💰 **Finance & Payments** | Track payments, generate financial reports, manage payment status |
 | 👤 **User Accounts** | Admin user management with role-based access |
 | 📜 **Activity Logging** | Comprehensive audit trail for all admin actions |
@@ -138,6 +139,7 @@ The **Codezela Career Accelerator Student Onboarding Platform** is a comprehensi
 │  │                 │  │                 │  │                         │  │
 │  │  / (Homepage)   │  │  /admin         │  │  /api/registrations     │  │
 │  │  /cca-register  │  │  /admin/programs│  │  /api/upload/presign    │  │
+│  │  /cca/payment   │  │  /admin/certificates                     │  │
 │  │                 │  │  /admin/finance │  │                         │  │
 │  └────────┬────────┘  └────────┬────────┘  └───────────┬─────────────┘  │
 └───────────┼────────────────────┼───────────────────────┼────────────────┘
@@ -203,15 +205,18 @@ cca-student-onboarding-next/
 │   │       ├── (dashboard)/         # Dashboard layout
 │   │       │   ├── accounts/        # User management
 │   │       │   ├── activity/        # Activity logs
+│   │       │   ├── certificates/    # Certificate and result management
 │   │       │   ├── finance/         # Finance dashboard
 │   │       │   ├── programs/        # Program CRUD
+│   │       │   ├── received-payments/ # Payment approvals and history
 │   │       │   ├── registrations/   # Registration management
 │   │       │   ├── dashboard-actions.ts
 │   │       │   └── page.tsx
 │   │       └── login/               # Admin login page
 │   ├── (public)/                    # Public route group
 │   │   ├── page.tsx                 # Homepage
-│   │   └── register/                # Registration form
+│   │   ├── cca-register/            # Registration form
+│   │   └── cca/payment/             # Payment lookup and submission
 │   ├── api/                         # API routes
 │   │   ├── registrations/           # Registration API
 │   │   └── upload/                  # File upload API
@@ -330,7 +335,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `SUPABASE_SECRET_KEY` | Supabase service role key | Supabase Dashboard |
 | `DATABASE_URL` | PostgreSQL connection URL (with PgBouncer) | Supabase Dashboard |
 | `DIRECT_URL` | Direct PostgreSQL connection URL | Supabase Dashboard |
-| `AUTH_SECRET` | NextAuth.js secret | Generate with `openssl rand -base64 32` |
+| `PG_POOL_MAX` | Optional maximum Prisma pool connections | `10` |
 
 ### Turnstile Configuration
 
@@ -357,14 +362,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `SEED_ADMIN_EMAIL` | Initial admin email | `admin@example.com` |
 | `SEED_ADMIN_PASSWORD` | Initial admin password | `ChangeMe123!` |
 | `SEED_ADMIN_NAME` | Initial admin name | `Admin User` |
-
-### Application
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEXT_PUBLIC_APP_URL` | Public app URL | `http://localhost:3000` |
-
----
 
 ## 🗄️ Database Schema
 
@@ -444,6 +441,13 @@ Payment tracking for registrations:
 - Void capability with audit trail
 - Receipt reference tracking
 
+#### `Certificate` and `CertificateModuleResult`
+Awarded certificate records:
+- One certificate per active registration with an immutable program snapshot
+- A required overall result: `A`, `B`, `C`, `D`, `F`, `Pass`, `Merit`, `Distinction`, `Refer`, or `Withheld`
+- Required result snapshots for every active program module at the time of issue
+- Module records referenced by certificates cannot be deleted
+
 #### `AdminActivityLog`
 Comprehensive audit logging:
 - Actor identification (user snapshots)
@@ -480,6 +484,18 @@ The application uses Next.js Server Actions for all data mutations:
 | `upsertIntakeWindow()` | Create or update intake window |
 | `toggleIntakeStatus()` | Activate/deactivate intake window |
 | `deleteIntakeWindow()` | Delete an intake window |
+| `getProgramModules()` | List a program's modules |
+| `upsertProgramModule()` | Create or update a program module |
+| `deleteProgramModule()` | Delete an unused program module |
+
+### Certificate Actions (`certificates-actions.ts`)
+| Action | Description |
+|--------|-------------|
+| `getCertificates()` | Search and paginate certificate records |
+| `searchCertificateStudents()` | Find eligible students by registration ID or NIC |
+| `createCertificate()` | Issue a certificate with required results |
+| `updateCertificate()` | Update certificate details and result snapshots |
+| `deleteCertificate()` | Remove a certificate record |
 
 ### Finance Actions (`finance-actions.ts`)
 | Action | Description |
@@ -570,6 +586,9 @@ npx tsx scripts/seed-programs.ts
 # Create initial admin user
 npx tsx scripts/seed-admin.ts
 
+# Apply pending migrations to the configured production database
+npm run db:migrate:deploy
+
 ```
 
 ### Utility Scripts
@@ -580,6 +599,17 @@ npx tsx scripts/seed-admin.ts
 | `enable-rls.ts` | Enable RLS policies on all tables |
 | `seed-programs.ts` | Seed 30+ career programs |
 | `seed-admin.ts` | Create initial admin user |
+
+### Quality Checks
+
+```bash
+# Fast static checks
+npm run lint
+npm run typecheck
+
+# Full production build gate
+npm run check
+```
 
 ---
 
@@ -601,7 +631,7 @@ npx tsx scripts/seed-admin.ts
 
 4. **Apply database migrations**
    ```bash
-   npx prisma migrate deploy
+   npm run db:migrate:deploy
    ```
    Run this against the production database before deploying application code that depends on a new migration.
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Award } from "lucide-react";
 import {
     getDashboardStats,
     getRegistrationTagFilterOptions,
@@ -154,23 +155,11 @@ export default async function AdminDashboardPage({
                     </Link>
                     <Link
                         prefetch={false}
-                        href="/admin/activity"
-                        className="px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white font-semibold rounded-xl focus:outline-none focus:ring-4 focus:ring-slate-300 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center space-x-2"
+                        href="/admin/certificates"
+                        className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl focus:outline-none focus:ring-4 focus:ring-amber-300 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center space-x-2"
                     >
-                        <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                        </svg>
-                        <span>Activity</span>
+                        <Award className="w-5 h-5" aria-hidden="true" />
+                        <span>Certificates</span>
                     </Link>
                 </div>
             </div>
