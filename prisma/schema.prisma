@@ -94,8 +94,8 @@ model RegistrationTag {
   id             BigInt   @id @default(autoincrement())
   name           String
   normalizedName String   @unique @map("normalized_name")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([name])
   @@map("registration_tags")
@@ -183,6 +183,7 @@ model Certificate {
   id                  BigInt   @id @default(autoincrement())
   registrationId      BigInt   @unique @map("registration_id")
   certificateNumber   String   @unique @map("certificate_number")
+  isCustomNumber      Boolean  @default(false) @map("is_custom_number")
   result              String?  @db.VarChar(80)
   issuedAt            DateTime @map("issued_at") @db.Date
   programCodeSnapshot String   @map("program_code_snapshot")
@@ -226,6 +227,37 @@ model ProgramModule {
   @@map("program_modules")
 }
 
+model PublicApiRateLimit {
+  rateKey         String   @id @map("rate_key")
+  route           String
+  clientId        String   @map("client_id")
+  windowStartedAt DateTime @map("window_started_at") @db.Timestamptz(6)
+  requestCount    Int      @default(0) @map("request_count")
+  expiresAt       DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([expiresAt], map: "idx_public_api_rate_limits_expires_at")
+  @@map("public_api_rate_limits")
+}
+
+model PublicApiIdempotency {
+  idempotencyKey String   @id @map("idempotency_key")
+  route          String
+  clientId       String   @map("client_id")
+  requestHash    String   @map("request_hash")
+  status         String   @default("in_progress")
+  httpStatus     Int?     @map("http_status")
+  responseBody   Json?    @map("response_body")
+  errorMessage   String?  @map("error_message")
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([expiresAt], map: "idx_public_api_idempotency_expires_at")
+  @@map("public_api_idempotency")
+}
+
 model AdminActivityLog {
   id                 BigInt   @id @default(autoincrement())
   actorUserId        BigInt?  @map("actor_user_id")
@@ -258,6 +290,13 @@ model AdminActivityLog {
   @@index([status])
   @@index([subjectType, subjectId])
   @@index([requestId])
+  @@index([createdAt(sort: Desc)], map: "idx_admin_activity_logs_created_at")
+  @@index([actorUserId], map: "idx_admin_activity_logs_actor_user_id")
+  @@index([category], map: "idx_admin_activity_logs_category")
+  @@index([action], map: "idx_admin_activity_logs_action")
+  @@index([status], map: "idx_admin_activity_logs_status")
+  @@index([subjectType, subjectId], map: "idx_admin_activity_logs_subject")
+  @@index([requestId], map: "idx_admin_activity_logs_request_id")
   @@map("admin_activity_logs")
 }
 

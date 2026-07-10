@@ -599,7 +599,13 @@ npx tsx scripts/seed-admin.ts
 3. **Configure Environment Variables**
    - Add all variables from `.env.example`
 
-4. **Deploy**
+4. **Apply database migrations**
+   ```bash
+   npx prisma migrate deploy
+   ```
+   Run this against the production database before deploying application code that depends on a new migration.
+
+5. **Deploy**
    - Vercel will build and deploy automatically
 
 ### Docker (Alternative)

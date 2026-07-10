@@ -13,6 +13,7 @@ import {
 const CERTIFICATES_ROUTE = "/admin/certificates";
 const PAGE_SIZE = 20;
 const CERTIFICATE_NUMBER_PATTERN = /^[A-Z0-9][A-Z0-9-]{2,79}$/;
+const APP_TIME_ZONE = "Asia/Colombo";
 
 export type CertificateStudentOption = {
   id: string;
@@ -28,6 +29,7 @@ export type CertificateStudentOption = {
 export type CertificateListItem = {
   id: string;
   certificateNumber: string;
+  isCustomNumber: boolean;
   result: string | null;
   issuedAt: string;
   createdAt: string;
@@ -78,7 +80,7 @@ function buildCertificateNumber(
   registerId: string,
   nicNumber: string | null | undefined,
 ): string | null {
-  const normalizedRegisterId = registerId.trim().toUpperCase();
+  const normalizedRegisterId = registerId.trim().toUpperCase().replace(/\s+/g, "");
   const nicDigits = (nicNumber ?? "").replace(/\D/g, "");
 
   if (!normalizedRegisterId || !nicDigits) return null;
@@ -87,7 +89,23 @@ function buildCertificateNumber(
 
 function parseIssuedAt(value: string): Date {
   const date = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) {
+  const dateParts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: APP_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .formatToParts(new Date())
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+  const today = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== value ||
+    value > today
+  ) {
     throw new Error("Enter a valid issue date.");
   }
   return date;
@@ -142,6 +160,7 @@ function toStudentOption(registration: {
 function toCertificateListItem(certificate: {
   id: bigint;
   certificateNumber: string;
+  isCustomNumber: boolean;
   result: string | null;
   issuedAt: Date;
   createdAt: Date;
@@ -161,6 +180,7 @@ function toCertificateListItem(certificate: {
   return {
     id: String(certificate.id),
     certificateNumber: certificate.certificateNumber,
+    isCustomNumber: certificate.isCustomNumber,
     result: certificate.result,
     issuedAt: certificate.issuedAt.toISOString(),
     createdAt: certificate.createdAt.toISOString(),
@@ -178,6 +198,7 @@ async function getCertificateAuditSnapshot(id: bigint) {
       id: true,
       registrationId: true,
       certificateNumber: true,
+      isCustomNumber: true,
       result: true,
       issuedAt: true,
       programCodeSnapshot: true,
@@ -185,7 +206,7 @@ async function getCertificateAuditSnapshot(id: bigint) {
       programYearSnapshot: true,
       updatedAt: true,
       registration: {
-        select: { registerId: true, fullName: true, deletedAt: true },
+        select: { registerId: true, fullName: true, nicNumber: true, deletedAt: true },
       },
     },
   });
@@ -210,15 +231,17 @@ export async function getCertificates(params?: {
   pageSize?: number;
 }): Promise<CertificateResult> {
   await assertAdminFromServerHeaders();
-  const search = params?.search?.trim() ?? "";
-  const program = params?.program?.trim().toUpperCase() ?? "";
-  const result = params?.result?.trim() ?? "";
+  const search = params?.search?.trim().slice(0, 120) ?? "";
+  const program = params?.program?.trim().slice(0, 80).toUpperCase() ?? "";
+  const result = params?.result?.trim().slice(0, 80) ?? "";
   const requestedPage = Math.max(1, params?.page ?? 1);
   const pageSize = Math.min(Math.max(1, params?.pageSize ?? PAGE_SIZE), 100);
 
   const where: Prisma.CertificateWhereInput = {
     registration: { deletedAt: null },
-    ...(program ? { programCodeSnapshot: program } : {}),
+    ...(program
+      ? { programCodeSnapshot: { equals: program, mode: "insensitive" } }
+      : {}),
     ...(result ? { result: { equals: result, mode: "insensitive" } } : {}),
     ...(search
       ? {
@@ -276,7 +299,7 @@ export async function searchCertificateStudents(
   query: string,
 ): Promise<CertificateStudentOption[]> {
   await assertAdminFromServerHeaders();
-  const search = query.trim();
+  const search = query.trim().slice(0, 80);
   if (search.length < 2) return [];
 
   const registrations = await prisma.cCARegistration.findMany({
@@ -365,6 +388,7 @@ export async function createCertificate(input: unknown) {
       data: {
         registrationId,
         certificateNumber,
+        isCustomNumber: payload.useCustomNumber === true,
         result: normalizeResult(payload.result),
         issuedAt: parseIssuedAt(payload.issuedAt),
         programCodeSnapshot: registration.programId,
@@ -441,12 +465,24 @@ export async function updateCertificate(input: unknown) {
   }
 
   try {
+    const shouldUseCustomNumber = payload.useCustomNumber === true;
+    const certificateNumber = shouldUseCustomNumber
+      ? getCustomCertificateNumber(payload.certificateNumber)
+      : before.isCustomNumber
+        ? buildCertificateNumber(
+            before.registration.registerId,
+            before.registration.nicNumber,
+          ) ??
+          (() => {
+            throw new Error("This student needs a numeric NIC for an automatic certificate ID.");
+          })()
+        : before.certificateNumber;
+
     const updated = await prisma.certificate.update({
       where: { id },
       data: {
-        ...(payload.useCustomNumber
-          ? { certificateNumber: getCustomCertificateNumber(payload.certificateNumber) }
-          : {}),
+        certificateNumber,
+        isCustomNumber: shouldUseCustomNumber,
         result: normalizeResult(payload.result),
         issuedAt: parseIssuedAt(payload.issuedAt),
         updatedBy: toDatabaseUserId(actor.userId),

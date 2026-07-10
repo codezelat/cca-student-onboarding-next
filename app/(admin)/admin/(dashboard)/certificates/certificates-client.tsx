@@ -191,13 +191,12 @@ export default function CertificatesClient({
   }
 
   function openEdit(certificate: CertificateListItem) {
-    const generatedNumber = certificate.registration.suggestedCertificateNumber;
     setSelectedStudent(certificate.registration);
     setStudentQuery("");
     setStudentOptions([]);
     setIssuedAt(toDateInputValue(certificate.issuedAt));
     setCertificateResult(certificate.result ?? "");
-    setUseCustomNumber(certificate.certificateNumber !== generatedNumber);
+    setUseCustomNumber(certificate.isCustomNumber);
     setCertificateNumber(certificate.certificateNumber);
     setDialog({ mode: "edit", certificate });
   }
@@ -276,9 +275,17 @@ export default function CertificatesClient({
   }
 
   const generatedCertificateNumber = selectedStudent?.suggestedCertificateNumber ?? "";
+  const preservedAutomaticNumber =
+    dialog?.mode === "edit" && !dialog.certificate.isCustomNumber
+      ? dialog.certificate.certificateNumber
+      : generatedCertificateNumber;
+  const canSaveAutomaticNumber =
+    dialog?.mode === "edit" && !dialog.certificate.isCustomNumber
+      ? Boolean(dialog.certificate.certificateNumber)
+      : Boolean(generatedCertificateNumber);
   const shownCertificateNumber = useCustomNumber
     ? certificateNumber
-    : generatedCertificateNumber;
+    : preservedAutomaticNumber;
   const hasFilters = Boolean(currentSearch || currentProgram || currentResult || search || program || result);
 
   return (
@@ -492,7 +499,7 @@ export default function CertificatesClient({
             </div>
             <DialogFooter className="border-t border-gray-100 bg-white/70 px-6 py-4">
               <Button type="button" variant="ghost" className="rounded-xl" disabled={isPending} onClick={() => setDialog(null)}>Cancel</Button>
-              <Button type="submit" className="rounded-xl bg-primary px-6" disabled={!selectedStudent || isPending || (!useCustomNumber && !generatedCertificateNumber)}>
+              <Button type="submit" className="rounded-xl bg-primary px-6" disabled={!selectedStudent || isPending || (!useCustomNumber && !canSaveAutomaticNumber)}>
                 {isPending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Award data-icon="inline-start" />}
                 {dialog?.mode === "edit" ? "Save Changes" : "Issue Certificate"}
               </Button>
