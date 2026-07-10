@@ -1,6 +1,9 @@
 "use server";
 
-import { Prisma } from "@prisma/client";
+import {
+  Prisma,
+  type CertificateResult as PrismaCertificateResult,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -9,6 +12,10 @@ import {
   getAdminActorFromRequestHeaders,
   logActivitySafe,
 } from "@/lib/server/activity-log";
+import {
+  CERTIFICATE_RESULT_VALUES,
+  type CertificateResultValue,
+} from "./certificate-options";
 
 const CERTIFICATES_ROUTE = "/admin/certificates";
 const PAGE_SIZE = 20;
@@ -30,13 +37,25 @@ export type CertificateListItem = {
   id: string;
   certificateNumber: string;
   isCustomNumber: boolean;
-  result: string | null;
+  result: CertificateResultValue;
   issuedAt: string;
   createdAt: string;
   programCodeSnapshot: string;
   programNameSnapshot: string;
   programYearSnapshot: string;
+  moduleResults: CertificateModuleResultItem[];
   registration: CertificateStudentOption;
+};
+
+export type CertificateModuleOption = {
+  id: string;
+  code: string;
+  name: string;
+  creditValue: string | null;
+};
+
+export type CertificateModuleResultItem = CertificateModuleOption & {
+  result: CertificateResultValue;
 };
 
 export type CertificateProgramOption = {
@@ -52,10 +71,16 @@ type CertificateResult = {
   totalPages: number;
 };
 
+const certificateModuleResultSchema = z.object({
+  programModuleId: z.coerce.number().int().positive(),
+  result: z.enum(CERTIFICATE_RESULT_VALUES),
+});
+
 const certificatePayloadSchema = z.object({
   registrationId: z.coerce.number().int().positive(),
   issuedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  result: z.string().trim().max(80).optional(),
+  result: z.enum(CERTIFICATE_RESULT_VALUES),
+  moduleResults: z.array(certificateModuleResultSchema).max(100).default([]),
   useCustomNumber: z.boolean().optional(),
   certificateNumber: z.string().trim().max(80).optional(),
 });
@@ -80,7 +105,10 @@ function buildCertificateNumber(
   registerId: string,
   nicNumber: string | null | undefined,
 ): string | null {
-  const normalizedRegisterId = registerId.trim().toUpperCase().replace(/\s+/g, "");
+  const normalizedRegisterId = registerId
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
   const nicDigits = (nicNumber ?? "").replace(/\D/g, "");
 
   if (!normalizedRegisterId || !nicDigits) return null;
@@ -111,11 +139,6 @@ function parseIssuedAt(value: string): Date {
   return date;
 }
 
-function normalizeResult(value: string | undefined): string | null {
-  const result = value?.trim();
-  return result ? result : null;
-}
-
 function getCustomCertificateNumber(value: string | undefined): string {
   const certificateNumber = normalizeCertificateNumber(value ?? "");
   if (!CERTIFICATE_NUMBER_PATTERN.test(certificateNumber)) {
@@ -125,11 +148,15 @@ function getCustomCertificateNumber(value: string | undefined): string {
 }
 
 function isUniqueConstraintError(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
 }
 
 function toDatabaseUserId(value: unknown): bigint | null {
-  const normalized = typeof value === "string" ? value.trim() : String(value ?? "");
+  const normalized =
+    typeof value === "string" ? value.trim() : String(value ?? "");
   return /^\d+$/.test(normalized) ? BigInt(normalized) : null;
 }
 
@@ -157,16 +184,57 @@ function toStudentOption(registration: {
   };
 }
 
+function toCertificateModuleOption(module: {
+  id: bigint;
+  code: string;
+  name: string;
+  creditValue: Prisma.Decimal | number | string | null;
+}): CertificateModuleOption {
+  return {
+    id: String(module.id),
+    code: module.code,
+    name: module.name,
+    creditValue:
+      module.creditValue === null ? null : String(module.creditValue),
+  };
+}
+
+function toCertificateModuleResultItem(moduleResult: {
+  result: PrismaCertificateResult;
+  moduleCodeSnapshot: string;
+  moduleNameSnapshot: string;
+  creditValueSnapshot: Prisma.Decimal | number | string | null;
+  programModuleId: bigint;
+}): CertificateModuleResultItem {
+  return {
+    id: String(moduleResult.programModuleId),
+    code: moduleResult.moduleCodeSnapshot,
+    name: moduleResult.moduleNameSnapshot,
+    creditValue:
+      moduleResult.creditValueSnapshot === null
+        ? null
+        : String(moduleResult.creditValueSnapshot),
+    result: moduleResult.result as CertificateResultValue,
+  };
+}
+
 function toCertificateListItem(certificate: {
   id: bigint;
   certificateNumber: string;
   isCustomNumber: boolean;
-  result: string | null;
+  result: PrismaCertificateResult;
   issuedAt: Date;
   createdAt: Date;
   programCodeSnapshot: string;
   programNameSnapshot: string;
   programYearSnapshot: string;
+  moduleResults: Array<{
+    result: PrismaCertificateResult;
+    moduleCodeSnapshot: string;
+    moduleNameSnapshot: string;
+    creditValueSnapshot: Prisma.Decimal | number | string | null;
+    programModuleId: bigint;
+  }>;
   registration: {
     id: bigint;
     registerId: string;
@@ -181,14 +249,72 @@ function toCertificateListItem(certificate: {
     id: String(certificate.id),
     certificateNumber: certificate.certificateNumber,
     isCustomNumber: certificate.isCustomNumber,
-    result: certificate.result,
+    result: certificate.result as CertificateResultValue,
     issuedAt: certificate.issuedAt.toISOString(),
     createdAt: certificate.createdAt.toISOString(),
     programCodeSnapshot: certificate.programCodeSnapshot,
     programNameSnapshot: certificate.programNameSnapshot,
     programYearSnapshot: certificate.programYearSnapshot,
+    moduleResults: certificate.moduleResults.map(toCertificateModuleResultItem),
     registration: toStudentOption(certificate.registration),
   };
+}
+
+async function getActiveProgramModules(programCode: string) {
+  return prisma.programModule.findMany({
+    where: {
+      isActive: true,
+      program: {
+        code: { equals: programCode, mode: "insensitive" },
+      },
+    },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      creditValue: true,
+    },
+    orderBy: [{ displayOrder: "asc" }, { code: "asc" }],
+  });
+}
+
+function validateModuleResults(
+  modules: Array<{
+    id: bigint;
+    code: string;
+    name: string;
+    creditValue: Prisma.Decimal | null;
+  }>,
+  moduleResults: Array<{
+    programModuleId: number;
+    result: CertificateResultValue;
+  }>,
+) {
+  if (modules.length === 0) {
+    if (moduleResults.length > 0) {
+      throw new Error("This program has no modules to record.");
+    }
+    return [];
+  }
+
+  const resultsByModuleId = new Map<bigint, CertificateResultValue>();
+  for (const entry of moduleResults) {
+    const moduleId = BigInt(entry.programModuleId);
+    if (resultsByModuleId.has(moduleId)) {
+      throw new Error("Each module can have only one result.");
+    }
+    resultsByModuleId.set(moduleId, entry.result);
+  }
+
+  if (resultsByModuleId.size !== modules.length) {
+    throw new Error("Choose a result for every module.");
+  }
+
+  return modules.map((module) => {
+    const result = resultsByModuleId.get(module.id);
+    if (!result) throw new Error("Choose a result for every module.");
+    return { module, result };
+  });
 }
 
 async function getCertificateAuditSnapshot(id: bigint) {
@@ -205,11 +331,48 @@ async function getCertificateAuditSnapshot(id: bigint) {
       programNameSnapshot: true,
       programYearSnapshot: true,
       updatedAt: true,
+      moduleResults: {
+        select: {
+          programModuleId: true,
+          result: true,
+          moduleCodeSnapshot: true,
+          moduleNameSnapshot: true,
+          creditValueSnapshot: true,
+        },
+      },
       registration: {
-        select: { registerId: true, fullName: true, nicNumber: true, deletedAt: true },
+        select: {
+          registerId: true,
+          fullName: true,
+          nicNumber: true,
+          deletedAt: true,
+        },
       },
     },
   });
+}
+
+export async function getCertificateModulesForRegistration(
+  registrationIdInput: string,
+): Promise<CertificateModuleOption[]> {
+  await assertAdminFromServerHeaders();
+  let registrationId: bigint;
+  try {
+    registrationId = BigInt(registrationIdInput);
+  } catch {
+    throw new Error("Invalid student.");
+  }
+
+  const registration = await prisma.cCARegistration.findUnique({
+    where: { id: registrationId },
+    select: { programId: true, deletedAt: true },
+  });
+  if (!registration || registration.deletedAt) {
+    throw new Error("This student is not available for a certificate.");
+  }
+
+  const modules = await getActiveProgramModules(registration.programId);
+  return modules.map(toCertificateModuleOption);
 }
 
 export async function getCertificateProgramOptions(): Promise<
@@ -234,6 +397,11 @@ export async function getCertificates(params?: {
   const search = params?.search?.trim().slice(0, 120) ?? "";
   const program = params?.program?.trim().slice(0, 80).toUpperCase() ?? "";
   const result = params?.result?.trim().slice(0, 80) ?? "";
+  const resultFilter = CERTIFICATE_RESULT_VALUES.includes(
+    result as CertificateResultValue,
+  )
+    ? (result as PrismaCertificateResult)
+    : null;
   const requestedPage = Math.max(1, params?.page ?? 1);
   const pageSize = Math.min(Math.max(1, params?.pageSize ?? PAGE_SIZE), 100);
 
@@ -242,7 +410,7 @@ export async function getCertificates(params?: {
     ...(program
       ? { programCodeSnapshot: { equals: program, mode: "insensitive" } }
       : {}),
-    ...(result ? { result: { equals: result, mode: "insensitive" } } : {}),
+    ...(resultFilter ? { result: resultFilter } : {}),
     ...(search
       ? {
           OR: [
@@ -279,6 +447,16 @@ export async function getCertificates(params?: {
           programName: true,
           programYear: true,
         },
+      },
+      moduleResults: {
+        select: {
+          programModuleId: true,
+          result: true,
+          moduleCodeSnapshot: true,
+          moduleNameSnapshot: true,
+          creditValueSnapshot: true,
+        },
+        orderBy: { moduleCodeSnapshot: "asc" },
       },
     },
     orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
@@ -358,15 +536,25 @@ export async function createCertificate(input: unknown) {
   if (registration.certificate) {
     throw new Error("A certificate already exists for this registration.");
   }
+  const activeModules = await getActiveProgramModules(registration.programId);
+  const validatedModuleResults = validateModuleResults(
+    activeModules,
+    payload.moduleResults,
+  );
 
   let certificateNumber: string;
   try {
     certificateNumber = payload.useCustomNumber
       ? getCustomCertificateNumber(payload.certificateNumber)
-      : buildCertificateNumber(registration.registerId, registration.nicNumber) ??
+      : (buildCertificateNumber(
+          registration.registerId,
+          registration.nicNumber,
+        ) ??
         (() => {
-          throw new Error("This student needs a numeric NIC or a custom certificate ID.");
-        })();
+          throw new Error(
+            "This student needs a numeric NIC or a custom certificate ID.",
+          );
+        })());
   } catch (error) {
     await logActivitySafe({
       actor,
@@ -378,7 +566,12 @@ export async function createCertificate(input: unknown) {
       subjectLabel: registration.registerId,
       message: "Certificate creation rejected due to an invalid identifier",
       routeName: CERTIFICATES_ROUTE,
-      meta: { error: error instanceof Error ? error.message : "Invalid certificate identifier" },
+      meta: {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Invalid certificate identifier",
+      },
     });
     throw error;
   }
@@ -389,13 +582,22 @@ export async function createCertificate(input: unknown) {
         registrationId,
         certificateNumber,
         isCustomNumber: payload.useCustomNumber === true,
-        result: normalizeResult(payload.result),
+        result: payload.result as PrismaCertificateResult,
         issuedAt: parseIssuedAt(payload.issuedAt),
         programCodeSnapshot: registration.programId,
         programNameSnapshot: registration.programName,
         programYearSnapshot: registration.programYear,
         createdBy: toDatabaseUserId(actor.userId),
         updatedBy: toDatabaseUserId(actor.userId),
+        moduleResults: {
+          create: validatedModuleResults.map(({ module, result }) => ({
+            programModuleId: module.id,
+            result: result as PrismaCertificateResult,
+            moduleCodeSnapshot: module.code,
+            moduleNameSnapshot: module.name,
+            creditValueSnapshot: module.creditValue,
+          })),
+        },
       },
       include: {
         registration: {
@@ -408,6 +610,16 @@ export async function createCertificate(input: unknown) {
             programName: true,
             programYear: true,
           },
+        },
+        moduleResults: {
+          select: {
+            programModuleId: true,
+            result: true,
+            moduleCodeSnapshot: true,
+            moduleNameSnapshot: true,
+            creditValueSnapshot: true,
+          },
+          orderBy: { moduleCodeSnapshot: "asc" },
         },
       },
     });
@@ -442,7 +654,9 @@ export async function createCertificate(input: unknown) {
       meta: { error: error instanceof Error ? error.message : "Unknown error" },
     });
     if (isUniqueConstraintError(error)) {
-      throw new Error("That certificate ID or student already has a certificate.");
+      throw new Error(
+        "That certificate ID or student already has a certificate.",
+      );
     }
     throw error;
   }
@@ -463,19 +677,31 @@ export async function updateCertificate(input: unknown) {
   if (before.registration.deletedAt) {
     throw new Error("Restore the student before changing this certificate.");
   }
+  const existingModuleResults = before.moduleResults.map((moduleResult) => ({
+    id: moduleResult.programModuleId,
+    code: moduleResult.moduleCodeSnapshot,
+    name: moduleResult.moduleNameSnapshot,
+    creditValue: moduleResult.creditValueSnapshot,
+  }));
+  const validatedModuleResults = validateModuleResults(
+    existingModuleResults,
+    payload.moduleResults,
+  );
 
   try {
     const shouldUseCustomNumber = payload.useCustomNumber === true;
     const certificateNumber = shouldUseCustomNumber
       ? getCustomCertificateNumber(payload.certificateNumber)
       : before.isCustomNumber
-        ? buildCertificateNumber(
+        ? (buildCertificateNumber(
             before.registration.registerId,
             before.registration.nicNumber,
           ) ??
           (() => {
-            throw new Error("This student needs a numeric NIC for an automatic certificate ID.");
-          })()
+            throw new Error(
+              "This student needs a numeric NIC for an automatic certificate ID.",
+            );
+          })())
         : before.certificateNumber;
 
     const updated = await prisma.certificate.update({
@@ -483,9 +709,23 @@ export async function updateCertificate(input: unknown) {
       data: {
         certificateNumber,
         isCustomNumber: shouldUseCustomNumber,
-        result: normalizeResult(payload.result),
+        result: payload.result as PrismaCertificateResult,
         issuedAt: parseIssuedAt(payload.issuedAt),
         updatedBy: toDatabaseUserId(actor.userId),
+        ...(existingModuleResults.length > 0
+          ? {
+              moduleResults: {
+                deleteMany: {},
+                create: validatedModuleResults.map(({ module, result }) => ({
+                  programModuleId: module.id,
+                  result: result as PrismaCertificateResult,
+                  moduleCodeSnapshot: module.code,
+                  moduleNameSnapshot: module.name,
+                  creditValueSnapshot: module.creditValue,
+                })),
+              },
+            }
+          : {}),
       },
       include: {
         registration: {
@@ -498,6 +738,16 @@ export async function updateCertificate(input: unknown) {
             programName: true,
             programYear: true,
           },
+        },
+        moduleResults: {
+          select: {
+            programModuleId: true,
+            result: true,
+            moduleCodeSnapshot: true,
+            moduleNameSnapshot: true,
+            creditValueSnapshot: true,
+          },
+          orderBy: { moduleCodeSnapshot: "asc" },
         },
       },
     });

@@ -180,23 +180,24 @@ model RegistrationPayment {
 }
 
 model Certificate {
-  id                  BigInt   @id @default(autoincrement())
-  registrationId      BigInt   @unique @map("registration_id")
-  certificateNumber   String   @unique @map("certificate_number")
-  isCustomNumber      Boolean  @default(false) @map("is_custom_number")
-  result              String?  @db.VarChar(80)
-  issuedAt            DateTime @map("issued_at") @db.Date
-  programCodeSnapshot String   @map("program_code_snapshot")
-  programNameSnapshot String   @map("program_name_snapshot")
-  programYearSnapshot String   @map("program_year_snapshot")
-  createdBy           BigInt?  @map("created_by")
-  updatedBy           BigInt?  @map("updated_by")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id                  BigInt            @id @default(autoincrement())
+  registrationId      BigInt            @unique @map("registration_id")
+  certificateNumber   String            @unique @map("certificate_number")
+  isCustomNumber      Boolean           @default(false) @map("is_custom_number")
+  result              CertificateResult
+  issuedAt            DateTime          @map("issued_at") @db.Date
+  programCodeSnapshot String            @map("program_code_snapshot")
+  programNameSnapshot String            @map("program_name_snapshot")
+  programYearSnapshot String            @map("program_year_snapshot")
+  createdBy           BigInt?           @map("created_by")
+  updatedBy           BigInt?           @map("updated_by")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
 
-  registration CCARegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
-  creator      User?           @relation("CertificateCreatedBy", fields: [createdBy], references: [id])
-  updater      User?           @relation("CertificateUpdatedBy", fields: [updatedBy], references: [id])
+  registration  CCARegistration           @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  moduleResults CertificateModuleResult[]
+  creator       User?                     @relation("CertificateCreatedBy", fields: [createdBy], references: [id])
+  updater       User?                     @relation("CertificateUpdatedBy", fields: [updatedBy], references: [id])
 
   @@index([issuedAt])
   @@index([result])
@@ -217,14 +218,33 @@ model ProgramModule {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
-  creator User?   @relation("ProgramModuleCreatedBy", fields: [createdBy], references: [id])
-  updater User?   @relation("ProgramModuleUpdatedBy", fields: [updatedBy], references: [id])
+  program            Program                   @relation(fields: [programId], references: [id], onDelete: Cascade)
+  certificateResults CertificateModuleResult[]
+  creator            User?                     @relation("ProgramModuleCreatedBy", fields: [createdBy], references: [id])
+  updater            User?                     @relation("ProgramModuleUpdatedBy", fields: [updatedBy], references: [id])
 
   @@unique([programId, code])
   @@index([programId, displayOrder])
   @@index([programId, isActive])
   @@map("program_modules")
+}
+
+model CertificateModuleResult {
+  certificateId       BigInt            @map("certificate_id")
+  programModuleId     BigInt            @map("program_module_id")
+  result              CertificateResult
+  moduleCodeSnapshot  String            @map("module_code_snapshot")
+  moduleNameSnapshot  String            @map("module_name_snapshot")
+  creditValueSnapshot Decimal?          @map("credit_value_snapshot") @db.Decimal(5, 2)
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  certificate   Certificate   @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  programModule ProgramModule @relation(fields: [programModuleId], references: [id], onDelete: Restrict)
+
+  @@id([certificateId, programModuleId])
+  @@index([programModuleId])
+  @@map("certificate_module_results")
 }
 
 model PublicApiRateLimit {
@@ -324,4 +344,17 @@ enum QualificationStatus {
 enum PaymentStatus {
   active
   void
+}
+
+enum CertificateResult {
+  A
+  B
+  C
+  D
+  F
+  Pass
+  Merit
+  Distinction
+  Refer
+  Withheld
 }

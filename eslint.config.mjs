@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "public/build/**",
     "next-env.d.ts",
+    // Vercel's local production artifact is generated, not application source.
+    ".vercel/**",
   ]),
 ]);
 

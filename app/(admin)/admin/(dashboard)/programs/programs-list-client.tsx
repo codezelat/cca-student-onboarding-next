@@ -12,6 +12,8 @@ import {
   Clock,
   Search,
   BookOpen,
+  Filter,
+  ChevronDown,
   Layers3,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -42,6 +44,7 @@ import { getPaginationRange } from "@/lib/pagination";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -97,7 +100,10 @@ export default function ProgramsListClient({
   const [registrationsSortValue, setRegistrationsSortValue] =
     useState<ProgramRegistrationsSort>(currentRegistrationsSort);
   const { toast } = useToast();
-  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string } | null>(
+    null,
+  );
+  const [isFiltersOpen, setIsFiltersOpen] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const { start: paginationStart, end: paginationEnd } = getPaginationRange({
     currentPage,
@@ -164,9 +170,7 @@ export default function ProgramsListClient({
       toast({
         title: "Cannot Delete",
         description:
-          error instanceof Error
-            ? error.message
-            : "Failed to delete program.",
+          error instanceof Error ? error.message : "Failed to delete program.",
         variant: "destructive",
       });
     } finally {
@@ -214,9 +218,9 @@ export default function ProgramsListClient({
 
   const hasFilters = Boolean(
     currentSearch ||
-      searchQuery ||
-      currentStatusSort !== "none" ||
-      currentRegistrationsSort !== "none",
+    searchQuery ||
+    currentStatusSort !== "none" ||
+    currentRegistrationsSort !== "none",
   );
 
   const handleClearFilter = () => {
@@ -228,87 +232,124 @@ export default function ProgramsListClient({
 
   return (
     <div className="space-y-6">
-      <form
-        onSubmit={handleFilterSubmit}
-        className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
-      >
-        <div className="flex flex-1 flex-wrap items-center gap-3">
-          <div className="relative max-w-md w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Search programs by name or code..."
-              className="pl-10 bg-white/50 backdrop-blur-sm border-white/60 rounded-xl"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <Button type="submit" variant="outline" className="rounded-xl">
-            Search
-          </Button>
-          {hasFilters && (
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl"
-              onClick={handleClearFilter}
+      <div className="overflow-hidden rounded-2xl border border-white/60 bg-white/60 shadow-lg ring-1 ring-black/5 backdrop-blur-xl">
+        <button
+          type="button"
+          onClick={() => setIsFiltersOpen((open) => !open)}
+          className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-colors hover:bg-white/30"
+          aria-expanded={isFiltersOpen}
+        >
+          <span>
+            <span className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+              <Filter className="size-4" />
+              Search & Filters
+            </span>
+            <span className="mt-1 block text-sm font-medium text-gray-500">
+              {hasFilters
+                ? `${totalRows} matching programs`
+                : "Program name, code and sorting"}
+            </span>
+          </span>
+          <ChevronDown
+            className={`size-5 shrink-0 text-gray-400 transition-transform duration-300 ${isFiltersOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+        <div
+          className={`grid transition-[grid-template-rows] duration-300 ease-out ${isFiltersOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+        >
+          <div className="overflow-hidden">
+            <form
+              onSubmit={handleFilterSubmit}
+              className="flex flex-col gap-4 px-6 pb-6"
             >
-              Clear
-            </Button>
-          )}
+              <div className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label
+                    htmlFor="program-filter-search"
+                    className="text-xs font-bold uppercase tracking-wider text-gray-500"
+                  >
+                    Search
+                  </label>
+                  <div className="relative mt-2">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+                    <Input
+                      id="program-filter-search"
+                      placeholder="Program name or code"
+                      className="rounded-xl border-gray-200 bg-white/50 pl-10"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                    Registrations
+                  </label>
+                  <Select
+                    value={registrationsSortValue}
+                    onValueChange={(value) =>
+                      setRegistrationsSortValue(parseRegistrationsSort(value))
+                    }
+                  >
+                    <SelectTrigger className="mt-2 w-full rounded-xl border-gray-200 bg-white/50">
+                      <SelectValue placeholder="Registrations" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-white/70 bg-white/95">
+                      <SelectGroup>
+                        <SelectItem value="none">Default</SelectItem>
+                        <SelectItem value="most">Most first</SelectItem>
+                        <SelectItem value="fewest">Fewest first</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                    Status
+                  </label>
+                  <Select
+                    value={statusSortValue}
+                    onValueChange={(value) =>
+                      setStatusSortValue(parseStatusSort(value))
+                    }
+                  >
+                    <SelectTrigger className="mt-2 w-full rounded-xl border-gray-200 bg-white/50">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-white/70 bg-white/95">
+                      <SelectGroup>
+                        <SelectItem value="none">Default</SelectItem>
+                        <SelectItem value="active_first">
+                          Active first
+                        </SelectItem>
+                        <SelectItem value="inactive_first">
+                          Inactive first
+                        </SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="submit" className="rounded-xl bg-primary px-6">
+                  <Filter data-icon="inline-start" />
+                  Apply Filters
+                </Button>
+                {hasFilters ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={handleClearFilter}
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
+            </form>
+          </div>
         </div>
-
-        <div className="grid w-full gap-3 lg:w-auto lg:grid-cols-2">
-          <Select
-            value={registrationsSortValue}
-            onValueChange={(value) => {
-              const nextValue = parseRegistrationsSort(value);
-              setRegistrationsSortValue(nextValue);
-              router.push(
-                buildUrl({
-                  search: searchQuery,
-                  statusSort: statusSortValue,
-                  registrationsSort: nextValue,
-                  page: 1,
-                }),
-              );
-            }}
-          >
-            <SelectTrigger className="w-full min-w-56 rounded-xl border-white/60 bg-white/50 backdrop-blur-sm">
-              <SelectValue placeholder="Sort by registrations" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl border-white/70 bg-white/95">
-              <SelectItem value="none">Registrations: Default</SelectItem>
-              <SelectItem value="most">Most Registrations</SelectItem>
-              <SelectItem value="fewest">Fewest Registrations</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={statusSortValue}
-            onValueChange={(value) => {
-              const nextValue = parseStatusSort(value);
-              setStatusSortValue(nextValue);
-              router.push(
-                buildUrl({
-                  search: searchQuery,
-                  statusSort: nextValue,
-                  registrationsSort: registrationsSortValue,
-                  page: 1,
-                }),
-              );
-            }}
-          >
-            <SelectTrigger className="w-full min-w-48 rounded-xl border-white/60 bg-white/50 backdrop-blur-sm">
-              <SelectValue placeholder="Sort by status" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl border-white/70 bg-white/95">
-              <SelectItem value="none">Status: Default</SelectItem>
-              <SelectItem value="active_first">Active First</SelectItem>
-              <SelectItem value="inactive_first">Inactive First</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </form>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <AnimatePresence mode="popLayout">
@@ -358,19 +399,28 @@ export default function ProgramsListClient({
                           className="w-48 p-1 rounded-xl shadow-2xl border-white/60 bg-white/90 backdrop-blur-xl"
                         >
                           <DropdownMenuItem asChild className="rounded-lg">
-                            <Link prefetch={false} href={`/admin/programs/${program.id}/edit`}>
+                            <Link
+                              prefetch={false}
+                              href={`/admin/programs/${program.id}/edit`}
+                            >
                               <Edit className="w-4 h-4 mr-2" />
                               Edit Program
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild className="rounded-lg">
-                            <Link prefetch={false} href={`/admin/programs/${program.id}/intakes`}>
+                            <Link
+                              prefetch={false}
+                              href={`/admin/programs/${program.id}/intakes`}
+                            >
                               <Calendar className="w-4 h-4 mr-2" />
                               Manage Intakes
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild className="rounded-lg">
-                            <Link prefetch={false} href={`/admin/programs/${program.id}/modules`}>
+                            <Link
+                              prefetch={false}
+                              href={`/admin/programs/${program.id}/modules`}
+                            >
                               <Layers3 className="w-4 h-4 mr-2" />
                               Manage Modules
                             </Link>
@@ -437,29 +487,30 @@ export default function ProgramsListClient({
                   </div>
 
                   <div className="min-h-24">
-                    {program.intakeWindows && program.intakeWindows.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-[10px] font-bold uppercase text-gray-400">
-                        Active Intake
-                      </p>
-                      <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
-                        <p className="text-sm font-bold text-indigo-900 group-hover:text-primary transition-colors">
-                          {program.intakeWindows[0].windowName}
+                    {program.intakeWindows &&
+                    program.intakeWindows.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-bold uppercase text-gray-400">
+                          Active Intake
                         </p>
-                        <p className="text-[10px] text-indigo-600/80 flex items-center gap-1 mt-1">
-                          <Clock className="w-3 h-3" />
-                          Closing:{" "}
-                          {formatAppDate(program.intakeWindows[0].closesAt)}
+                        <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
+                          <p className="text-sm font-bold text-indigo-900 group-hover:text-primary transition-colors">
+                            {program.intakeWindows[0].windowName}
+                          </p>
+                          <p className="text-[10px] text-indigo-600/80 flex items-center gap-1 mt-1">
+                            <Clock className="w-3 h-3" />
+                            Closing:{" "}
+                            {formatAppDate(program.intakeWindows[0].closesAt)}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex h-full items-center py-2">
+                        <p className="text-xs text-gray-400 italic">
+                          No active intake windows
                         </p>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="flex h-full items-center py-2">
-                      <p className="text-xs text-gray-400 italic">
-                        No active intake windows
-                      </p>
-                    </div>
-                  )}
+                    )}
                   </div>
                 </CardContent>
 
@@ -469,7 +520,10 @@ export default function ProgramsListClient({
                     variant="outline"
                     className="w-full bg-white/40 hover:bg-primary hover:text-white border-white/60 rounded-xl transition-all font-bold"
                   >
-                    <Link prefetch={false} href={`/admin/programs/${program.id}/intakes`}>
+                    <Link
+                      prefetch={false}
+                      href={`/admin/programs/${program.id}/intakes`}
+                    >
                       Manage Windows
                     </Link>
                   </Button>
@@ -518,7 +572,9 @@ export default function ProgramsListClient({
 
       <ConfirmDialog
         open={!!deleteConfirm}
-        onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirm(null);
+        }}
         title="Delete Program"
         description="Are you sure you want to delete this program? This cannot be undone if it has no registrations."
         confirmLabel="Delete Program"
