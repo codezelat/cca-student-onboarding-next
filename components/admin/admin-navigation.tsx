@@ -89,6 +89,18 @@ export default function AdminNavigation({
             ),
         },
         {
+            label: "Certificates",
+            href: "/admin/certificates",
+            icon: (
+                <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M12 15l3.5 2L14.5 13l3-2.5-4-.5L12 6l-1.5 4-4 .5 3 2.5-1 4L12 15zM5 4h14v16H5z"
+                />
+            ),
+        },
+        {
             label: "Program Management",
             href: "/admin/programs",
             icon: (

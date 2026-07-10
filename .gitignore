@@ -60,4 +60,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Keep Prisma schema migrations under source control even when a global SQL ignore is configured.
+!prisma/migrations/
+!prisma/migrations/**/
+!prisma/migrations/**/*.sql
+
 /app/generated/prisma

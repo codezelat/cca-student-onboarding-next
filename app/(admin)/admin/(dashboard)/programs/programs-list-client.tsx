@@ -12,6 +12,7 @@ import {
   Clock,
   Search,
   BookOpen,
+  Layers3,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -366,6 +367,12 @@ export default function ProgramsListClient({
                             <Link prefetch={false} href={`/admin/programs/${program.id}/intakes`}>
                               <Calendar className="w-4 h-4 mr-2" />
                               Manage Intakes
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild className="rounded-lg">
+                            <Link prefetch={false} href={`/admin/programs/${program.id}/modules`}>
+                              <Layers3 className="w-4 h-4 mr-2" />
+                              Manage Modules
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />

@@ -2,11 +2,13 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath, revalidateTag } from "next/cache";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { z } from "zod";
 import {
     getAdminActorFromRequestHeaders,
     logActivitySafe,
 } from "@/lib/server/activity-log";
+import { assertAdminFromServerHeaders } from "@/lib/server/admin-auth";
 import { REGISTRATION_PROGRAM_OPTIONS_CACHE_TAG } from "@/lib/server/program-cache";
 import type {
     EditableProgram,
@@ -45,6 +47,48 @@ function revalidateProgramAdminViews({
 function toIsoString(value: Date | string): string {
     const date = value instanceof Date ? value : new Date(value);
     return date.toISOString();
+}
+
+function toDatabaseUserId(value: unknown): bigint | null {
+    const normalized = typeof value === "string" ? value.trim() : String(value ?? "");
+    return /^\d+$/.test(normalized) ? BigInt(normalized) : null;
+}
+
+const programModuleSchema = z.object({
+    id: z.coerce.number().int().positive().optional(),
+    programId: z.coerce.number().int().positive(),
+    code: z.string().trim().min(2).max(80),
+    name: z.string().trim().min(2).max(200),
+    creditValue: z.union([z.coerce.number().min(0).max(999.99), z.null()]).optional(),
+    displayOrder: z.coerce.number().int().min(0).max(10000).default(0),
+    isActive: z.boolean().default(true),
+});
+
+export type ProgramModuleItem = {
+    id: string;
+    code: string;
+    name: string;
+    creditValue: string | null;
+    displayOrder: number;
+    isActive: boolean;
+};
+
+function toProgramModuleItem(module: {
+    id: bigint;
+    code: string;
+    name: string;
+    creditValue: Prisma.Decimal | number | string | null;
+    displayOrder: number;
+    isActive: boolean;
+}): ProgramModuleItem {
+    return {
+        id: String(module.id),
+        code: module.code,
+        name: module.name,
+        creditValue: module.creditValue === null ? null : String(module.creditValue),
+        displayOrder: module.displayOrder,
+        isActive: module.isActive,
+    };
 }
 
 function parseStatusSort(value: string | undefined): ProgramStatusSort {
@@ -693,6 +737,163 @@ export async function deleteIntakeWindow(id: string, programId: string) {
             meta: {
                 error: error instanceof Error ? error.message : "Unknown error",
             },
+        });
+        throw error;
+    }
+}
+
+export async function getProgramModules(
+    programId: string,
+    params?: { page?: number; pageSize?: number },
+) {
+    await assertAdminFromServerHeaders();
+    const requestedPage = Math.max(1, params?.page ?? 1);
+    const pageSize = Math.min(Math.max(1, params?.pageSize ?? 20), 100);
+    const where = { programId: BigInt(programId) };
+    const total = await prisma.programModule.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const modules = await prisma.programModule.findMany({
+        where,
+        orderBy: [{ displayOrder: "asc" }, { code: "asc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+    });
+    return serialize({
+        data: modules.map(toProgramModuleItem),
+        total,
+        page,
+        pageSize,
+        totalPages,
+    });
+}
+
+export async function upsertProgramModule(input: unknown) {
+    await assertAdminFromServerHeaders();
+    const actor = await getAdminActorFromRequestHeaders();
+    const parsed = programModuleSchema.safeParse(input);
+    if (!parsed.success) {
+        throw new Error("Check the module details and try again.");
+    }
+
+    const payload = parsed.data;
+    const programId = BigInt(payload.programId);
+    const before = payload.id
+        ? await prisma.programModule.findUnique({ where: { id: BigInt(payload.id) } })
+        : null;
+    if (payload.id && (!before || before.programId !== programId)) {
+        throw new Error("Module not found.");
+    }
+    if (!payload.id) {
+        const program = await prisma.program.findUnique({
+            where: { id: programId },
+            select: { id: true },
+        });
+        if (!program) throw new Error("Program not found.");
+    }
+    const moduleData = {
+        code: payload.code.toUpperCase(),
+        name: payload.name,
+        creditValue: payload.creditValue ?? null,
+        displayOrder: payload.displayOrder,
+        isActive: payload.isActive,
+        updatedBy: toDatabaseUserId(actor.userId),
+    };
+
+    try {
+        const moduleRecord = payload.id
+            ? await prisma.programModule.update({
+                  where: { id: BigInt(payload.id) },
+                  data: moduleData,
+              })
+            : await prisma.programModule.create({
+                  data: {
+                      ...moduleData,
+                      programId,
+                      createdBy: toDatabaseUserId(actor.userId),
+                  },
+              });
+
+        await logActivitySafe({
+            actor,
+            category: "program_module",
+            action: payload.id ? "program_module_updated" : "program_module_created",
+            status: "success",
+            subjectType: "ProgramModule",
+            subjectId: moduleRecord.id,
+            subjectLabel: moduleRecord.code,
+            message: payload.id ? "Program module updated" : "Program module created",
+            routeName: `/admin/programs/${payload.programId}/modules`,
+            beforeData: before,
+            afterData: moduleRecord,
+        });
+        revalidatePath(`/admin/programs/${payload.programId}/modules`);
+        revalidatePath("/admin/programs");
+        return toProgramModuleItem(moduleRecord);
+    } catch (error) {
+        await logActivitySafe({
+            actor,
+            category: "program_module",
+            action: payload.id ? "program_module_update_failed" : "program_module_create_failed",
+            status: "failure",
+            subjectType: "ProgramModule",
+            subjectId: payload.id ?? null,
+            subjectLabel: before?.code ?? payload.code,
+            message: "Program module save failed",
+            routeName: `/admin/programs/${payload.programId}/modules`,
+            beforeData: before,
+            meta: { error: error instanceof Error ? error.message : "Unknown error" },
+        });
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            throw new Error("This program already has that module code.");
+        }
+        throw error;
+    }
+}
+
+export async function deleteProgramModule(idInput: string, programId: string) {
+    await assertAdminFromServerHeaders();
+    const actor = await getAdminActorFromRequestHeaders();
+    let id: bigint;
+    try {
+        id = BigInt(idInput);
+    } catch {
+        throw new Error("Invalid module.");
+    }
+    const before = await prisma.programModule.findUnique({ where: { id } });
+    if (!before || String(before.programId) !== programId) {
+        throw new Error("Module not found.");
+    }
+
+    try {
+        await prisma.programModule.delete({ where: { id } });
+        await logActivitySafe({
+            actor,
+            category: "program_module",
+            action: "program_module_deleted",
+            status: "success",
+            subjectType: "ProgramModule",
+            subjectId: id,
+            subjectLabel: before.code,
+            message: "Program module deleted",
+            routeName: `/admin/programs/${programId}/modules`,
+            beforeData: before,
+        });
+        revalidatePath(`/admin/programs/${programId}/modules`);
+        revalidatePath("/admin/programs");
+    } catch (error) {
+        await logActivitySafe({
+            actor,
+            category: "program_module",
+            action: "program_module_delete_failed",
+            status: "failure",
+            subjectType: "ProgramModule",
+            subjectId: id,
+            subjectLabel: before.code,
+            message: "Program module deletion failed",
+            routeName: `/admin/programs/${programId}/modules`,
+            beforeData: before,
+            meta: { error: error instanceof Error ? error.message : "Unknown error" },
         });
         throw error;
     }
