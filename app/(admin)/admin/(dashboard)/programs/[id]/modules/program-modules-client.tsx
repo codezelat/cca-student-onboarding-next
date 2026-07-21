@@ -84,15 +84,37 @@ export default function ProgramModulesClient({
 
   function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const normalizedCode = code.trim().toUpperCase();
+    const normalizedName = name.trim();
+    const parsedCredits = creditValue.trim() ? Number(creditValue) : null;
+    const parsedDisplayOrder = Number(displayOrder);
+
+    if (
+      normalizedCode.length < 2 ||
+      normalizedName.length < 2 ||
+      (parsedCredits !== null &&
+        (!Number.isFinite(parsedCredits) || parsedCredits < 0 || parsedCredits > 999.99)) ||
+      !Number.isInteger(parsedDisplayOrder) ||
+      parsedDisplayOrder < 0 ||
+      parsedDisplayOrder > 10000
+    ) {
+      toast({
+        title: "Check module details",
+        description: "Use a code, name, valid credits, and an order from 0 to 10,000.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     startTransition(async () => {
       try {
         await upsertProgramModule({
           id: editing?.id,
           programId,
-          code,
-          name,
-          creditValue: creditValue.trim() ? Number(creditValue) : null,
-          displayOrder: Number(displayOrder),
+          code: normalizedCode,
+          name: normalizedName,
+          creditValue: parsedCredits,
+          displayOrder: parsedDisplayOrder,
           isActive,
         });
         toast({ title: editing ? "Module updated" : "Module added" });
@@ -144,7 +166,7 @@ export default function ProgramModulesClient({
         <DialogContent className="rounded-3xl border-white/60 bg-white/95 shadow-2xl backdrop-blur-xl sm:max-w-lg">
           <form onSubmit={handleSave} className="flex flex-col gap-5">
             <DialogHeader><DialogTitle>{editing ? "Edit Module" : "Add Module"}</DialogTitle><DialogDescription className="sr-only">Set the module details for this program.</DialogDescription></DialogHeader>
-            <div className="grid gap-5 sm:grid-cols-2"><div><Label htmlFor="module-code">Code</Label><Input id="module-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="CCA-101" required className="mt-2 rounded-xl" /></div><div><Label htmlFor="module-credits">Credits</Label><Input id="module-credits" type="number" min="0" step="0.5" value={creditValue} onChange={(event) => setCreditValue(event.target.value)} placeholder="Optional" className="mt-2 rounded-xl" /></div><div className="sm:col-span-2"><Label htmlFor="module-name">Module</Label><Input id="module-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Module name" required className="mt-2 rounded-xl" /></div><div><Label htmlFor="module-order">Order</Label><Input id="module-order" type="number" min="0" value={displayOrder} onChange={(event) => setDisplayOrder(event.target.value)} required className="mt-2 rounded-xl" /></div><div className="flex items-end pb-2"><div className="flex items-center gap-2"><Checkbox id="module-active" checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} /><Label htmlFor="module-active" className="cursor-pointer">Active</Label></div></div></div>
+            <div className="grid gap-5 sm:grid-cols-2"><div><Label htmlFor="module-code">Code</Label><Input id="module-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="CCA-101" minLength={2} maxLength={80} required className="mt-2 rounded-xl" /></div><div><Label htmlFor="module-credits">Credits</Label><Input id="module-credits" type="number" min="0" max="999.99" step="0.01" value={creditValue} onChange={(event) => setCreditValue(event.target.value)} placeholder="Optional" className="mt-2 rounded-xl" /></div><div className="sm:col-span-2"><Label htmlFor="module-name">Module</Label><Input id="module-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Module name" minLength={2} maxLength={200} required className="mt-2 rounded-xl" /></div><div><Label htmlFor="module-order">Order</Label><Input id="module-order" type="number" min="0" max="10000" step="1" value={displayOrder} onChange={(event) => setDisplayOrder(event.target.value)} required className="mt-2 rounded-xl" /></div><div className="flex items-end pb-2"><div className="flex items-center gap-2"><Checkbox id="module-active" checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} /><Label htmlFor="module-active" className="cursor-pointer">Active</Label></div></div></div>
             <DialogFooter><Button type="button" variant="ghost" className="rounded-xl" disabled={isPending} onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" className="rounded-xl bg-primary" disabled={isPending}>{isPending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}{editing ? "Save Changes" : "Add Module"}</Button></DialogFooter>
           </form>
         </DialogContent>

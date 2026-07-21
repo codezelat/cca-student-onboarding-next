@@ -55,15 +55,29 @@ function toDatabaseUserId(value: unknown): bigint | null {
   return /^\d+$/.test(normalized) ? BigInt(normalized) : null;
 }
 
+const databaseIdSchema = z.preprocess(
+  (value) =>
+    typeof value === "number" && Number.isSafeInteger(value)
+      ? String(value)
+      : value,
+  z.string().trim().regex(/^[1-9]\d*$/),
+);
+
 const programModuleSchema = z.object({
-  id: z.coerce.number().int().positive().optional(),
-  programId: z.coerce.number().int().positive(),
+  id: databaseIdSchema.optional(),
+  programId: databaseIdSchema,
   code: z.string().trim().min(2).max(80),
   name: z.string().trim().min(2).max(200),
   creditValue: z
-    .union([z.coerce.number().min(0).max(999.99), z.null()])
+    .union([z.coerce.number().finite().min(0).max(999.99), z.null()])
     .optional(),
-  displayOrder: z.coerce.number().int().min(0).max(10000).default(0),
+  displayOrder: z
+    .coerce.number()
+    .finite()
+    .int()
+    .min(0)
+    .max(10000)
+    .default(0),
   isActive: z.boolean().default(true),
 });
 
@@ -756,6 +770,9 @@ export async function getProgramModules(
   params?: { page?: number; pageSize?: number },
 ) {
   await assertAdminFromServerHeaders();
+  if (!/^[1-9]\d*$/.test(programId)) {
+    throw new Error("Invalid program.");
+  }
   const requestedPage = Math.max(1, params?.page ?? 1);
   const pageSize = Math.min(Math.max(1, params?.pageSize ?? 20), 100);
   const where = { programId: BigInt(programId) };
@@ -782,7 +799,19 @@ export async function upsertProgramModule(input: unknown) {
   const actor = await getAdminActorFromRequestHeaders();
   const parsed = programModuleSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error("Check the module details and try again.");
+    await logActivitySafe({
+      actor,
+      category: "program_module",
+      action: "program_module_save_validation_failed",
+      status: "failure",
+      subjectType: "ProgramModule",
+      message: "Program module validation failed",
+      routeName: "/admin/programs",
+      meta: {
+        fields: parsed.error.issues.map((issue) => issue.path.join(".")),
+      },
+    });
+    throw new Error("Enter a valid module code, name, credits, and order.");
   }
 
   const payload = parsed.data;
@@ -863,6 +892,18 @@ export async function upsertProgramModule(input: unknown) {
     ) {
       throw new Error("This program already has that module code.");
     }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2003"
+    ) {
+      throw new Error("This program is no longer available. Refresh and try again.");
+    }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      throw new Error("This module is no longer available. Refresh and try again.");
+    }
     throw error;
   }
 }
@@ -875,6 +916,9 @@ export async function deleteProgramModule(idInput: string, programId: string) {
     id = BigInt(idInput);
   } catch {
     throw new Error("Invalid module.");
+  }
+  if (!/^[1-9]\d*$/.test(programId)) {
+    throw new Error("Invalid program.");
   }
   const before = await prisma.programModule.findUnique({ where: { id } });
   if (!before || String(before.programId) !== programId) {
