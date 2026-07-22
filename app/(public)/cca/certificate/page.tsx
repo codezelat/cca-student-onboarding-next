@@ -212,7 +212,9 @@ export default function CertificateVerificationPage() {
                           <p className="truncate font-semibold text-gray-900">{module.name}</p>
                           <p className="mt-0.5 text-xs text-gray-500">
                             {module.code}
-                            {module.credits ? ` · ${module.credits} credits` : ""}
+                            {module.credits && Number(module.credits) > 0
+                              ? ` · ${module.credits} credits`
+                              : ""}
                           </p>
                         </div>
                         <span className="rounded-lg bg-gray-100 px-2.5 py-1 text-sm font-black text-gray-800">{module.result}</span>
