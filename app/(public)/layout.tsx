@@ -7,10 +7,10 @@ export default function PublicLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <>
+        <div className="relative flex min-h-screen flex-col overflow-x-clip">
             <Header />
-            <main className="flex-grow flex flex-col">{children}</main>
+            <main className="flex flex-1 flex-col">{children}</main>
             <Footer />
-        </>
+        </div>
     );
 }
