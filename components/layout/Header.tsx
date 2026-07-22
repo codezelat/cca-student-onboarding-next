@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { ShieldCheck } from "lucide-react";
 
 export function Header() {
   return (
@@ -23,6 +24,14 @@ export function Header() {
         </Link>
 
         <div className="flex items-center gap-3">
+          <Link
+            href="/cca/certificate"
+            className="inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-primary-700 transition-colors hover:bg-white/60 sm:px-4"
+          >
+            <ShieldCheck className="size-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Verify Certificate</span>
+            <span className="sm:hidden">Verify</span>
+          </Link>
           <Link
             href="/cca-register"
             className="px-6 py-2.5 rounded-xl bg-linear-to-r from-primary-500 to-secondary-500 text-white font-medium hover:from-primary-600 hover:to-secondary-600 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"

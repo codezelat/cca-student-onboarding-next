@@ -64,6 +64,7 @@ The **Codezela Career Accelerator Student Onboarding Platform** is a comprehensi
 | 🛡️ **Spam Protection** | Cloudflare Turnstile integration |
 | 📱 **Responsive Design** | Mobile-first approach with Tailwind CSS |
 | 🌐 **International Support** | Country selection with dynamic Sri Lankan province/district fields |
+| 🏅 **Certificate Verification** | Public certificate lookup with issued program and module result snapshots |
 
 ### Admin Dashboard
 
@@ -140,6 +141,7 @@ The **Codezela Career Accelerator Student Onboarding Platform** is a comprehensi
 │  │  / (Homepage)   │  │  /admin         │  │  /api/registrations     │  │
 │  │  /cca-register  │  │  /admin/programs│  │  /api/upload/presign    │  │
 │  │  /cca/payment   │  │  /admin/certificates                     │  │
+│  │  /cca/certificate│ │                 │  │ /api/certificates/verify │  │
 │  │                 │  │  /admin/finance │  │                         │  │
 │  └────────┬────────┘  └────────┬────────┘  └───────────┬─────────────┘  │
 └───────────┼────────────────────┼───────────────────────┼────────────────┘
@@ -216,7 +218,8 @@ cca-student-onboarding-next/
 │   ├── (public)/                    # Public route group
 │   │   ├── page.tsx                 # Homepage
 │   │   ├── cca-register/            # Registration form
-│   │   └── cca/payment/             # Payment lookup and submission
+│   │   ├── cca/payment/             # Payment lookup and submission
+│   │   └── cca/certificate/         # Certificate verification
 │   ├── api/                         # API routes
 │   │   ├── registrations/           # Registration API
 │   │   └── upload/                  # File upload API
@@ -539,6 +542,14 @@ The application uses Next.js Server Actions for all data mutations:
   payment_url: string;
 }
 ```
+
+### `/api/certificates/verify`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/certificates/verify?certificate_id=...` | Verify an issued certificate and return its public result record |
+
+The route is rate limited, non-cacheable, and returns only certificate ID, holder name, issued program, issue date, overall result, and module result snapshots. It does not expose NIC, contact, payment, or registration data.
 
 ### `/api/upload/presign`
 
