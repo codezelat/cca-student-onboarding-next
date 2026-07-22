@@ -116,7 +116,7 @@ export default function CertificateVerificationPage() {
                   if (error) setError("");
                   if (verification) setVerification(null);
                 }}
-                placeholder="Certificate ID"
+                placeholder="Enter Your Certificate ID"
                 autoCapitalize="characters"
                 autoComplete="off"
                 spellCheck={false}

@@ -9,8 +9,6 @@ export default function PublicLayout({
     return (
         <>
             <Header />
-            {/* Spacer to account for fixed header */}
-            <div className="h-16 sm:h-20" />
             <main className="flex-grow flex flex-col">{children}</main>
             <Footer />
         </>
