@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
+    metadataBase: new URL("https://portal.cca.it.com"),
     title: "Codezela Career Accelerator - Student Onboarding",
     description: "Apply for programs at Codezela Career Accelerator",
 };
