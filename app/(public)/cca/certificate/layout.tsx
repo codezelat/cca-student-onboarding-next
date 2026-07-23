@@ -4,7 +4,7 @@ const title = "Verify a CCA Certificate";
 const description =
   "Verify the authenticity of a Codezela Career Accelerator certificate using its certificate ID.";
 const canonicalPath = "/cca/certificate";
-const imagePath = "/cca/certificate/opengraph-image";
+const imagePath = "/cca/certificate/social-image";
 
 export const metadata: Metadata = {
   title,
