@@ -31,7 +31,7 @@ const qualificationValues = [
 ] as const;
 
 const registrationSchema = z.object({
-  turnstileToken: z.string().min(1),
+  turnstileToken: z.string().min(1).max(2048),
   programId: z.string().trim().min(1).max(50),
   fullName: z.string().trim().min(2).max(150),
   nameWithInitials: z.string().trim().min(2).max(100),
@@ -617,7 +617,10 @@ export async function POST(request: Request) {
     // 1. Verify Turnstile
     const turnstileResult = await turnstileService.verify(
       payload.turnstileToken,
-      requestContext.ipAddress,
+      {
+        remoteIp: requestContext.ipAddress,
+        expectedAction: "public_registration",
+      },
     );
     if (!turnstileResult.success) {
       await logActivitySafe({

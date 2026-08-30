@@ -47,7 +47,10 @@ export async function loginAction(formData: FormData) {
 
     const turnstileResult = await turnstileService.verify(
         turnstileToken,
-        requestMeta.ipAddress,
+        {
+            remoteIp: requestMeta.ipAddress,
+            expectedAction: "admin_login",
+        },
     );
 
     if (!turnstileResult.success) {

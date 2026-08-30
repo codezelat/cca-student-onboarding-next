@@ -3,14 +3,29 @@ export interface TurnstileResult {
     errors: string[];
 }
 
+type TurnstileVerificationOptions = {
+    remoteIp?: string;
+    expectedAction?: string;
+};
+
+type SiteverifyResponse = {
+    success?: boolean;
+    hostname?: unknown;
+    action?: unknown;
+    ["error-codes"]?: unknown;
+};
+
 export class TurnstileService {
-    async verify(token: string, remoteIp?: string): Promise<TurnstileResult> {
+    async verify(
+        token: string,
+        { remoteIp, expectedAction }: TurnstileVerificationOptions = {},
+    ): Promise<TurnstileResult> {
         if (process.env.NODE_ENV === "development" && token === "dev-bypass") {
             return { success: true, errors: [] };
         }
 
         const secret = process.env.TURNSTILE_SECRET_KEY;
-        if (!token || !secret) {
+        if (!token || token.length > 2048 || !secret) {
             return { success: false, errors: ["missing-input"] };
         }
 
@@ -22,6 +37,7 @@ export class TurnstileService {
                     headers: {
                         "Content-Type": "application/x-www-form-urlencoded",
                     },
+                    signal: AbortSignal.timeout(10_000),
                     body: new URLSearchParams({
                         secret,
                         response: token,
@@ -37,17 +53,26 @@ export class TurnstileService {
                 };
             }
 
-            const data = await res.json();
+            const data = (await res.json()) as SiteverifyResponse;
             const expectedHostname = process.env.TURNSTILE_ALLOWED_HOSTNAME?.trim();
             const hostnameMatches =
                 !expectedHostname ||
                 (typeof data.hostname === "string" && data.hostname === expectedHostname);
+            const actionMatches =
+                !expectedAction ||
+                (typeof data.action === "string" && data.action === expectedAction);
+
+            const errors = Array.isArray(data["error-codes"])
+                ? data["error-codes"].filter(
+                      (errorCode): errorCode is string => typeof errorCode === "string",
+                  )
+                : [];
+            if (!hostnameMatches) errors.push("hostname-mismatch");
+            if (!actionMatches) errors.push("action-mismatch");
 
             return {
-                success: data.success === true && hostnameMatches,
-                errors: hostnameMatches
-                    ? data["error-codes"] || []
-                    : ["hostname-mismatch"],
+                success: data.success === true && hostnameMatches && actionMatches,
+                errors,
             };
         } catch (error) {
             console.error("Turnstile validation error:", error);

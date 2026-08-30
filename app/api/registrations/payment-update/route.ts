@@ -22,7 +22,7 @@ const PAYMENT_UPDATE_RATE_LIMIT = {
 const paymentUpdateSchema = z.object({
   registrationId: z.string().trim().regex(/^\d+$/, "Invalid registration ID"),
   paymentUrl: z.string().trim().url().max(2048),
-  turnstileToken: z.string().trim().min(1),
+  turnstileToken: z.string().trim().min(1).max(2048),
 });
 
 const paymentUpdateFieldLabels: Record<string, string> = {
@@ -153,7 +153,10 @@ export async function POST(request: Request) {
     const { registrationId, paymentUrl, turnstileToken } = parsed.data;
     const turnstileResult = await turnstileService.verify(
       turnstileToken,
-      requestContext.ipAddress,
+      {
+        remoteIp: requestContext.ipAddress,
+        expectedAction: "public_payment_update",
+      },
     );
     if (!turnstileResult.success) {
       await logActivitySafe({

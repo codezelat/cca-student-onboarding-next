@@ -346,7 +346,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 |----------|-------------|--------|
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Turnstile site key | Cloudflare Dashboard |
 | `TURNSTILE_SECRET_KEY` | Turnstile secret key | Cloudflare Dashboard |
-| `TURNSTILE_ALLOWED_HOSTNAME` | Optional hostname pin for server validation | Your deployment hostname |
+| `TURNSTILE_ALLOWED_HOSTNAME` | Required production hostname pin for Siteverify | `portal.cca.it.com` |
 
 ### Cloudflare R2 Configuration
 
