@@ -16,6 +16,7 @@ const isDev = process.env.NODE_ENV === "development";
 type StudentPaymentRegistration = {
   id: string;
   registerId: string;
+  registeredAt: string;
   firstName: string;
   fullName: string;
   programId: string;
@@ -28,6 +29,17 @@ type StudentPaymentRegistration = {
   creditAmount?: number;
   isOverpaid?: boolean;
 };
+
+function formatStudentId(registerId: string, registeredAt: string) {
+  const id = registerId.trim().toUpperCase();
+  const date = new Date(registeredAt);
+  if (Number.isNaN(date.getTime())) return id;
+  const year = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    timeZone: "Asia/Colombo",
+  }).format(date);
+  return `${id}-${year.slice(-2)}`;
+}
 
 const getPaymentPosition = (registration: StudentPaymentRegistration) => {
   const derivedBalanceDue = registration.fullAmount - registration.paidAmount;
@@ -654,6 +666,9 @@ export default function PaymentUpdatePage() {
                     >
                       {studentDetails.fullName}
                     </p>
+                    <p className="mt-1 text-xs font-semibold text-gray-500">
+                      Student ID: {formatStudentId(studentDetails.registerId, studentDetails.registeredAt)}
+                    </p>
                   </div>
                   <div className="p-4 bg-gray-50/80 rounded-xl border border-gray-100">
                     <p className="text-sm text-gray-500 mb-1">
@@ -666,8 +681,7 @@ export default function PaymentUpdatePage() {
                       {studentDetails.programName}
                     </p>
                     <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                      {studentDetails.programId} - {studentDetails.programYear} -{" "}
-                      {studentDetails.registerId}
+                      {studentDetails.programId} - {studentDetails.programYear}
                     </p>
                     {studentDetails.programDuration && (
                       <p className="mt-1 text-xs text-gray-500">

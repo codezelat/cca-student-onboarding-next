@@ -85,6 +85,7 @@ export async function GET(request: Request) {
       select: {
         id: true,
         registerId: true,
+        createdAt: true,
         fullName: true,
         nameWithInitials: true,
         programId: true,
@@ -129,6 +130,7 @@ export async function GET(request: Request) {
       return {
         id: registration.id.toString(),
         registerId: registration.registerId,
+        registeredAt: registration.createdAt.toISOString(),
         firstName,
         fullName: registration.fullName,
         programId: registration.programId,
