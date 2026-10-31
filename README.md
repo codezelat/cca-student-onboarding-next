@@ -551,6 +551,10 @@ The application uses Next.js Server Actions for all data mutations:
 
 The route is rate limited, non-cacheable, and returns only certificate ID, holder name, issued program, issue date, overall result, and module result snapshots. It does not expose NIC, contact, payment, or registration data.
 
+### Server-to-server student lookup
+
+`POST /api/integrations/student-lookup` accepts JSON `{ "studentId": "CCA-A00318-26" }` and requires `Authorization: Bearer <STUDENT_LOOKUP_API_KEY>`. Configure the same 64-character hexadecimal key generated from 32 random bytes in the portal and the trusted calling application's server environment. Never expose it to a browser. Responses are `no-store`; a match returns `studentId`, `registrationId` (a string), `name`, `email`, and `program` (`code`, `name`, `year`). Deleted registrations and IDs with an incorrect Colombo-time registration year return 404. Authentication failures return 401, malformed requests 400, rate-limited requests 429, and configuration or service failures 503. This endpoint identifies an enrollment; callers must verify the student via a separate email OTP before granting access or displaying personal data.
+
 ### `/api/upload/presign`
 
 | Method | Endpoint | Description |

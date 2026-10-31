@@ -4,6 +4,7 @@ import { useState, ChangeEvent, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Turnstile } from "@marsidev/react-turnstile";
+import { formatStudentId } from "@/lib/student-id";
 import { useFileUpload } from "@/lib/hooks/use-file-upload";
 import {
   ALLOWED_UPLOAD_ACCEPT,
@@ -29,17 +30,6 @@ type StudentPaymentRegistration = {
   creditAmount?: number;
   isOverpaid?: boolean;
 };
-
-function formatStudentId(registerId: string, registeredAt: string) {
-  const id = registerId.trim().toUpperCase();
-  const date = new Date(registeredAt);
-  if (Number.isNaN(date.getTime())) return id;
-  const year = new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    timeZone: "Asia/Colombo",
-  }).format(date);
-  return `${id}-${year.slice(-2)}`;
-}
 
 const getPaymentPosition = (registration: StudentPaymentRegistration) => {
   const derivedBalanceDue = registration.fullAmount - registration.paidAmount;
