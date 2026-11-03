@@ -234,10 +234,14 @@ export async function POST(request: Request) {
       END
       WHERE id = ${registrationBigInt}
         AND deleted_at IS NULL
+        AND closed_at IS NULL
       RETURNING id
     `);
 
     if (!updatedRows.length) {
+      const closed = await prisma.cCARegistration.findFirst({ where: { id: registrationBigInt, deletedAt: null, closedAt: { not: null } }, select: { closedAt: true } });
+      const status = closed ? 409 : 404;
+      const errorMessage = closed ? "Program ended. Payment submissions are closed." : "Registration not found or unavailable";
       await logActivitySafe({
         category: "payment_update",
         action: "payment_update_registration_not_found",
@@ -249,13 +253,13 @@ export async function POST(request: Request) {
       });
       await finalizeIdempotencyFailure({
         key: activeIdempotencyKey!,
-        httpStatus: 404,
-        errorMessage: "Registration not found or unavailable",
+        httpStatus: status,
+        errorMessage,
         ttlSeconds: 10 * 60,
       });
       return NextResponse.json(
-        { success: false, error: "Registration not found or unavailable" },
-        { status: 404 },
+        { success: false, error: errorMessage, ...(closed ? { code: "program_closed", closedAt: closed.closedAt?.toISOString() } : {}) },
+        { status },
       );
     }
 

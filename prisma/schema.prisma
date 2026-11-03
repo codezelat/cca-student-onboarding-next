@@ -74,6 +74,7 @@ model CCARegistration {
   currentPaidAmount                   Decimal?            @map("current_paid_amount") @db.Decimal(12, 2)
   termsAccepted                       Boolean             @default(false) @map("terms_accepted")
   deletedAt                           DateTime?           @map("deleted_at")
+  closedAt                            DateTime?           @map("closed_at") @db.Timestamptz(6)
   createdAt                           DateTime            @default(now()) @map("created_at")
   updatedAt                           DateTime            @updatedAt @map("updated_at")
 
@@ -84,6 +85,7 @@ model CCARegistration {
 
   @@index([programId])
   @@index([emailAddress])
+  @@index([deletedAt, closedAt])
   @@index([nicNumber])
   @@index([programId, nicNumber])
   @@index([programId, passportNumber])

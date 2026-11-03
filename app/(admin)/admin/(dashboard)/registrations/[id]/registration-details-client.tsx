@@ -164,9 +164,9 @@ export default function RegistrationDetailsClient({
       Array.isArray(registration.tags) ? registration.tags : [],
     );
     setAssignedTags(nextAssignedTags);
-    setTagOptions((current) =>
+    setTagOptions(
       normalizeTagList(
-        [...current, ...availableTags, ...nextAssignedTags],
+        [...availableTags, ...nextAssignedTags],
         MAX_REGISTRATION_TAG_OPTIONS,
       ),
     );
@@ -583,6 +583,9 @@ export default function RegistrationDetailsClient({
               <Badge variant="destructive" className="animate-pulse">
                 Trashed
               </Badge>
+            )}
+            {!isTrashed && registration.closedAt && (
+              <Badge variant="secondary">Closed {formatAppDateShort(registration.closedAt)}</Badge>
             )}
           </div>
           <p className="text-muted-foreground mt-1">

@@ -18,6 +18,7 @@ type StudentPaymentRegistration = {
   id: string;
   registerId: string;
   registeredAt: string;
+  closedAt: string | null;
   firstName: string;
   fullName: string;
   programId: string;
@@ -211,6 +212,11 @@ export default function PaymentUpdatePage() {
   };
 
   const handleSubmitPayment = async () => {
+    if (studentDetails?.closedAt) {
+      setSubmitStatus("error");
+      setSubmitError("Program ended. Payment submissions are closed.");
+      return;
+    }
     if (!studentDetails) {
       setSubmitStatus("error");
       setSubmitError("Please fetch your student details before submitting.");
@@ -287,6 +293,10 @@ export default function PaymentUpdatePage() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
+        if (result.code === "program_closed" && result.closedAt) {
+          setStudentDetails((current) => current?.id === currentRegistrationId ? { ...current, closedAt: result.closedAt } : current);
+          setPaymentFile(null);
+        }
         throw new Error(result.error || "Failed to update payment record");
       }
 
@@ -564,6 +574,7 @@ export default function PaymentUpdatePage() {
                             <p className="truncate text-base font-bold text-gray-900 group-hover:text-primary-700">
                               {registration.programName}
                             </p>
+                            {registration.closedAt && <p className="mt-1 text-xs font-semibold text-slate-500">Program ended</p>}
                             <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
                               {registration.programId} -{" "}
                               {registration.programYear} -{" "}
@@ -715,6 +726,12 @@ export default function PaymentUpdatePage() {
                 </div>
 
                 {/* Upload Zone */}
+                {studentDetails.closedAt ? (
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-5">
+                    <p className="font-semibold text-slate-700">Program ended</p>
+                    <p className="mt-1 text-sm text-slate-500">Payment submissions are closed.</p>
+                  </div>
+                ) : (
                 <div className="border-t border-gray-100 pt-8 mt-4">
                   <h3 className="text-lg font-bold text-gray-800 mb-4">
                     Upload New Payment Slip
@@ -889,6 +906,7 @@ export default function PaymentUpdatePage() {
                     </p>
                   )}
                 </div>
+                )}
               </div>
             )}
           </div>

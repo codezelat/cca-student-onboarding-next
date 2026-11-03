@@ -71,7 +71,7 @@ The **Codezela Career Accelerator Student Onboarding Platform** is a comprehensi
 | Feature | Description |
 |---------|-------------|
 | 📊 **Analytics Overview** | Real-time statistics on registrations, programs, and payments |
-| 👥 **Registration Management** | View, search, filter, edit, and soft-delete student registrations |
+| 👥 **Registration Management** | Active, Closed, Trash and All scopes; close/reopen with recorded closing dates; select current-page rows for confirmed bulk close, reopen, trash or restore |
 | 📚 **Program Management** | Create, edit, and manage programs, intake windows, and program modules |
 | 🏅 **Certificates** | Issue, search, edit, and remove certificates with required overall and per-module results |
 | 💰 **Finance & Payments** | Track payments, generate financial reports, manage payment status |
@@ -82,6 +82,12 @@ The **Codezela Career Accelerator Student Onboarding Platform** is a comprehensi
 | 🖼️ **Document Viewer** | Built-in image/PDF viewer with zoom and pan capabilities |
 | 💳 **Payment Recording** | Record new payments and void existing ones |
 | 🔔 **Toast Notifications** | Real-time feedback for all user actions |
+
+Closed registrations retain financial and certificate history. Restoring a trashed closed registration returns it to Closed; reopening clears its closing date, with the transition retained in the activity log. Scope, search, balance, tag and program filters apply to the table, counts and export. Bulk selection is limited to the current page and resets when the query or row states change; a stale batch is rolled back. Apply `npm run db:migrate:deploy` before deploying code that uses `closed_at`.
+
+The public payment page displays closed enrollments as "Program ended" with their existing financial position and no upload controls. The submission API atomically requires both `deleted_at IS NULL` and `closed_at IS NULL`, rejecting stale-page submissions after closure. Closed records stay included in finance; trashed records remain excluded.
+
+Tag options are derived from actual assignments, including closed and trashed registrations. Catalog entries with no assignments anywhere are removed; a zero count under the current filters alone does not delete a tag. New tags are created by assigning them to a registration.
 
 ---
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
     Search,
@@ -24,6 +25,7 @@ import {
 } from "lucide-react";
 import {
     toggleRegistrationTrash,
+    bulkRegistrationAction,
     purgeRegistration,
     getRegistrationsForExport,
 } from "./dashboard-actions";
@@ -91,10 +93,12 @@ type RegistrationRow = {
         code: string;
     } | null;
     deletedAt: string | Date | null;
+    closedAt: string | Date | null;
 };
 
 type DashboardStats = {
     activeRegistrations: number;
+    closedRegistrations: number;
     trashedRegistrations: number;
     totalRegistrations: number;
     topProgram: { id: string; count: number } | null;
@@ -244,6 +248,31 @@ export default function RegistrationTable({
     const [trashConfirm, setTrashConfirm] = useState<{ id: number; restore: boolean } | null>(null);
     const [purgeConfirm, setPurgeConfirm] = useState<{ id: number } | null>(null);
     const [isTrashPending, setIsTrashPending] = useState(false);
+    const selectionKey = useSearchParams().toString() + JSON.stringify(initialRegistrations.map((row) => [String(row.id), row.closedAt, row.deletedAt]));
+    const [selection, setSelection] = useState<{ key: string; ids: string[] }>({ key: "", ids: [] });
+    const selectedIds = selection.key === selectionKey ? selection.ids : [];
+    type BulkPrompt = { ids: string[]; action: "close" | "reopen" | "trash" | "restore" };
+    const [bulkPrompt, setBulkPrompt] = useState<(BulkPrompt & { key: string }) | null>(null);
+    const bulkConfirm = bulkPrompt?.key === selectionKey ? bulkPrompt : null;
+    const setBulkConfirm = (value: BulkPrompt | null) => setBulkPrompt(value ? { ...value, key: selectionKey } : null);
+    const [bulkPending, setBulkPending] = useState(false);
+    const bulkLock = useRef(false);
+    const selectedRows = initialRegistrations.filter((row) => selectedIds.includes(String(row.id)));
+    const runBulkAction = async () => {
+        if (!bulkConfirm || bulkLock.current) return;
+        bulkLock.current = true;
+        setBulkPending(true);
+        try {
+            const result = await bulkRegistrationAction(bulkConfirm.ids, bulkConfirm.action);
+            if (!result.success) throw new Error(result.error);
+            setSelection({ key: selectionKey, ids: [] });
+            setBulkConfirm(null);
+            router.refresh();
+            toast({ title: "Registrations updated" });
+        } catch (error) {
+            toast({ title: error instanceof Error ? error.message : "Update failed", variant: "destructive" });
+        } finally { bulkLock.current = false; setBulkPending(false); }
+    };
     const [isPurgePending, setIsPurgePending] = useState(false);
     const [copiedWhatsappId, setCopiedWhatsappId] = useState<string | null>(null);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
@@ -861,6 +890,14 @@ export default function RegistrationTable({
                     }`}
                 >
                     Active ({initialStats.activeRegistrations})
+                </button>
+                <button
+                    type="button"
+                    aria-pressed={currentScope === "closed"}
+                    onClick={() => router.push(buildUrl({ scope: "closed", page: 1 }))}
+                    className={`rounded-xl border px-4 py-2 text-sm font-semibold ${currentScope === "closed" ? "border-slate-700 bg-slate-700 text-white" : "border-white/60 bg-white/60 text-gray-700 hover:bg-white/80"}`}
+                >
+                    Closed ({initialStats.closedRegistrations})
                 </button>
                 <button
                     type="button"
@@ -1639,6 +1676,11 @@ export default function RegistrationTable({
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-white/40">
                             <tr>
+                                <th className="px-4 py-4">
+                                    <Checkbox aria-label="Select current page" disabled={bulkPending || !initialRegistrations.length}
+                                        checked={selectedIds.length === initialRegistrations.length && selectedIds.length > 0 ? true : selectedIds.length > 0 ? "indeterminate" : false}
+                                        onCheckedChange={(checked) => setSelection({ key: selectionKey, ids: checked === true ? initialRegistrations.map((row) => String(row.id)) : [] })} />
+                                </th>
                                 <th className="px-6 py-4 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">
                                     Registered
                                 </th>
@@ -1674,7 +1716,7 @@ export default function RegistrationTable({
                             {initialRegistrations.length === 0 ? (
                                 <tr>
                                     <td
-                                        colSpan={showPaymentSlipColumn ? 9 : 8}
+                                        colSpan={showPaymentSlipColumn ? 10 : 9}
                                         className="px-6 py-20 text-center"
                                     >
                                         <div className="flex flex-col items-center gap-4 opacity-50">
@@ -1705,6 +1747,9 @@ export default function RegistrationTable({
                                             key={registrationIdLabel}
                                             className="hover:bg-white/50 transition-colors group"
                                         >
+                                            <td className="px-4 py-4">
+                                                <Checkbox aria-label={`Select ${reg.registerId}`} disabled={bulkPending} checked={selectedIds.includes(registrationIdLabel)} onCheckedChange={(checked) => setSelection({ key: selectionKey, ids: checked === true ? [...selectedIds, registrationIdLabel] : selectedIds.filter((id) => id !== registrationIdLabel) })} />
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                 <div className="space-y-0.5">
                                                     <div className="font-black text-gray-900">
@@ -1732,6 +1777,7 @@ export default function RegistrationTable({
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-800">
                                                 {reg.fullName}
+                                                {reg.closedAt && <span className="mt-1 block text-xs font-medium text-slate-500">Closed {formatAppDateShort(reg.closedAt)}</span>}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
                                                 {reg.nicNumber ||
@@ -1833,6 +1879,9 @@ export default function RegistrationTable({
                                                         </>
                                                     ) : (
                                                         <>
+                                                            <Button variant="outline" size="sm" disabled={bulkPending} onClick={() => setBulkConfirm({ ids: [registrationIdLabel], action: reg.closedAt ? "reopen" : "close" })} className="h-9 bg-white">
+                                                                {reg.closedAt ? "Reopen" : "Close"}
+                                                            </Button>
                                                             <Button
                                                                 variant="outline"
                                                                 size="icon"
@@ -1992,6 +2041,21 @@ export default function RegistrationTable({
             isPending={isTrashPending}
             onConfirm={confirmTrash}
         />
+
+        {selectedIds.length > 0 && (
+            <div role="region" aria-label="Selected registrations" className="fixed bottom-4 left-4 z-40 flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-2 rounded-2xl border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur-xl">
+                <span className="px-2 text-sm font-semibold">{selectedIds.length} selected</span>
+                {selectedRows.every((row) => !row.deletedAt && !row.closedAt) && <Button size="sm" disabled={bulkPending} onClick={() => setBulkConfirm({ ids: selectedIds, action: "close" })}>Close</Button>}
+                {selectedRows.every((row) => !row.deletedAt && row.closedAt) && <Button size="sm" disabled={bulkPending} onClick={() => setBulkConfirm({ ids: selectedIds, action: "reopen" })}>Reopen</Button>}
+                {selectedRows.every((row) => !row.deletedAt) && <Button size="sm" variant="destructive" disabled={bulkPending} onClick={() => setBulkConfirm({ ids: selectedIds, action: "trash" })}>Trash</Button>}
+                {selectedRows.every((row) => row.deletedAt) && <Button size="sm" disabled={bulkPending} onClick={() => setBulkConfirm({ ids: selectedIds, action: "restore" })}>Restore</Button>}
+                <Button size="icon" variant="ghost" aria-label="Clear selection" disabled={bulkPending} onClick={() => setSelection({ key: selectionKey, ids: [] })}><X className="size-4" /></Button>
+            </div>
+        )}
+        <ConfirmDialog open={!!bulkConfirm} onOpenChange={(open) => { if (!open && !bulkPending) setBulkConfirm(null); }}
+            title={`${bulkConfirm?.action === "close" ? "Close" : bulkConfirm?.action === "reopen" ? "Reopen" : bulkConfirm?.action === "restore" ? "Restore" : "Trash"} ${bulkConfirm?.ids.length ?? 0} registration(s)?`}
+            description={bulkConfirm?.action === "close" ? "The closing date will be recorded as today." : "Apply this change to the selected registrations?"}
+            isPending={bulkPending} onConfirm={runBulkAction} variant={bulkConfirm?.action === "trash" ? "destructive" : "default"} />
 
         <ConfirmDialog
             open={!!purgeConfirm}

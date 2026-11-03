@@ -56,7 +56,8 @@ export default async function AdminDashboardPage({
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
     const params = await searchParams;
-    const scope = getSingleSearchParamValue(params.scope) || "active";
+    const requestedScope = getSingleSearchParamValue(params.scope);
+    const scope = ["active", "closed", "trashed", "all"].includes(requestedScope) ? requestedScope : "active";
     const search = getSingleSearchParamValue(params.search);
     const programFilter = getMultiSearchParamValues(params.program_filter);
     const programGroupFilter = getSingleSearchParamValue(

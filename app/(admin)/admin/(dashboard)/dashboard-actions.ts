@@ -47,6 +47,7 @@ async function getRegistrationAuditSnapshot(id: number) {
       emailAddress: true,
       whatsappNumber: true,
       deletedAt: true,
+      closedAt: true,
       fullAmount: true,
       currentPaidAmount: true,
       tags: true,
@@ -76,10 +77,6 @@ export type RegistrationTagFilterOption = {
   count: number;
 };
 
-const DEFAULT_REGISTRATION_TAGS = [
-  "General Rate",
-  "Special 50% Offer",
-] as const;
 const MAX_REGISTRATION_TAGS = 12;
 const MAX_REGISTRATION_TAG_OPTIONS = 100;
 const MAX_REGISTRATION_TAG_LENGTH = 60;
@@ -155,6 +152,10 @@ function buildRegistrationWhere(
 
   if (scope === "active") {
     where.deletedAt = null;
+    where.closedAt = null;
+  } else if (scope === "closed") {
+    where.deletedAt = null;
+    where.closedAt = { not: null };
   } else if (scope === "trashed") {
     where.deletedAt = { not: null };
   }
@@ -414,23 +415,18 @@ async function upsertRegistrationTagCatalog(tagsInput: string[]) {
   `);
 }
 
-async function getRegistrationTagCatalogRows(): Promise<string[]> {
-  type CatalogTagRow = { tag: string | null };
-
-  try {
-    await ensureRegistrationTagCatalogTable();
-    const rows = await prisma.$queryRaw<CatalogTagRow[]>`
-      SELECT name AS tag
-      FROM registration_tags
-      WHERE btrim(name) <> ''
-      ORDER BY name ASC
-    `;
-
-    return rows.flatMap((row) => (row.tag ? [row.tag] : []));
-  } catch (error) {
-    console.error("Failed to read registration tag catalog:", error);
-    return [];
-  }
+async function removeUnusedRegistrationTags() {
+  await ensureRegistrationTagCatalogTable();
+  await prisma.$executeRaw`
+    DELETE FROM registration_tags AS catalog
+    WHERE NOT EXISTS (
+      SELECT 1 FROM cca_registrations AS registration
+      CROSS JOIN LATERAL jsonb_array_elements_text(
+        CASE WHEN jsonb_typeof(registration.tags) = 'array' THEN registration.tags ELSE '[]'::jsonb END
+      ) AS assigned(tag)
+      WHERE lower(regexp_replace(btrim(assigned.tag), '[[:space:]]+', ' ', 'g')) = catalog.normalized_name
+    )
+  `;
 }
 
 function parseRequiredDate(value: string, fieldName: string): Date {
@@ -549,6 +545,7 @@ function buildRegistrationExportSelect(
 export async function getDashboardStats() {
   type StatsRow = {
     active: bigint;
+    closed: bigint;
     trashed: bigint;
     total: bigint;
   };
@@ -557,13 +554,14 @@ export async function getDashboardStats() {
     prisma.$queryRaw<StatsRow[]>`
       SELECT
         COUNT(*)                                                                              AS total,
-        COUNT(*) FILTER (WHERE deleted_at IS NULL)                                           AS active,
+        COUNT(*) FILTER (WHERE deleted_at IS NULL AND closed_at IS NULL)                      AS active,
+        COUNT(*) FILTER (WHERE deleted_at IS NULL AND closed_at IS NOT NULL)                  AS closed,
         COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)                                       AS trashed
       FROM cca_registrations
     `,
     prisma.cCARegistration.groupBy({
       by: ["programId"],
-      where: { deletedAt: null },
+      where: { deletedAt: null, closedAt: null },
       _count: { programId: true },
       orderBy: { _count: { programId: "desc" } },
       take: 1,
@@ -572,12 +570,14 @@ export async function getDashboardStats() {
 
   const row = statsRows[0] ?? {
     active: BigInt(0),
+    closed: BigInt(0),
     trashed: BigInt(0),
     total: BigInt(0),
   };
 
   return {
     activeRegistrations: Number(row.active),
+    closedRegistrations: Number(row.closed),
     trashedRegistrations: Number(row.trashed),
     totalRegistrations: Number(row.total),
     topProgram: topProgramResult[0]
@@ -649,6 +649,7 @@ export async function getRegistrations(params: {
       fullAmount: true,
       currentPaidAmount: true,
       createdAt: true,
+      closedAt: true,
       deletedAt: true,
       program: {
         select: {
@@ -780,6 +781,38 @@ export async function toggleRegistrationTrash(id: number, restore: boolean) {
       },
     });
     throw error;
+  }
+}
+
+export async function bulkRegistrationAction(idsInput: unknown, actionInput: unknown) {
+  await assertAdminFromServerHeaders();
+  const parsed = z.object({
+    ids: z.array(z.string().refine((id) => /^[1-9]\d{0,18}$/.test(id) && BigInt(id) <= BigInt("9223372036854775807"))).min(1).max(100),
+    action: z.enum(["close", "reopen", "trash", "restore"]),
+  }).safeParse({ ids: idsInput, action: actionInput });
+  if (!parsed.success) return { success: false, error: "Invalid selection." };
+  const ids = [...new Set(parsed.data.ids)].map((id) => BigInt(id));
+  const action = parsed.data.action;
+  const actor = await getAdminActorFromRequestHeaders();
+  try {
+    const now = new Date();
+    await prisma.$transaction(async (tx) => {
+      const where: Prisma.CCARegistrationWhereInput = { id: { in: ids } };
+      if (action === "restore") where.deletedAt = { not: null };
+      else where.deletedAt = null;
+      if (action === "close") where.closedAt = null;
+      if (action === "reopen") where.closedAt = { not: null };
+      const data = action === "close" ? { closedAt: now }
+        : action === "reopen" ? { closedAt: null }
+        : action === "trash" ? { deletedAt: now } : { deletedAt: null };
+      const updated = await tx.cCARegistration.updateMany({ where, data });
+      if (updated.count !== ids.length) throw new Error("Selection changed. Refresh and select again.");
+    });
+    await logActivitySafe({ actor, category: "registration", action: `registrations_${action}`, status: "success", subjectType: "CCARegistration", message: `${ids.length} registrations: ${action}`, meta: { ids: ids.map(String), closedAt: action === "close" ? now.toISOString() : undefined }, routeName: "/admin" });
+    revalidatePath("/admin", "layout");
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error && error.message === "Selection changed. Refresh and select again." ? error.message : "Unable to update selection. Please retry." };
   }
 }
 
@@ -961,24 +994,16 @@ export async function getAvailableRegistrationTags() {
   `;
 
   const assignedTags = rows.flatMap((row) => (row.tag ? [row.tag] : []));
-  const seedTags = normalizeRegistrationTagOptions([
-    ...DEFAULT_REGISTRATION_TAGS,
-    ...assignedTags,
-  ]);
+  const seedTags = normalizeRegistrationTagOptions(assignedTags);
 
   try {
     await upsertRegistrationTagCatalog(seedTags);
+    await removeUnusedRegistrationTags();
   } catch (error) {
     console.error("Failed to backfill registration tag catalog:", error);
   }
 
-  const catalogTags = await getRegistrationTagCatalogRows();
-
-  return normalizeRegistrationTagOptions([
-    ...DEFAULT_REGISTRATION_TAGS,
-    ...catalogTags,
-    ...assignedTags,
-  ]);
+  return normalizeRegistrationTagOptions(assignedTags);
 }
 
 export async function getRegistrationTagFilterOptions(
@@ -1153,6 +1178,7 @@ export async function updateRegistrationTags(id: number, tagsInput: unknown) {
 
     try {
       await upsertRegistrationTagCatalog(tags);
+      await removeUnusedRegistrationTags();
     } catch (error) {
       console.error("Failed to update registration tag catalog:", error);
     }

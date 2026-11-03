@@ -35,6 +35,7 @@ export const REGISTRATION_EXPORT_DATA_KEYS = [
   "createdAt",
   "updatedAt",
   "deletedAt",
+  "closedAt",
 ] as const;
 
 export type RegistrationExportDataKey =
@@ -43,6 +44,7 @@ export type RegistrationExportDataKey =
 export const REGISTRATION_EXPORT_FIELD_KEYS = [
   "registerId",
   "status",
+  "closedAt",
   "createdAt",
   "updatedAt",
   "deletedAt",
@@ -121,8 +123,15 @@ export const REGISTRATION_EXPORT_FIELDS: readonly RegistrationExportFieldDefinit
     key: "status",
     label: "Status",
     group: "core",
-    description: "Active or trashed registration state.",
-    dataKeys: ["deletedAt"],
+    description: "Active, closed or trashed registration state.",
+    dataKeys: ["deletedAt", "closedAt"],
+  },
+  {
+    key: "closedAt",
+    label: "Closed At",
+    group: "core",
+    description: "When the enrollment was closed.",
+    dataKeys: ["closedAt"],
   },
   {
     key: "createdAt",
@@ -478,10 +487,11 @@ export function getRegistrationExportCellValue(
 
   switch (fieldKey) {
     case "status":
-      return isTrashed ? "Trashed" : "Active";
+      return isTrashed ? "Trashed" : row.closedAt ? "Closed" : "Active";
     case "createdAt":
     case "updatedAt":
     case "deletedAt":
+    case "closedAt":
       return toDateTimeString(row[fieldKey]);
     case "dateOfBirth":
     case "qualificationCompletedDate":
